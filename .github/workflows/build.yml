@@ -18,11 +18,18 @@ jobs:
           fetch-depth: 2
       - id: v
         run: |
-          PREV=$(git show HEAD^:pubspec.yaml 2>/dev/null | grep '^version:' | head -1 | sed -E 's/version: *([0-9.]+).*/\1/')
           CUR=$(grep '^version:' pubspec.yaml | head -1 | sed -E 's/version: *([0-9.]+).*/\1/')
-          echo "prev=$PREV  cur=$CUR"
-          echo "changed=$([ "$PREV" = "$CUR" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
-          echo "version=$CUR" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手动触发：总是构建，版本取当前 pubspec
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$CUR" >> "$GITHUB_OUTPUT"
+            echo "prev=(manual)  cur=$CUR  -> changed=true"
+          else
+            PREV=$(git show HEAD^:pubspec.yaml 2>/dev/null | grep '^version:' | head -1 | sed -E 's/version: *([0-9.]+).*/\1/')
+            echo "prev=$PREV  cur=$CUR"
+            echo "changed=$([ "$PREV" = "$CUR" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+            echo "version=$CUR" >> "$GITHUB_OUTPUT"
+          fi
 
   # 版本号变化时编译 Android APK + Web（ubuntu）
   build:
