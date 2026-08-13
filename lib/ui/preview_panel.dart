@@ -127,8 +127,9 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
             if (widget.pages.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  runAlignment: WrapAlignment.center,
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -259,8 +260,9 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
             if (widget.pages.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  runAlignment: WrapAlignment.center,
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),

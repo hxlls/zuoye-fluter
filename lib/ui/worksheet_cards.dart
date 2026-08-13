@@ -151,6 +151,8 @@ class _MathCard extends StatelessWidget {
             width: 90,
             color: const Color(0xff333333),
           ),
+          // 横线下方留空，供学生写答案
+          const SizedBox(height: 28),
         ],
       ),
     );

@@ -43,20 +43,123 @@ class _HomePageState extends State<HomePage> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+    final wide = MediaQuery.of(context).size.width >= 760;
+    if (wide) {
+      return Scaffold(
+        body: Column(
+          children: [
+            _topBar(),
+            _versionBar(),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: AiConfigCard(),
+            ),
+            _tabs(),
+            Expanded(
+              child: _panel(),
+            ),
+          ],
+        ),
+      );
+    }
+    // 手机：底部导航栏 + 精简顶栏
     return Scaffold(
-      body: Column(
-        children: [
-          _topBar(),
-          _versionBar(),
+      appBar: AppBar(
+        backgroundColor: const Color(0xff2f6fd0),
+        foregroundColor: Colors.white,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('📖 小学作业生成器 v${AppData.version}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text('一键生成 · 可打印 · 支持导出 PDF',
+                style: TextStyle(fontSize: 11, color: Colors.white70)),
+          ],
+        ),
+        actions: [
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: AiConfigCard(),
-          ),
-          _tabs(),
-          Expanded(
-            child: _panel(),
+            padding: EdgeInsets.only(right: 4),
+            child: Icon(Icons.auto_awesome, size: 18, color: Colors.white70),
           ),
         ],
+      ),
+      body: Column(
+        children: [
+          _versionBarMobile(),
+          Expanded(child: _panel()),
+        ],
+      ),
+      bottomNavigationBar: _bottomNav(),
+    );
+  }
+
+  Widget _bottomNav() {
+    final items = [
+      ('calligraphy', Icons.edit, '练字帖'),
+      ('chinese', Icons.menu_book, '语文'),
+      ('math', Icons.calculate, '数学'),
+      ('english', Icons.language, '英语'),
+      ('ai', Icons.auto_awesome, 'AI'),
+      ('aihelp', Icons.chat, '帮答'),
+      ('about', Icons.info_outline, '关于'),
+    ];
+    final idx = items.indexWhere((e) => e.$1 == _tab);
+    return BottomNavigationBar(
+      currentIndex: idx < 0 ? 0 : idx,
+      onTap: (i) => setState(() => _tab = items[i].$1),
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: const Color(0xff2f6fd0),
+      unselectedItemColor: const Color(0xff999999),
+      items: [
+        for (final (_, icon, label) in items)
+          BottomNavigationBarItem(icon: Icon(icon), label: label),
+      ],
+    );
+  }
+
+  Widget _versionBarMobile() {
+    final versions = [
+      ('renjiao', '人教版'),
+      ('hebei', '冀教版'),
+      ('waiyanYQ', '外研·一起点'),
+      ('waiyanSQ', '外研·三起点'),
+    ];
+    final volumes = [('上', '上册'), ('下', '下册')];
+    final grades = _allowedGrades();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      color: const Color(0xfff6f3ec),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _dropdownGroup(
+              label: '教材',
+              value: _version,
+              items: versions,
+              onChanged: (k) {
+                setState(() {
+                  _version = k;
+                  _normalizeGrade();
+                });
+              },
+            ),
+            const SizedBox(width: 10),
+            _dropdownGroup(
+              label: '册',
+              value: _volume,
+              items: volumes,
+              onChanged: (k) => setState(() => _volume = k),
+            ),
+            const SizedBox(width: 10),
+            _dropdownGroup(
+              label: '年级',
+              value: '$_grade',
+              items: [for (final g in grades) ('$g', '${g}年级')],
+              onChanged: (k) => setState(() => _grade = int.parse(k)),
+            ),
+          ],
+        ),
       ),
     );
   }

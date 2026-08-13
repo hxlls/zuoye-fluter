@@ -1,24 +1,64 @@
 import 'package:flutter/material.dart';
 
-/// 面板布局：左侧配置 + 右侧预览
-class PanelLayout extends StatelessWidget {
+/// 面板布局：
+/// 桌面/平板（>=760px）：左侧配置 + 右侧预览
+/// 手机（<760px）：配置收进左侧抽屉，主区全屏预览
+class PanelLayout extends StatefulWidget {
   final Widget config;
   final Widget preview;
   const PanelLayout({super.key, required this.config, required this.preview});
 
   @override
+  State<PanelLayout> createState() => _PanelLayoutState();
+}
+
+class _PanelLayoutState extends State<PanelLayout> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          width: 320,
-          padding: const EdgeInsets.all(14),
-          color: const Color(0xfffaf8f2),
-          child: SingleChildScrollView(child: config),
+    final wide = MediaQuery.of(context).size.width >= 760;
+    if (wide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 320,
+            padding: const EdgeInsets.all(14),
+            color: const Color(0xfffaf8f2),
+            child: SingleChildScrollView(child: widget.config),
+          ),
+          Expanded(child: widget.preview),
+        ],
+      );
+    }
+    // 手机：抽屉 + 全屏预览
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        toolbarHeight: 48,
+        backgroundColor: const Color(0xfffaf8f2),
+        title: Row(
+          children: [
+            TextButton.icon(
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              icon: const Icon(Icons.settings_outlined, size: 18),
+              label: const Text('设置'),
+            ),
+          ],
         ),
-        Expanded(child: preview),
-      ],
+      ),
+      drawer: Drawer(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
+            child: widget.config,
+          ),
+        ),
+      ),
+      body: widget.preview,
     );
   }
 }

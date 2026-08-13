@@ -184,7 +184,7 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     if (opts.showAnswer && answerList.isNotEmpty) {
       final lines = <String>[];
       for (var i = 0; i < answerList.length; i++) {
-        lines.add('${i + 1}. ${answerList[i].$1} → <b>${answerList[i].$2}</b>');
+        lines.add('${i + 1}. ${answerList[i].$1} → ${answerList[i].$2}');
       }
       pages.add(WsPage(
         title: WsPageTitle(main: '参考答案'),

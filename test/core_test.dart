@@ -90,6 +90,32 @@ void main() {
       // 无重复
       expect(keys.length, keys.toSet().length);
     });
+
+    test('参考答案不含 HTML 标签', () async {
+      await AppData().load();
+      final pages = mathRenderPages(MathOptions(
+        grade: 3,
+        version: 'renjiao',
+        volume: '上',
+        count: 40,
+        diff: 'mid',
+        showAnswer: true,
+      ));
+      final htmlRe = RegExp(r'<[a-z/][^>]*>', caseSensitive: false);
+      for (final p in pages) {
+        for (final n in p.nodes) {
+          if (n is WsAnswerLine) {
+            expect(n.key.contains('<'), false, reason: '答案行 key 含 HTML: ${n.key}');
+            expect(n.ans.contains('<'), false, reason: '答案行 ans 含 HTML: ${n.ans}');
+          }
+          if (n is WsMatchAnswer) {
+            for (final l in n.lines) {
+              expect(htmlRe.hasMatch(l), false, reason: '连线答案含 HTML: $l');
+            }
+          }
+        }
+      }
+    });
   });
 
   group('chinese', () {

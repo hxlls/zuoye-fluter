@@ -168,7 +168,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
     curNodes.add(WsSection(instr, mathStyle: true));
 
     final perRow = sec.cols ?? (sec.vertical ? 4 : 3);
-    final itemH = (sec.itemH ?? (sec.vertical ? 116 : 74)).toDouble();
+    final itemH = (sec.itemH ?? (sec.vertical ? 138 : 74)).toDouble();
     var row = <WsCard>[];
     for (var i = 0; i < sec.items.length; i++) {
       if (row.isEmpty) {
@@ -210,7 +210,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
       var line = '';
       final lines = <String>[];
       for (var i = 0; i < answers.length; i++) {
-        line += '<b>${i + 1}.</b> ${_ansStr(answers[i])}　';
+        line += '${i + 1}. ${_ansStr(answers[i])}　';
         if ((i + 1) % 10 == 0) {
           lines.add(line);
           line = '';
