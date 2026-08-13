@@ -23,7 +23,7 @@ jobs:
           echo "changed=$([ "$PREV" = "$CUR" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
           echo "version=$CUR" >> "$GITHUB_OUTPUT"
 
-  # 版本号变化时编译 Android APK + Web 并发布 Release
+  # 版本号变化时编译 Android APK + Web（ubuntu）
   build:
     needs: check
     if: needs.check.outputs.changed == 'true'
@@ -69,11 +69,100 @@ jobs:
       - name: 构建 Web 版
         run: flutter build web --release
 
-      - name: 整理产物
+      - name: 整理 Android/Web 产物
         run: |
           mkdir -p release
           cp build/app/outputs/flutter-apk/app-release.apk "release/小学作业生成器-android-v${{ needs.check.outputs.version }}.apk" 2>/dev/null || true
           cp -r build/web "release/小学作业生成器-web-v${{ needs.check.outputs.version }}" 2>/dev/null || true
+          ls -la release/
+
+      - name: 上传 Android/Web 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-web
+          path: release/**
+          if-no-files-found: warn
+
+  # 版本号变化时编译 Windows 版（需 Windows runner，Flutter 不能跨平台构建桌面版）
+  build-windows:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 恢复 pub 缓存
+        uses: actions/cache@v4
+        with:
+          path: %LOCALAPPDATA%\Pub\Cache
+          key: pub-windows-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-windows-
+
+      - name: 安装依赖
+        run: flutter pub get
+
+      - name: 构建 Windows 版
+        run: flutter build windows --release
+
+      - name: 整理 Windows 产物
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $ver = "${{ needs.check.outputs.version }}"
+          $src = "build\windows\x64\runner\Release"
+          $zip = "release\小学作业生成器-windows-v$ver.zip"
+          if (Test-Path $src) {
+            Compress-Archive -Path "$src\*" -DestinationPath $zip -Force
+            Get-ChildItem release
+          } else {
+            Write-Error "Windows 构建产物缺失: $src"
+            exit 1
+          }
+
+      - name: 上传 Windows 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/**
+          if-no-files-found: warn
+
+  # 汇总所有产物并发布 Release
+  release:
+    needs: [build, build-windows]
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 下载 Android/Web 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: android-web
+          path: release/
+
+      - name: 下载 Windows 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: release/
+
+      - name: 列出产物
+        run: |
+          find release -type f | sort
           ls -la release/
 
       - name: 生成发布说明（变更内容）
@@ -92,6 +181,7 @@ jobs:
             fi
             echo ""
             echo "### 📦 下载"
+            echo "- Windows 便携版（zip，解压即用）"
             echo "- Android APK（可直接安装）"
             echo "- Web 版（浏览器打开 index.html）"
           } > notes.md

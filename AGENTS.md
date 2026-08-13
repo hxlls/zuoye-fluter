@@ -2,7 +2,7 @@
 
 ## 项目概况
 小学作业生成器（小学数学/语文/英语/练字帖/AI 出题作业 PDF），**Flutter 重写版**。
-技术栈：Dart/Flutter（`lib/`），目标平台 Android APK + Web。`.github/workflows/build.yml` 在版本号变化时自动编译发布 GitHub Release。
+技术栈：Dart/Flutter（`lib/`），目标平台 **Windows 桌面版 + Android APK + Web**。`.github/workflows/build.yml` 在版本号变化时自动编译（Android/Web 在 ubuntu，Windows 在 windows-latest，因 Flutter 桌面版不能跨平台构建）并发布 GitHub Release。
 原 JS 版（Electron+Capacitor）位于 `/home/ling/xiaoxuezuoye`，本目录是其 Dart 移植。
 
 ## 架构
@@ -49,7 +49,8 @@ assets/data.json            数据（勿手改，由 conv_data.js 从原项目�
 ## 构建
 - Android：`flutter build apk --release`（需 JDK 21，`export JAVA_HOME=$HOME/jdk21`；本机系统 Java 25 与 AGP 不兼容）。
 - Web：`flutter build web --release`。
-- CI（.github/workflows/build.yml）在 main 分支版本号变化时自动构建 APK + Web 并发布 Release。
+- Windows：本机 Linux 不能构建，须在 Windows 环境或依赖 CI 的 windows-latest job。
+- CI（.github/workflows/build.yml）在 main 分支版本号变化时自动构建 APK + Web（ubuntu）+ Windows zip（windows-latest），汇总发布 Release。
 
 ## 环境注意
 - 本机 Flutter 在 `~/flutter/flutter`，已加入 `~/.bashrc` PATH。
