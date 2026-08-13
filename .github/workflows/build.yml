@@ -130,7 +130,7 @@ jobs:
 
   # 汇总所有产物并发布 Release
   release:
-    needs: [build, build-windows]
+    needs: [check, build, build-windows]
     if: github.event_name == 'workflow_dispatch' || needs.check.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
