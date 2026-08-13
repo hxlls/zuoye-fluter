@@ -3,6 +3,7 @@ name: 版本变动自动编译
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   # 检测 pubspec.yaml 版本号是否变化
@@ -26,7 +27,7 @@ jobs:
   # 版本号变化时编译 Android APK + Web（ubuntu）
   build:
     needs: check
-    if: needs.check.outputs.changed == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.check.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,7 +79,7 @@ jobs:
   # 版本号变化时编译 Windows 版（需 Windows runner，Flutter 不能跨平台构建桌面版）
   build-windows:
     needs: check
-    if: needs.check.outputs.changed == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.check.outputs.changed == 'true'
     runs-on: windows-latest
     permissions:
       contents: write
@@ -123,7 +124,7 @@ jobs:
   # 汇总所有产物并发布 Release
   release:
     needs: [build, build-windows]
-    if: needs.check.outputs.changed == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.check.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
