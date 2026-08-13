@@ -71,9 +71,10 @@ jobs:
 
       - name: 整理 Android/Web 产物
         run: |
+          VER="${{ needs.check.outputs.version }}"
           mkdir -p release
-          cp build/app/outputs/flutter-apk/app-release.apk "release/小学作业生成器-android-v${{ needs.check.outputs.version }}.apk" 2>/dev/null || true
-          cp -r build/web "release/小学作业生成器-web-v${{ needs.check.outputs.version }}" 2>/dev/null || true
+          cp build/app/outputs/flutter-apk/app-release.apk "release/zuoye-fluter-android-v${VER}.apk" 2>/dev/null || true
+          (cd build/web && zip -qr "../web-release.zip" .) 2>/dev/null && mv build/web-release.zip "release/zuoye-fluter-web-v${VER}.zip" || true
           ls -la release/
 
       - name: 上传 Android/Web 产物
@@ -112,7 +113,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path release | Out-Null
           $ver = "${{ needs.check.outputs.version }}"
           $src = "build\windows\x64\runner\Release"
-          $zip = "release\小学作业生成器-windows-v$ver.zip"
+          $zip = "release\zuoye-fluter-windows-v$ver.zip"
           if (Test-Path $src) {
             Compress-Archive -Path "$src\*" -DestinationPath $zip -Force
             Get-ChildItem release
@@ -173,9 +174,9 @@ jobs:
             fi
             echo ""
             echo "### 📦 下载"
-            echo "- Windows 便携版（zip，解压即用）"
-            echo "- Android APK（可直接安装）"
-            echo "- Web 版（浏览器打开 index.html）"
+            echo "- zuoye-fluter-windows-v${{ needs.check.outputs.version }}.zip（Windows 便携版，解压即用）"
+            echo "- zuoye-fluter-android-v${{ needs.check.outputs.version }}.apk（Android，可直接安装）"
+            echo "- zuoye-fluter-web-v${{ needs.check.outputs.version }}.zip（Web 版，解压后浏览器打开 index.html）"
           } > notes.md
           cat notes.md
 
