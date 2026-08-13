@@ -73,45 +73,44 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
         _keys.add(GlobalKey());
       }
     }
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(10),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xffe9e6df),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                child: Center(
-                  child: Column(
-                    children: [
-                      if (widget.loading)
-                        const Padding(
-                          padding: EdgeInsets.all(30),
-                          child: CircularProgressIndicator(),
-                        )
-                      else if (widget.pages.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(40),
-                          child: Text('点击「生成预览」查看作业',
-                              style:
-                                  TextStyle(color: Color(0xff888888), fontSize: 15)),
-                        )
-                      else
-                        for (var i = 0; i < widget.pages.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: RepaintBoundary(
-                              key: _keys[i],
-                              child: FittedBox(
-                                fit: BoxFit.fitWidth,
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                      minWidth: 300, maxWidth: 794),
-                                  child: WorksheetPageView(page: widget.pages[i]),
+    return Container(
+      margin: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xffe9e6df),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Center(
+                child: Column(
+                  children: [
+                    if (widget.loading)
+                      const Padding(
+                        padding: EdgeInsets.all(30),
+                        child: CircularProgressIndicator(),
+                      )
+                    else if (widget.pages.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text('点击「生成预览」查看作业',
+                            style:
+                                TextStyle(color: Color(0xff888888), fontSize: 15)),
+                      )
+                    else
+                      for (var i = 0; i < widget.pages.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: RepaintBoundary(
+                            key: _keys[i],
+                            child: FittedBox(
+                              fit: BoxFit.fitWidth,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                    minWidth: 300, maxWidth: 794),
+                                child: WorksheetPageView(page: widget.pages[i]),
                                 ),
                               ),
                             ),
@@ -148,7 +147,6 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
               ),
           ],
         ),
-      ),
     );
   }
 }
@@ -207,46 +205,45 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
         _keys.add(GlobalKey());
       }
     }
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(10),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xffe9e6df),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                child: Center(
-                  child: Column(
-                    children: [
-                      if (widget.loading)
-                        const Padding(
-                          padding: EdgeInsets.all(30),
-                          child: CircularProgressIndicator(),
-                        )
-                      else if (widget.pages.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(40),
-                          child: Text('点击「生成预览」查看练字帖',
-                              style:
-                                  TextStyle(color: Color(0xff888888), fontSize: 15)),
-                        )
-                      else
-                        for (var i = 0; i < widget.pages.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: RepaintBoundary(
-                              key: _keys[i],
-                              child: _CalligraphyPageView(page: widget.pages[i]),
-                            ),
+    return Container(
+      margin: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xffe9e6df),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Center(
+                child: Column(
+                  children: [
+                    if (widget.loading)
+                      const Padding(
+                        padding: EdgeInsets.all(30),
+                        child: CircularProgressIndicator(),
+                      )
+                    else if (widget.pages.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text('点击「生成预览」查看练字帖',
+                            style:
+                                TextStyle(color: Color(0xff888888), fontSize: 15)),
+                      )
+                    else
+                      for (var i = 0; i < widget.pages.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: RepaintBoundary(
+                            key: _keys[i],
+                            child: _CalligraphyPageView(page: widget.pages[i]),
                           ),
-                    ],
-                  ),
+                        ),
+                  ],
                 ),
               ),
+            ),
             ),
             if (widget.pages.isNotEmpty)
               Padding(
@@ -267,7 +264,6 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
               ),
           ],
         ),
-      ),
     );
   }
 }
@@ -326,12 +322,15 @@ class _CalligraphyRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (final c in cells)
-          _TianziCell(cell: c, size: cellW.toDouble(), showPinyin: showPinyin),
-      ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final c in cells)
+            _TianziCell(cell: c, size: cellW.toDouble(), showPinyin: showPinyin),
+        ],
+      ),
     );
   }
 }

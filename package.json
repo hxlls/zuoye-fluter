@@ -1,7 +1,7 @@
 {
   "name": "zuoye-fluter",
   "productName": "小学作业生成器",
-  "version": "1.67.0",
+  "version": "1.68.0",
   "description": "中国小学作业生成器 Flutter 版（练字帖 / 语文 / 数学 / 英语 / AI 出题）",
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {

@@ -90,38 +90,45 @@ class _HomePageState extends State<HomePage> {
       ('waiyanSQ', '外研·三起点'),
     ];
     final volumes = [('上', '上册'), ('下', '下册')];
+    final grades = _allowedGrades();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       color: const Color(0xfff6f3ec),
       child: Wrap(
-        spacing: 8,
+        spacing: 16,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text('教材版本', style: TextStyle(fontSize: 13)),
-          for (final (k, l) in versions)
-            _chip(l, k == _version, () {
+          _dropdownGroup(
+            label: '教材版本',
+            value: _version,
+            items: versions,
+            onChanged: (k) {
               setState(() {
                 _version = k;
                 _normalizeGrade();
               });
-            }),
-          const Text('学期', style: TextStyle(fontSize: 13)),
-          for (final (k, l) in volumes)
-            _chip(l, k == _volume, () {
-              setState(() => _volume = k);
-            }),
-          const Text('选择年级', style: TextStyle(fontSize: 13)),
-          for (var g = 1; g <= 6; g++)
-            _chip('$g年级', g == _grade, () {
-              setState(() => _grade = g);
-            }),
+            },
+          ),
+          _dropdownGroup(
+            label: '学期',
+            value: _volume,
+            items: volumes,
+            onChanged: (k) => setState(() => _volume = k),
+          ),
+          _dropdownGroup(
+            label: '年级',
+            value: '$_grade',
+            items: [for (final g in grades) ('$g', '${g}年级')],
+            onChanged: (k) => setState(() => _grade = int.parse(k)),
+          ),
         ],
       ),
     );
   }
 
-  void _normalizeGrade() {
+  /// 当前版本支持的年级（按各科目支持范围求并集，保证至少有可选年级）
+  List<int> _allowedGrades() {
     final data = AppData();
     final support = data.versionSupport[_version] ?? data.versionSupport['renjiao']!;
     final allowed = <int>{};
@@ -131,29 +138,53 @@ class _HomePageState extends State<HomePage> {
         for (var g = r[0]; g <= r[1]; g++) allowed.add(g);
       }
     }
-    if (allowed.isNotEmpty && !allowed.contains(_grade)) {
-      _grade = allowed.reduce((a, b) => a < b ? a : b);
-    }
+    if (allowed.isEmpty) allowed.addAll([1, 2, 3, 4, 5, 6]);
+    final list = allowed.toList()..sort();
+    return list;
   }
 
-  Widget _chip(String label, bool active, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xff2f6fd0) : Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-              color: active ? const Color(0xff2f6fd0) : const Color(0xffcccccc)),
+  Widget _dropdownGroup({
+    required String label,
+    required String value,
+    required List<(String, String)> items,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, color: Color(0xff666666))),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xffcccccc)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isDense: true,
+              style: const TextStyle(fontSize: 14, color: Color(0xff333333)),
+              items: [
+                for (final (k, l) in items)
+                  DropdownMenuItem(value: k, child: Text(l)),
+              ],
+              onChanged: (v) {
+                if (v != null) onChanged(v);
+              },
+            ),
+          ),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 13,
-                color: active ? Colors.white : const Color(0xff444444))),
-      ),
+      ],
     );
+  }
+
+  void _normalizeGrade() {
+    final allowed = _allowedGrades();
+    if (allowed.isNotEmpty && !allowed.contains(_grade)) {
+      _grade = allowed.first;
+    }
   }
 
   Widget _tabs() {
