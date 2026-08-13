@@ -154,25 +154,28 @@ class _HomePageState extends State<HomePage> {
       children: [
         Text(label, style: const TextStyle(fontSize: 13, color: Color(0xff666666))),
         const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xffcccccc)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isDense: true,
-              style: const TextStyle(fontSize: 14, color: Color(0xff333333)),
-              items: [
-                for (final (k, l) in items)
-                  DropdownMenuItem(value: k, child: Text(l)),
-              ],
-              onChanged: (v) {
-                if (v != null) onChanged(v);
-              },
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xffcccccc)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                isDense: true,
+                style: const TextStyle(fontSize: 14, color: Color(0xff333333)),
+                items: [
+                  for (final (k, l) in items)
+                    DropdownMenuItem(value: k, child: Text(l)),
+                ],
+                onChanged: (v) {
+                  if (v != null) onChanged(v);
+                },
+              ),
             ),
           ),
         ),

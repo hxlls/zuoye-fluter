@@ -7,7 +7,18 @@ import '../core/english_worksheet.dart';
 import '../ai/ai_generator.dart';
 
 const _kaiTi = 'KaiTi';
-const _serif = 'Georgia';
+// 数学数字用衬线体，跨平台回退：Windows 有 Times/Georgia，Android/Linux 有 DejaVu Serif
+const _mathFamily = 'Times New Roman';
+const _mathFallback = ['Georgia', 'DejaVu Serif', 'Liberation Serif', 'serif'];
+
+TextStyle _mathStyle(double size, {FontWeight w = FontWeight.w600}) => TextStyle(
+      fontSize: size,
+      fontWeight: w,
+      letterSpacing: 1,
+      color: const Color(0xff222222),
+      fontFamily: _mathFamily,
+      fontFamilyFallback: _mathFallback,
+    );
 
 /// 公共入口：根据卡片类型构建 Widget
 Widget buildWsCardWidget(WsCard card) {
@@ -72,12 +83,7 @@ class _MathCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text('${fmt(prob.a)} ${prob.op} ${fmt(prob.b)} =',
-                style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                    color: Color(0xff222222),
-                    fontFamily: _serif)),
+                style: _mathStyle(19)),
             Container(
               margin: const EdgeInsets.only(left: 4),
               width: 56,
@@ -94,26 +100,26 @@ class _MathCard extends StatelessWidget {
       body = _vertical(prob.a, prob.b, prob.op);
     }
 
-    final vertical = (detail?.vertical ?? false);
-
+    // 序号与题目分离布局：序号固定占一行，题目在下方，避免重叠
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
-      padding: EdgeInsets.fromLTRB(12, vertical ? 32 : 22, 12, 14),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: const Color(0xffe2ddd2)),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Stack(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: 5,
-            left: 9,
-            child: Text('${numLabel ?? ""}.',
-                style: const TextStyle(
-                    fontSize: 12, color: Color(0xff999999), fontWeight: FontWeight.w700)),
+          Text('${numLabel ?? ""}.',
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xff999999), fontWeight: FontWeight.w700)),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Center(child: body),
           ),
-          Center(child: body),
         ],
       ),
     );
@@ -126,13 +132,17 @@ class _MathCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(fmt(a), style: const TextStyle(fontSize: 23, height: 1.25, fontWeight: FontWeight.w600)),
+          Text(fmt(a),
+              style: _mathStyle(23)
+                  .copyWith(height: 1.25, letterSpacing: 0)),
           Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text('$op ', style: const TextStyle(fontSize: 23, height: 1.25, fontWeight: FontWeight.w600)),
-              Text(fmt(b), style: const TextStyle(fontSize: 23, height: 1.25, fontWeight: FontWeight.w600)),
+              Text('$op ',
+                  style: _mathStyle(23).copyWith(height: 1.25, letterSpacing: 0)),
+              Text(fmt(b),
+                  style: _mathStyle(23).copyWith(height: 1.25, letterSpacing: 0)),
             ],
           ),
           const SizedBox(height: 4),
@@ -171,20 +181,10 @@ class _ExprText extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(eqText,
-              style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1,
-                  color: Color(0xff222222),
-                  fontFamily: _serif)),
+              style: _mathStyle(19)),
           if (rest.isNotEmpty)
             Text(rest,
-                style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                    color: Color(0xff222222),
-                    fontFamily: _serif)),
+                style: _mathStyle(19)),
           if (blank)
             Container(
               margin: const EdgeInsets.only(left: 4),
@@ -243,8 +243,14 @@ class _MathText extends StatelessWidget {
     );
   }
 
-  TextStyle _style(double size, FontWeight w, double ls) =>
-      TextStyle(fontSize: size, fontWeight: w, letterSpacing: ls, color: const Color(0xff222222), fontFamily: _serif);
+  TextStyle _style(double size, FontWeight w, double ls) => TextStyle(
+        fontSize: size,
+        fontWeight: w,
+        letterSpacing: ls,
+        color: const Color(0xff222222),
+        fontFamily: _mathFamily,
+        fontFamilyFallback: _mathFallback,
+      );
 }
 
 class _WordExpr extends StatelessWidget {
@@ -300,7 +306,7 @@ class _LongDiv extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text('${fmt(b)} ',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              style: _mathStyle(18).copyWith(letterSpacing: 0)),
           Text('⟌',
               style: const TextStyle(fontSize: 34, height: 0.8, color: Color(0xff333333))),
           Container(
@@ -312,8 +318,7 @@ class _LongDiv extends StatelessWidget {
               children: [
                 Container(height: 26),
                 Text('${fmt(a)}',
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.w600)),
+                    style: _mathStyle(20).copyWith(letterSpacing: 0)),
               ],
             ),
           ),

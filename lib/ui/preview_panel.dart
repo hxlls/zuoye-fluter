@@ -39,7 +39,11 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
     if (_keys.isEmpty) return;
     setState(() => _exporting = true);
     try {
-      await PdfService.savePdf(_keys, '小学作业-${widget.label}');
+      final path = await PdfService.savePdf(_keys, '小学作业-${widget.label}');
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('PDF 已导出：$path')));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -103,18 +107,18 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
                       for (var i = 0; i < widget.pages.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: RepaintBoundary(
-                            key: _keys[i],
-                            child: FittedBox(
-                              fit: BoxFit.fitWidth,
+                          child: FittedBox(
+                            fit: BoxFit.fitWidth,
+                            child: RepaintBoundary(
+                              key: _keys[i],
                               child: ConstrainedBox(
                                 constraints: const BoxConstraints(
                                     minWidth: 300, maxWidth: 794),
                                 child: WorksheetPageView(page: widget.pages[i]),
-                                ),
                               ),
                             ),
                           ),
+                        ),
                     ],
                   ),
                 ),
@@ -186,7 +190,11 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
     if (_keys.isEmpty) return;
     setState(() => _exporting = true);
     try {
-      await PdfService.savePdf(_keys, '小学作业-${widget.label}');
+      final path = await PdfService.savePdf(_keys, '小学作业-${widget.label}');
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('PDF 已导出：$path')));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -235,9 +243,12 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
                       for (var i = 0; i < widget.pages.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: RepaintBoundary(
-                            key: _keys[i],
-                            child: _CalligraphyPageView(page: widget.pages[i]),
+                          child: FittedBox(
+                            fit: BoxFit.fitWidth,
+                            child: RepaintBoundary(
+                              key: _keys[i],
+                              child: _CalligraphyPageView(page: widget.pages[i]),
+                            ),
                           ),
                         ),
                   ],

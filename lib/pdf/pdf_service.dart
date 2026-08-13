@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
@@ -31,14 +32,23 @@ class PdfService {
     return pdf.save();
   }
 
-  /// 保存 PDF 到用户选择的路径
+  /// 保存 PDF（桌面端直接存下载目录，移动端弹出分享/保存对话框）
   static Future<String?> savePdf(List<GlobalKey> pageKeys, String filename) async {
     final data = await buildPdf(pageKeys);
-    // 尝试打印/分享对话框
-    await Printing.layoutPdf(
-      onLayout: (_) => data,
-      name: filename,
-    );
+    if (kIsWeb) {
+      await Printing.layoutPdf(onLayout: (_) => data, name: filename);
+      return null;
+    }
+    try {
+      final dir = await getDownloadsDirectory();
+      if (dir != null) {
+        final file = File('${dir.path}/$filename.pdf');
+        await file.writeAsBytes(data, flush: true);
+        return file.path;
+      }
+    } catch (_) {}
+    // 无下载目录（如部分 Android 环境）时走分享/打印对话框
+    await Printing.layoutPdf(onLayout: (_) => data, name: filename);
     return null;
   }
 
