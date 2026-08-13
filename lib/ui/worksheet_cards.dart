@@ -1,0 +1,831 @@
+import 'package:flutter/material.dart';
+import '../data/app_data.dart';
+import '../core/worksheet_model.dart';
+import '../core/math_worksheet.dart';
+import '../core/chinese_worksheet.dart';
+import '../core/english_worksheet.dart';
+import '../ai/ai_generator.dart';
+
+const _kaiTi = 'KaiTi';
+const _serif = 'Georgia';
+
+/// 公共入口：根据卡片类型构建 Widget
+Widget buildWsCardWidget(WsCard card) {
+  if (card.kind == 'pad' || card.data == null) return const SizedBox();
+  if (card.kind == 'math') {
+    return _MathCard(data: card.data as MathItemData, numLabel: card.num);
+  }
+  if (card.kind == 'cn') return _CnCard(data: card.data as CnCardData);
+  if (card.kind == 'ai') {
+    return _AiCard(data: card.data as AiCardData, num: card.num);
+  }
+  if (card.kind == 'eng') {
+    final d = card.data as EngGridCardData;
+    if (d.kind == 'letter') return _LetterCard(data: d.data);
+    if (d.kind == 'trace') return _TraceCard(data: d.data);
+    return _WordQuestionCard(data: d.data);
+  }
+  return const SizedBox();
+}
+
+/// 公共入口：独立块（阅读/连线）
+Widget buildWsBlockWidget(dynamic data) {
+  if (data is ReadingBlockData) return _ReadingBlock(data: data);
+  if (data is WsGridData) return _MatchList(rows: data.rows);
+  return const SizedBox();
+}
+
+/// 数学卡片
+class _MathCard extends StatelessWidget {
+  final MathItemData data;
+  final int? numLabel;
+  const _MathCard({required this.data, this.numLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    final prob = data.prob;
+    final detail = AppData().mathDetails[data.tid];
+    Widget body;
+    if (prob.word) {
+      body = _WordExpr(expr: prob.expr!);
+    } else if (prob.keepExpr) {
+      body = _MathText(prob.expr!, size: 18);
+    } else if (prob.expr != null) {
+      body = _ExprText(
+        expr: prob.expr!,
+        blank: true,
+      );
+    } else if (prob.compare) {
+      body = _MathText(
+        '${fmt(prob.a)} 〇 ${fmt(prob.b)}',
+        size: 19,
+        blank: false,
+      );
+    } else if (prob.op == '÷r') {
+      body = _LongDiv(a: prob.a, b: prob.b);
+    } else if (detail != null && detail.inline) {
+      // 口算题：横式 a op b = ____
+      body = FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('${fmt(prob.a)} ${prob.op} ${fmt(prob.b)} =',
+                style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1,
+                    color: Color(0xff222222),
+                    fontFamily: _serif)),
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              width: 56,
+              height: 1.5,
+              color: const Color(0xff333333),
+            ),
+          ],
+        ),
+      );
+    } else if (prob.op == '÷') {
+      // 除法笔算：标准长除法竖式
+      body = _LongDiv(a: prob.a, b: prob.b);
+    } else {
+      body = _vertical(prob.a, prob.b, prob.op);
+    }
+
+    final vertical = (detail?.vertical ?? false);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.fromLTRB(12, vertical ? 32 : 22, 12, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xffe2ddd2)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 5,
+            left: 9,
+            child: Text('${numLabel ?? ""}.',
+                style: const TextStyle(
+                    fontSize: 12, color: Color(0xff999999), fontWeight: FontWeight.w700)),
+          ),
+          Center(child: body),
+        ],
+      ),
+    );
+  }
+
+  Widget _vertical(num a, num b, String op) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(fmt(a), style: const TextStyle(fontSize: 23, height: 1.25, fontWeight: FontWeight.w600)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('$op ', style: const TextStyle(fontSize: 23, height: 1.25, fontWeight: FontWeight.w600)),
+              Text(fmt(b), style: const TextStyle(fontSize: 23, height: 1.25, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Container(
+            height: 2,
+            width: 90,
+            color: const Color(0xff333333),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String fmt(num v) {
+    if (v is int) return '$v';
+    if (v == v.roundToDouble()) return v.toInt().toString();
+    return v.toString();
+  }
+}
+
+class _ExprText extends StatelessWidget {
+  final String expr;
+  final bool blank;
+  const _ExprText({required this.expr, this.blank = true});
+
+  @override
+  Widget build(BuildContext context) {
+    // 若表达式已含 = ，在其后加下划线；否则末尾加 " = " + 下划线
+    final idx = expr.indexOf('=');
+    final eqText = idx >= 0 ? expr.substring(0, idx + 1) : '$expr =';
+    final rest = idx >= 0 ? expr.substring(idx + 1).trim() : '';
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(eqText,
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
+                  color: Color(0xff222222),
+                  fontFamily: _serif)),
+          if (rest.isNotEmpty)
+            Text(rest,
+                style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1,
+                    color: Color(0xff222222),
+                    fontFamily: _serif)),
+          if (blank)
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              width: 56,
+              height: 1.5,
+              color: const Color(0xff333333),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MathText extends StatelessWidget {
+  final String text;
+  final double size;
+  final bool blank;
+  final bool alignRight;
+  const _MathText(this.text, {this.size = 19, this.blank = false, this.alignRight = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    final idx = text.indexOf('〇');
+    if (idx >= 0) {
+      children.add(Text(text.substring(0, idx),
+          style: _style(size, FontWeight.w600, 1)));
+      children.add(Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: 26,
+        child: Text('〇',
+            textAlign: TextAlign.center,
+            style: _style(size, FontWeight.w600, 1)),
+      ));
+      children.add(Text(text.substring(idx + 1),
+          style: _style(size, FontWeight.w600, 1)));
+    } else {
+      children.add(Text(text,
+          style: _style(size, FontWeight.w600, 1)));
+      if (blank) {
+        children.add(Container(
+          margin: const EdgeInsets.only(left: 2),
+          width: 56,
+          height: 1.5,
+          color: const Color(0xff333333),
+        ));
+      }
+    }
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: children,
+      ),
+    );
+  }
+
+  TextStyle _style(double size, FontWeight w, double ls) =>
+      TextStyle(fontSize: size, fontWeight: w, letterSpacing: ls, color: const Color(0xff222222), fontFamily: _serif);
+}
+
+class _WordExpr extends StatelessWidget {
+  final String expr;
+  const _WordExpr({required this.expr});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(expr,
+            textAlign: TextAlign.left,
+            style: const TextStyle(fontSize: 17, height: 1.8, color: Color(0xff222222))),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Text('答：',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xff333333))),
+            Expanded(
+              child: Container(
+                height: 24,
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LongDiv extends StatelessWidget {
+  final num a;
+  final num b;
+  const _LongDiv({required this.a, required this.b});
+
+  @override
+  Widget build(BuildContext context) {
+    // 动态宽度：被除数位数越多越宽
+    final dw = (('$a').length * 14.0 + 12).clamp(48.0, 120.0);
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text('${fmt(b)} ',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          Text('⟌',
+              style: const TextStyle(fontSize: 34, height: 0.8, color: Color(0xff333333))),
+          Container(
+            width: dw,
+            alignment: Alignment.bottomCenter,
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(height: 26),
+                Text('${fmt(a)}',
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String fmt(num v) => v == v.roundToDouble() ? v.toInt().toString() : '$v';
+}
+
+/// 语文卡片
+class _CnCard extends StatelessWidget {
+  final CnCardData data;
+  const _CnCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (data.type) {
+      case 'pinyin2char':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(data.py,
+                style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1,
+                    color: Color(0xff333333))),
+            const SizedBox(height: 8),
+            _ansLine(),
+          ],
+        );
+      case 'char2pinyin':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pinyinLine(),
+            const SizedBox(height: 4),
+            Text(data.ch,
+                style: const TextStyle(
+                    fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
+          ],
+        );
+      case 'zuci':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(data.ch,
+                style: const TextStyle(
+                    fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
+            const SizedBox(height: 4),
+            _ansLine(),
+            _ansLine(),
+            _ansLine(),
+          ],
+        );
+      case 'gushiFill':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${data.gTitle} · ${data.gAuthor}',
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xff2f6fd0))),
+            const SizedBox(height: 6),
+            for (var i = 0; i < (data.segs?.length ?? 0); i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: i == data.blank
+                    ? const Text('（　　　　　　）',
+                        style: TextStyle(fontSize: 26, color: Color(0xff777777)))
+                    : Text(data.segs![i],
+                        style: const TextStyle(
+                            fontSize: 26,
+                            height: 1.6,
+                            fontFamily: _kaiTi,
+                            color: Color(0xff222222))),
+              ),
+          ],
+        );
+      case 'chengyuFill':
+        final chars = data.idiom!.split('');
+        final shown = chars.asMap().entries
+            .map((e) => e.key == data.blankIdx ? '（　）' : e.value)
+            .join('');
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(shown,
+                style: const TextStyle(
+                    fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
+            const SizedBox(height: 6),
+            Text('释义：${data.meaning}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Color(0xff555555), height: 1.6)),
+          ],
+        );
+      case 'chengyuGuess':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(data.meaning ?? '',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Color(0xff555555), height: 1.6)),
+            const SizedBox(height: 6),
+            _ansLine(),
+          ],
+        );
+      case 'mingjuFill':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < (data.segs?.length ?? 0); i++)
+              Text(
+                i == data.blank
+                    ? '（　　　　　　　　）'
+                    : data.segs![i],
+                style: const TextStyle(
+                    fontSize: 17, height: 1.7, fontFamily: _kaiTi, color: Color(0xff222222)),
+              ),
+            if (data.source != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('出处：${data.source}',
+                    style: const TextStyle(fontSize: 12, color: Color(0xff999999))),
+              ),
+          ],
+        );
+      default:
+        return const SizedBox();
+    }
+  }
+
+  Widget _ansLine() {
+    return Container(
+      width: 140,
+      height: 26,
+      margin: const EdgeInsets.only(top: 4),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+      ),
+    );
+  }
+
+  Widget _pinyinLine() {
+    return Container(
+      width: 140,
+      height: 22,
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+      ),
+    );
+  }
+}
+
+/// AI 卡片
+class _AiCard extends StatelessWidget {
+  final AiCardData data;
+  final int? num;
+  const _AiCard({required this.data, this.num});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xffe2ddd2)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                text: '${num ?? ''}. ',
+                style: const TextStyle(
+                    fontSize: 13, color: Color(0xff999999), fontWeight: FontWeight.w700),
+              ),
+              TextSpan(
+                  text: data.q,
+                  style: const TextStyle(fontSize: 16, height: 1.7)),
+            ]),
+          ),
+          if (data.needsAns)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text('答：',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xff333333))),
+                  Expanded(
+                    child: Container(
+                      height: 20,
+                      decoration: BoxDecoration(
+                        border: Border(
+                            bottom:
+                                BorderSide(color: Color(0xff333333), width: 1.5)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              height: 20,
+              margin: const EdgeInsets.only(top: 4),
+              decoration: const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 英语字母卡片
+class _LetterCard extends StatelessWidget {
+  final EngCardData data;
+  const _LetterCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(data.en,
+            style: const TextStyle(
+                fontSize: 30,
+                fontFamily: 'Times New Roman',
+                height: 1.1,
+                color: Color(0xffc9c9c9))),
+        const _FourLine(),
+      ],
+    );
+  }
+}
+
+/// 单词描红
+class _TraceCard extends StatelessWidget {
+  final EngCardData data;
+  const _TraceCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FourLine(
+          word: data.en,
+          color: const Color(0xffa0a0a0),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(data.cn,
+              style: const TextStyle(fontSize: 13, color: Color(0xff888888))),
+        ),
+        const _FourLine(),
+      ],
+    );
+  }
+}
+
+/// 单词题（中译英/英译中/拼写）
+class _WordQuestionCard extends StatelessWidget {
+  final EngCardData data;
+  const _WordQuestionCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.type == 'cn2en') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(data.cn,
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xff333333))),
+          const SizedBox(height: 6),
+          _FourLine(),
+        ],
+      );
+    }
+    if (data.type == 'en2cn') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(data.en,
+              style: const TextStyle(
+                  fontSize: 26,
+                  fontFamily: 'Times New Roman',
+                  letterSpacing: 2)),
+          const SizedBox(height: 4),
+          Container(
+            width: 180,
+            height: 26,
+            margin: const EdgeInsets.only(top: 4),
+            decoration: const BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+            ),
+          ),
+        ],
+      );
+    }
+    // spell
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(data.shown ?? '',
+            style: const TextStyle(
+                fontSize: 26, fontFamily: 'Times New Roman', letterSpacing: 2)),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: Text('中文：${data.cn}',
+              style: const TextStyle(fontSize: 12, color: Color(0xff888888))),
+        ),
+        Container(
+          width: 180,
+          height: 26,
+          decoration: const BoxDecoration(
+            border: Border(
+                bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 四线三格
+class _FourLine extends StatelessWidget {
+  final String? word;
+  final Color? color;
+  const _FourLine({this.word, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    const top = [12.0, 25.0, 38.0, 51.0];
+    const colors = [
+      Color(0xff999999),
+      Color(0xff888888),
+      Color(0xff999999),
+      Color(0xff999999),
+    ];
+    const widths = [1.0, 1.5, 1.0, 1.0];
+    return SizedBox(
+      height: 56,
+      child: Stack(
+        children: [
+          for (var i = 0; i < 4; i++)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: top[i],
+              child: Container(
+                height: 0,
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: colors[i],
+                      width: widths[i],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (word != null)
+            Positioned(
+              left: 6,
+              top: 10,
+              child: Text(word!,
+                  style: TextStyle(
+                      fontSize: 34,
+                      height: 1,
+                      fontFamily: 'Times New Roman',
+                      letterSpacing: 4,
+                      color: color ?? const Color(0xffa0a0a0))),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 连线列表
+class _MatchList extends StatelessWidget {
+  final List<EngGridCardData> rows;
+  const _MatchList({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < rows.length; i++)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xffe2ddd2)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text('${i + 1}. ${rows[i].data.en}',
+                      style: const TextStyle(fontSize: 18, fontFamily: 'Times New Roman')),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      border: Border(
+                          bottom: BorderSide(color: Color(0xff888888), width: 1.5)),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    '${rows[i].data.matchNum}. ${rows[i].data.cn}',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 阅读短文块
+class _ReadingBlock extends StatelessWidget {
+  final ReadingBlockData data;
+  const _ReadingBlock({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xffe2ddd2)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '《${data.title}》${data.author.isNotEmpty ? ' · ${data.author}' : ''}',
+            style: const TextStyle(
+                fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xff2f6fd0)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            data.text,
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.9,
+              color: const Color(0xff333333),
+              fontFamily: data.en ? 'Times New Roman' : null,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final q in data.questions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(q.q, style: const TextStyle(fontSize: 15, height: 1.7)),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text('答：',
+                          style: TextStyle(fontSize: 15, color: Color(0xff333333))),
+                      Expanded(
+                        child: Container(
+                          height: 24,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                                bottom: BorderSide(
+                                    color: Color(0xff333333), width: 1.5)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

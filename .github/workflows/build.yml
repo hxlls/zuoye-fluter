@@ -1,0 +1,106 @@
+name: 版本变动自动编译
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  # 检测 pubspec.yaml 版本号是否变化
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.v.outputs.changed }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: v
+        run: |
+          PREV=$(git show HEAD^:pubspec.yaml 2>/dev/null | grep '^version:' | head -1 | sed -E 's/version: *([0-9.]+).*/\1/')
+          CUR=$(grep '^version:' pubspec.yaml | head -1 | sed -E 's/version: *([0-9.]+).*/\1/')
+          echo "prev=$PREV  cur=$CUR"
+          echo "changed=$([ "$PREV" = "$CUR" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          echo "version=$CUR" >> "$GITHUB_OUTPUT"
+
+  # 版本号变化时编译 Android APK + Web 并发布 Release
+  build:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 恢复 pub 缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: 设置 JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 设置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装依赖
+        run: flutter pub get
+
+      - name: 运行测试
+        run: flutter test
+
+      - name: 构建 Android APK
+        run: flutter build apk --release
+
+      - name: 构建 Web 版
+        run: flutter build web --release
+
+      - name: 整理产物
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk "release/小学作业生成器-android-v${{ needs.check.outputs.version }}.apk" 2>/dev/null || true
+          cp -r build/web "release/小学作业生成器-web-v${{ needs.check.outputs.version }}" 2>/dev/null || true
+          ls -la release/
+
+      - name: 生成发布说明（变更内容）
+        id: notes
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          {
+            echo "## 小学作业生成器 v${{ needs.check.outputs.version }}（Flutter 版）"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "### 📝 本次更新内容（自 $PREV_TAG 起）"
+              echo ""
+              git log --oneline --no-merges "$PREV_TAG"..HEAD | sed 's/^/- /'
+            else
+              echo "### 📝 初始版本"
+            fi
+            echo ""
+            echo "### 📦 下载"
+            echo "- Android APK（可直接安装）"
+            echo "- Web 版（浏览器打开 index.html）"
+          } > notes.md
+          cat notes.md
+
+      - name: 发布 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check.outputs.version }}
+          name: v${{ needs.check.outputs.version }}
+          body_path: notes.md
+          files: release/**
