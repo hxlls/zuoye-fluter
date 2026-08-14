@@ -168,19 +168,25 @@ class AiClient {
     }
     final model = cfg.model.trim();
     final isDeepseekV4 = model.startsWith('deepseek-v4');
+    final isMimo = model.startsWith('mimo-');
     final body = json.encode({
       'model': model,
       'messages': msgs,
       'temperature': temperature,
       'stream': false,
       // 出题需输出整页 JSON，给足输出长度避免截断
-      if (jsonMode) 'max_tokens': 8192,
+      // 参数名因提供商而异：DeepSeek 用 max_tokens，MiMo 用 max_completion_tokens
+      if (jsonMode)
+        if (isMimo)
+          'max_completion_tokens': 8192
+        else
+          'max_tokens': 8192,
       if (jsonMode)
         'response_format': {
           'type': 'json_object',
         },
-      // DeepSeek V4 默认 thinking 模式：出题时关闭，避免思维链干扰 JSON 输出
-      if (jsonMode && isDeepseekV4) 'thinking': {'type': 'disabled'},
+      // DeepSeek V4 / MiMo 默认 thinking 模式：出题时关闭，避免思维链干扰 JSON 输出
+      if (jsonMode && (isDeepseekV4 || isMimo)) 'thinking': {'type': 'disabled'},
     });
 
     try {
