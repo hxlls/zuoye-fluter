@@ -177,7 +177,7 @@ class CheckLabel extends StatelessWidget {
   }
 }
 
-/// 题型行：勾选 + 标签 + 题量输入
+/// 题型行：勾选 + 标签 + 题量下拉
 class TypeRow extends StatelessWidget {
   final String label;
   final String? sub;
@@ -214,24 +214,25 @@ class TypeRow extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(
-          width: 56,
-          child: TextField(
-            keyboardType: TextInputType.number,
-            enabled: checked,
-            controller: TextEditingController(text: '$count'),
+        // 题量下拉（0=不选，方便手机点选）
+        DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            value: checked ? count : 0,
+            isDense: true,
+            style: const TextStyle(fontSize: 14, color: Color(0xff333333)),
+            items: [
+              for (var i = 0; i <= 30; i++)
+                DropdownMenuItem(value: i, child: Text('$i')),
+            ],
             onChanged: (v) {
-              final n = int.tryParse(v);
-              onCount(n == null ? 0 : n.clamp(0, 30));
+              if (v == null) return;
+              onCount(v);
+              if (v > 0 && !checked) onChecked(true);
+              if (v == 0 && checked) onChecked(false);
             },
-            textAlign: TextAlign.center,
-            decoration: const InputDecoration(
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 2),
         const Text('题', style: TextStyle(fontSize: 12, color: Color(0xff999999))),
       ],
     );
@@ -244,21 +245,24 @@ class NumDropdown extends StatelessWidget {
   final int min;
   final int max;
   final ValueChanged<int> onChanged;
+  final bool fillWidth; // 手机端铺满整行，方便点击
   const NumDropdown({
     super.key,
     required this.value,
     required this.min,
     required this.max,
     required this.onChanged,
+    this.fillWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonHideUnderline(
+    final dropdown = DropdownButtonHideUnderline(
       child: DropdownButton<int>(
         value: value,
         isDense: true,
-        style: const TextStyle(fontSize: 14, color: Color(0xff333333)),
+        isExpanded: fillWidth,
+        style: const TextStyle(fontSize: 15, color: Color(0xff333333)),
         items: [
           for (var i = min; i <= max; i++)
             DropdownMenuItem(value: i, child: Text('$i')),
@@ -267,6 +271,17 @@ class NumDropdown extends StatelessWidget {
           if (v != null) onChanged(v);
         },
       ),
+    );
+    // 带边框圆角，视觉更明确、触达面积更大
+    return Container(
+      width: fillWidth ? double.infinity : null,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xffcccccc)),
+      ),
+      child: dropdown,
     );
   }
 }
