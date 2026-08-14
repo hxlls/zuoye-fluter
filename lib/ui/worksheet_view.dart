@@ -9,14 +9,11 @@ class WorksheetPageView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 普通页固定 A4 高度；参考答案等 noSpread 页允许自然增高（对应 CSS min-height）
-    final height = page.noSpread ? null : 1123.0;
+    // 普通页 min-height A4，内容超高时自然增高（对应 CSS min-height:1123 + flex:1），
+    // 避免内容溢出纸张；参考答案等 noSpread 页同样允许自然增高
     return Container(
       width: 794,
-      height: height,
-      constraints: page.noSpread
-          ? const BoxConstraints(minHeight: 1123)
-          : null,
+      constraints: const BoxConstraints(minHeight: 1123),
       padding: const EdgeInsets.fromLTRB(56, 44, 56, 44),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -34,22 +31,24 @@ class WorksheetPageView extends StatelessWidget {
                 for (final n in page.nodes) _buildNode(context, n),
               ],
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (page.title != null) _TitleBar(title: page.title!),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisAlignment: page.packed
-                        ? MainAxisAlignment.start
-                        : MainAxisAlignment.spaceEvenly,
-                    children: [
-                      for (final n in page.nodes) _buildNode(context, n),
-                    ],
+          : IntrinsicHeight(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (page.title != null) _TitleBar(title: page.title!),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisAlignment: page.packed
+                          ? MainAxisAlignment.start
+                          : MainAxisAlignment.spaceEvenly,
+                      children: [
+                        for (final n in page.nodes) _buildNode(context, n),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
     );
   }

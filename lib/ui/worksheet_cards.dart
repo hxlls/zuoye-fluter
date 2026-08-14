@@ -23,6 +23,10 @@ TextStyle _mathStyle(double size, {FontWeight w = FontWeight.w600}) => TextStyle
 /// 公共入口：根据卡片类型构建 Widget
 Widget buildWsCardWidget(WsCard card) {
   if (card.kind == 'pad' || card.data == null) return const SizedBox();
+  // 占位补全卡（填充行末空格）不渲染内容
+  if (card.data is CnCardData && (card.data as CnCardData).pad) {
+    return const SizedBox();
+  }
   if (card.kind == 'math') {
     return _MathCard(data: card.data as MathItemData, numLabel: card.num);
   }
