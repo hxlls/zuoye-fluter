@@ -218,12 +218,19 @@ class _MathText extends StatelessWidget {
     if (idx >= 0) {
       children.add(Text(text.substring(0, idx),
           style: _style(size, FontWeight.w600, 1)));
-      children.add(Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        width: 26,
-        child: Text('〇',
-            textAlign: TextAlign.center,
-            style: _style(size, FontWeight.w600, 1)),
+      // 比较大小：圆内填符号 → 改为括号（预留足够写 > < = 的空位）
+      children.add(Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text('（',
+              style: _style(size, FontWeight.w600, 1)),
+          Container(
+            width: size * 1.7,
+          ),
+          Text('）',
+              style: _style(size, FontWeight.w600, 1)),
+        ],
       ));
       children.add(Text(text.substring(idx + 1),
           style: _style(size, FontWeight.w600, 1)));
@@ -426,14 +433,31 @@ class _CnCard extends StatelessWidget {
           ],
         );
       case 'chengyuGuess':
-        return Column(
+        // 看意思写成语：释义文字后面紧跟横线（从上到下每题一行），字体加深
+        return Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(data.meaning ?? '',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Color(0xff555555), height: 1.6)),
-            const SizedBox(height: 6),
-            _ansLine(),
+            Flexible(
+              child: Text(data.meaning ?? '',
+                  style: const TextStyle(
+                      fontSize: 15,
+                      color: Color(0xff222222),
+                      height: 1.6,
+                      fontWeight: FontWeight.w500)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Container(
+                height: 26,
+                margin: const EdgeInsets.only(bottom: 2),
+                decoration: const BoxDecoration(
+                  border: Border(
+                      bottom:
+                          BorderSide(color: Color(0xff333333), width: 1.5)),
+                ),
+              ),
+            ),
           ],
         );
       case 'mingjuFill':

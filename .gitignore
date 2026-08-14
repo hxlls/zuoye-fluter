@@ -41,3 +41,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Signing keystore & credentials（勿提交）
+/android/app/upload-keystore.jks
+/android/key.properties
