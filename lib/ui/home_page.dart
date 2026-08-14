@@ -77,9 +77,10 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          const Padding(
-            padding: EdgeInsets.only(right: 4),
-            child: Icon(Icons.auto_awesome, size: 18, color: Colors.white70),
+          IconButton(
+            onPressed: _openAiConfig,
+            icon: const Icon(Icons.settings, size: 20, color: Colors.white),
+            tooltip: 'AI 设置',
           ),
         ],
       ),
@@ -90,6 +91,24 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       bottomNavigationBar: _bottomNav(),
+    );
+  }
+
+  void _openAiConfig() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              child: AiConfigCard(),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
