@@ -60,7 +60,7 @@ class _MathCard extends StatelessWidget {
     if (prob.word) {
       body = _WordExpr(expr: prob.expr!);
     } else if (prob.keepExpr) {
-      body = _MathText(prob.expr!, size: 18);
+      body = _MathText(prob.expr!, size: 22);
     } else if (prob.expr != null) {
       body = _ExprText(
         expr: prob.expr!,

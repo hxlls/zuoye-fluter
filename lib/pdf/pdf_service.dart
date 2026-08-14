@@ -1,9 +1,10 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -32,24 +33,35 @@ class PdfService {
     return pdf.save();
   }
 
-  /// 保存 PDF（桌面端直接存下载目录，移动端弹出分享/保存对话框）
+  /// 保存 PDF：弹出系统「另存为」对话框，由用户自由选择存储位置
   static Future<String?> savePdf(List<GlobalKey> pageKeys, String filename) async {
     final data = await buildPdf(pageKeys);
     if (kIsWeb) {
       await Printing.layoutPdf(onLayout: (_) => data, name: filename);
       return null;
     }
-    try {
-      final dir = await getDownloadsDirectory();
-      if (dir != null) {
-        final file = File('${dir.path}/$filename.pdf');
-        await file.writeAsBytes(data, flush: true);
-        return file.path;
-      }
-    } catch (_) {}
-    // 无下载目录（如部分 Android 环境）时走分享/打印对话框
-    await Printing.layoutPdf(onLayout: (_) => data, name: filename);
-    return null;
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      // 移动端：系统文件选择器（Android SAF / iOS 文件 App）
+      final path = await FlutterFileDialog.saveFile(
+        params: SaveFileDialogParams(
+          data: data,
+          fileName: '$filename.pdf',
+          mimeTypesFilter: const ['application/pdf'],
+        ),
+      );
+      return path;
+    }
+    // 桌面端（Windows/macOS/Linux）：系统另存为对话框
+    final location = await getSaveLocation(
+      suggestedName: '$filename.pdf',
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'PDF', extensions: ['pdf']),
+      ],
+    );
+    if (location == null) return null; // 用户取消
+    final file = File(location.path);
+    await file.writeAsBytes(data, flush: true);
+    return file.path;
   }
 
   /// 直接保存到下载目录（Android / Linux）

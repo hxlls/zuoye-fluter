@@ -89,6 +89,11 @@ class _AiPanelState extends State<AiPanel> {
   Widget build(BuildContext context) {
     return PanelLayout(
       config: _config(),
+      mobileAction: FilledButton.icon(
+        onPressed: _loading ? null : _generate,
+        icon: const Icon(Icons.auto_awesome, size: 18),
+        label: Text(_loading ? '⏳ 正在生成…' : '🤖 AI 生成作业'),
+      ),
       preview: WorksheetPreviewPanel(
         pages: _pages,
         label: 'AI作业', loading: _loading,

@@ -9,8 +9,10 @@ class WsPage {
   List<WsNode> nodes;
   /// 是否不拉伸（参考答案等，top 对齐）
   bool noSpread;
+  /// 内容是否紧凑排布（unitconv 等稀疏页：行从顶部开始，避免大片留白）
+  bool packed;
 
-  WsPage({this.title, List<WsNode>? nodes, this.noSpread = false})
+  WsPage({this.title, List<WsNode>? nodes, this.noSpread = false, this.packed = false})
       : nodes = nodes ?? [];
 }
 

@@ -146,6 +146,14 @@ class _ChinesePanelState extends State<ChinesePanel> {
     setState(_regenerate);
   }
 
+  void _generate() {
+    if ((_counts['aiyuedu'] ?? 0) > 0) {
+      _generateAIReading();
+    } else {
+      _refresh();
+    }
+  }
+
   Future<void> _importCorpus() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -211,6 +219,11 @@ class _ChinesePanelState extends State<ChinesePanel> {
   Widget build(BuildContext context) {
     return PanelLayout(
       config: _config(),
+      mobileAction: FilledButton.icon(
+        onPressed: _loading ? null : _generate,
+        icon: const Icon(Icons.refresh, size: 18),
+        label: Text(_loading ? '⏳ 生成中…' : '生成预览'),
+      ),
       preview: WorksheetPreviewPanel(
         pages: _pages,
         label: '语文作业', loading: _loading,
@@ -322,13 +335,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: () {
-              if ((_counts['aiyuedu'] ?? 0) > 0) {
-                _generateAIReading();
-              } else {
-                _refresh();
-              }
-            },
+            onPressed: _generate,
             child: const Text('生成预览'),
           ),
         ),

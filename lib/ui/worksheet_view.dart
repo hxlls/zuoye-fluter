@@ -41,7 +41,9 @@ class WorksheetPageView extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: page.packed
+                        ? MainAxisAlignment.start
+                        : MainAxisAlignment.spaceEvenly,
                     children: [
                       for (final n in page.nodes) _buildNode(context, n),
                     ],
@@ -82,14 +84,17 @@ class WorksheetPageView extends StatelessWidget {
 
   Widget _buildGrid(WsGrid grid) {
     // 网格保持自然高度（对应 CSS 中 grid 项的 min-height），由页面级 spaceEvenly 分布间距
+    // 行间加最小间距（对应 CSS gap），避免题目挤在一起
     final rows = <Widget>[];
     for (var i = 0; i < grid.cards.length; i += grid.cols) {
       final end = i + grid.cols > grid.cards.length
           ? grid.cards.length
           : i + grid.cols;
       final cards = grid.cards.sublist(i, end);
-      rows.add(Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // 有 itemHeight 时按最小行高约束（自然更高时仍可增高，避免裁剪），
+      // 使稀疏内容页（如单位换算）不会留下大片空白
+      final row = Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           for (var c = 0; c < grid.cols; c++)
             Expanded(
@@ -101,6 +106,15 @@ class WorksheetPageView extends StatelessWidget {
                   : const SizedBox(),
             ),
         ],
+      );
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: grid.itemHeight == null
+            ? row
+            : ConstrainedBox(
+                constraints: BoxConstraints(minHeight: grid.itemHeight!),
+                child: row,
+              ),
       ));
     }
     return Column(

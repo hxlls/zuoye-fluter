@@ -22,6 +22,7 @@ class AiHelpPanel extends StatefulWidget {
 }
 
 class _AiHelpPanelState extends State<AiHelpPanel> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String _subject = 'math';
   final _inputCtl = TextEditingController();
   final List<(String, String)> _messages = []; // (role, content)
@@ -99,56 +100,97 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
   @override
   Widget build(BuildContext context) {
     final data = AppData();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          width: 280,
-          padding: const EdgeInsets.all(14),
-          color: const Color(0xfffaf8f2),
+    final wide = MediaQuery.of(context).size.width >= 760;
+    final chat = _buildChat(data, wide: wide);
+    if (wide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSidebar(data),
+          Expanded(child: chat),
+        ],
+      );
+    }
+    // 手机：设置收进抽屉，主区全屏问答
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        toolbarHeight: 48,
+        backgroundColor: const Color(0xfffaf8f2),
+        title: const Text('💡 AI 帮答题',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: '设置',
+          ),
+        ],
+      ),
+      drawer: Drawer(
+        child: SafeArea(
           child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('AI 帮答题',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                const Text('💡 输入或拍照上传题目，AI 识别并分步骤讲解',
-                    style: TextStyle(fontSize: 12, color: Color(0xff888888))),
-                const SizedBox(height: 14),
-                FormGroup(
-                  label: '科目',
-                  child: SegButtons(
-                    options: [
-                      ('math', '数学'),
-                      ('english', '英语'),
-                      ('chinese', '语文'),
-                      ('other', '其他'),
-                    ],
-                    value: _subject,
-                    onChanged: (v) => setState(() => _subject = v),
-                  ),
-                ),
-                FormGroup(
-                  label: '讲解对象年级',
-                  child: Text(
-                    '使用顶部选择的 ${data.textbooks[widget.version]?.name ?? '人教版'} ${data.gradeNames[widget.grade] ?? ''} ${widget.volume == '下' ? '下册' : '上册'}',
-                    style: const TextStyle(fontSize: 14, color: Color(0xff555555)),
-                  ),
-                ),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _messages.clear()),
-                    child: const Text('🔄 新对话（清空记录）'),
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
+            child: _buildSidebar(data),
           ),
         ),
-        Expanded(
-          child: Container(
+      ),
+      body: chat,
+    );
+  }
+
+  Widget _buildSidebar(AppData data) {
+    return Container(
+      width: 280,
+      padding: const EdgeInsets.all(14),
+      color: const Color(0xfffaf8f2),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('AI 帮答题',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            const Text('💡 输入或拍照上传题目，AI 识别并分步骤讲解',
+                style: TextStyle(fontSize: 12, color: Color(0xff888888))),
+            const SizedBox(height: 14),
+            FormGroup(
+              label: '科目',
+              child: SegButtons(
+                options: [
+                  ('math', '数学'),
+                  ('english', '英语'),
+                  ('chinese', '语文'),
+                  ('other', '其他'),
+                ],
+                value: _subject,
+                onChanged: (v) => setState(() => _subject = v),
+              ),
+            ),
+            FormGroup(
+              label: '讲解对象年级',
+              child: Text(
+                '使用顶部选择的 ${data.textbooks[widget.version]?.name ?? '人教版'} ${data.gradeNames[widget.grade] ?? ''} ${widget.volume == '下' ? '下册' : '上册'}',
+                style: const TextStyle(fontSize: 14, color: Color(0xff555555)),
+              ),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => setState(() => _messages.clear()),
+                child: const Text('🔄 新对话（清空记录）'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChat(AppData data, {required bool wide}) {
+    return Container(
             margin: const EdgeInsets.all(10),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -211,19 +253,26 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: _sending ? null : _send,
-                        child: Text(_sending ? '⏳ 讲解中…' : '🤖 AI 解答'),
-                      ),
+                      wide
+                          ? FilledButton(
+                              onPressed: _sending ? null : _send,
+                              child: Text(_sending ? '⏳ 讲解中…' : '🤖 AI 解答'),
+                            )
+                          : FilledButton(
+                              onPressed: _sending ? null : _send,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                              ),
+                              child: Text(_sending ? '⏳' : '解答'),
+                            ),
                     ],
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-      ],
-    );
+          );
   }
 
   Widget _chatBubble(String role, String content) {

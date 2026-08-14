@@ -6,7 +6,14 @@ import 'package:flutter/material.dart';
 class PanelLayout extends StatefulWidget {
   final Widget config;
   final Widget preview;
-  const PanelLayout({super.key, required this.config, required this.preview});
+  /// 手机端主操作按钮（如「AI 生成」），常驻预览区顶部直接可点
+  final Widget? mobileAction;
+  const PanelLayout({
+    super.key,
+    required this.config,
+    required this.preview,
+    this.mobileAction,
+  });
 
   @override
   State<PanelLayout> createState() => _PanelLayoutState();
@@ -58,7 +65,16 @@ class _PanelLayoutState extends State<PanelLayout> {
           ),
         ),
       ),
-      body: widget.preview,
+      body: Column(
+        children: [
+          if (widget.mobileAction != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+              child: SizedBox(width: double.infinity, child: widget.mobileAction),
+            ),
+          Expanded(child: widget.preview),
+        ],
+      ),
     );
   }
 }

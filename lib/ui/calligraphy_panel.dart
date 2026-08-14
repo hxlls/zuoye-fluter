@@ -67,6 +67,11 @@ class _CalligraphyPanelState extends State<CalligraphyPanel> {
   Widget build(BuildContext context) {
     return PanelLayout(
       config: _config(),
+      mobileAction: FilledButton.icon(
+        onPressed: () => setState(() => _regenerate()),
+        icon: const Icon(Icons.refresh, size: 18),
+        label: const Text('生成预览'),
+      ),
       preview: CalligraphyPreviewPanel(
         pages: _pages,
         label: '练字帖', loading: _loading,

@@ -143,17 +143,20 @@ List<WsPage> mathRenderPages(MathOptions opts) {
   var curH = 0.0;
   var curNodes = <WsNode>[];
   var curTitle = opts.showTitle ? mathTitle(pageNo[0]) : null;
+  var curPacked = false;
 
   void flushPage() {
     if (curNodes.isNotEmpty) {
       pages.add(WsPage(
         title: curTitle,
         nodes: curNodes,
+        packed: curPacked,
       ));
       pageNo[0]++;
     }
     curNodes = [];
     curH = 0;
+    curPacked = false;
   }
 
   for (final sec in sections) {
@@ -163,6 +166,8 @@ List<WsPage> mathRenderPages(MathOptions opts) {
       curTitle = opts.showTitle ? mathTitle(pageNo[0]) : null;
     }
     curH += secH;
+    // 单位换算等稀疏内容页：行从顶部紧凑排布，避免大片留白
+    if (sec.tid == 'unitconv') curPacked = true;
     curNodes.add(WsHeading(sec.title, unit: sec.unit));
     final instr = data.mathInstruction[sec.tid] ?? '计算下面各题。';
     curNodes.add(WsSection(instr, mathStyle: true));
