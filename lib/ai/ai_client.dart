@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// AI 提供商预设
 const AI_PROVIDERS = {
-  'deepseek': (base: 'https://api.deepseek.com', model: 'deepseek-chat'),
+  'deepseek': (base: 'https://api.deepseek.com', model: 'deepseek-v4-flash'),
   'openai': (base: 'https://api.openai.com/v1', model: 'gpt-4o-mini'),
   'qwen': (
     base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -131,8 +131,10 @@ class AiChatMessage {
 class AiClient {
   /// 发送消息并返回文本内容（原生 http，无 CORS）
   /// [imageBase64] 传入 `data:image/...;base64,...` 时按多模态发送（OpenAI 兼容 image_url）
+  /// [jsonMode] 出题等需解析 JSON 的场景：DeepSeek V4 默认 thinking 模式会导致长 JSON 输出
+  ///   不稳定/空 content，启用后自动关闭 thinking 并请求 json_object
   static Future<String> chat(AiConfig cfg, List<AiChatMessage> messages,
-      {double temperature = 0.8, String? imageBase64}) async {
+      {double temperature = 0.8, String? imageBase64, bool jsonMode = false}) async {
     if (cfg.base.trim().isEmpty) {
       throw Exception('未配置 API 地址，请先填写 AI 设置');
     }
@@ -164,11 +166,21 @@ class AiClient {
         },
       ];
     }
+    final model = cfg.model.trim();
+    final isDeepseekV4 = model.startsWith('deepseek-v4');
     final body = json.encode({
-      'model': cfg.model,
+      'model': model,
       'messages': msgs,
       'temperature': temperature,
       'stream': false,
+      // 出题需输出整页 JSON，给足输出长度避免截断
+      if (jsonMode) 'max_tokens': 8192,
+      if (jsonMode)
+        'response_format': {
+          'type': 'json_object',
+        },
+      // DeepSeek V4 默认 thinking 模式：出题时关闭，避免思维链干扰 JSON 输出
+      if (jsonMode && isDeepseekV4) 'thinking': {'type': 'disabled'},
     });
 
     try {
@@ -179,9 +191,18 @@ class AiClient {
             'API 返回错误 ${resp.$1}：${text.length > 300 ? text.substring(0, 300) : text}');
       }
       final data = json.decode(text) as Map<String, dynamic>;
-      final content = data['choices']?[0]?['message']?['content'];
+      final msg = data['choices']?[0]?['message'];
+      var content = msg?['content'];
+      // 部分推理模型 content 为 null，答案可能在 reasoning_content 或最后一段
       if (content == null) {
-        throw Exception('API 返回格式异常（缺少 choices[0].message.content）');
+        final reasoning = msg?['reasoning_content'];
+        content = (reasoning is String && reasoning.trim().isNotEmpty)
+            ? reasoning
+            : null;
+      }
+      if (content == null) {
+        throw Exception(
+            'API 返回格式异常（缺少 choices[0].message.content）：${text.length > 200 ? text.substring(0, 200) : text}');
       }
       return content as String;
     } on Exception {
@@ -196,7 +217,7 @@ class AiClient {
 Future<(int, String)> httpPostJson(String url, Map<String, String> headers, String body) async {
   final resp = await http
       .post(Uri.parse(url), headers: headers, body: body)
-      .timeout(const Duration(seconds: 90));
+      .timeout(const Duration(seconds: 180));
   return (resp.statusCode, resp.body);
 }
 

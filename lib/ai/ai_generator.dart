@@ -167,7 +167,7 @@ Future<List<AiSection>> aiGenerateWorksheet(
   if (validSpecs.isEmpty) throw Exception('请至少选择一种题型并设置题量。');
   final content = await AiClient.chat(cfg, [
     AiChatMessage('user', aiBuildPrompt(subject, validSpecs, opts)),
-  ]);
+  ], jsonMode: true);
   final data = aiExtractJson(content);
   final rawSections = data['sections'] is List
       ? (data['sections'] as List).cast<Map<String, dynamic>>()
@@ -387,7 +387,8 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       '3. 题目必须原创、新颖，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
-  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)]);
+  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
+      jsonMode: true);
   final data2 = aiExtractJson(content);
   final items = data2['items'] is List ? data2['items'] as List : [];
   return [
@@ -423,7 +424,8 @@ Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
       '3. 短文与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","text":"英文短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
-  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)]);
+  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
+      jsonMode: true);
   final data2 = aiExtractJson(content);
   final items = data2['items'] is List ? data2['items'] as List : [];
   return [
