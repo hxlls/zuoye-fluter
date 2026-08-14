@@ -355,7 +355,7 @@ class _CnCard extends StatelessWidget {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('（${data.py}）',
+            Text(data.py,
                 style: const TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w600,
@@ -391,10 +391,11 @@ class _CnCard extends StatelessWidget {
         );
       case 'gushiFill':
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('${data.gTitle} · ${data.gAuthor}',
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -405,8 +406,10 @@ class _CnCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 2),
                 child: i == data.blank
                     ? const Text('（　　　　　　）',
+                        textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 26, color: Color(0xff777777)))
                     : Text(data.segs![i],
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                             fontSize: 26,
                             height: 1.6,
@@ -462,7 +465,7 @@ class _CnCard extends StatelessWidget {
         );
       case 'mingjuFill':
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             for (var i = 0; i < (data.segs?.length ?? 0); i++)
@@ -470,6 +473,7 @@ class _CnCard extends StatelessWidget {
                 i == data.blank
                     ? '（　　　　　　　　）'
                     : data.segs![i],
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 17, height: 1.7, fontFamily: _kaiTi, color: Color(0xff222222)),
               ),
@@ -477,6 +481,7 @@ class _CnCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text('出处：${data.source}',
+                    textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 12, color: Color(0xff999999))),
               ),
           ],
