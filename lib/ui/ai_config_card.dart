@@ -67,6 +67,40 @@ class _AiConfigCardState extends State<AiConfigCard> {
     });
   }
 
+  Future<void> _test() async {
+    final cfg = AiConfig(
+      provider: _provider,
+      base: _baseCtl.text.trim(),
+      model: _modelCtl.text.trim(),
+      key: _keyCtl.text.trim(),
+    );
+    if (cfg.base.isEmpty || cfg.model.isEmpty || cfg.key.isEmpty) {
+      setState(() {
+        _status = '请先填写 API 地址、模型与 Key';
+        _statusColor = const Color(0xffd8433b);
+      });
+      return;
+    }
+    setState(() {
+      _status = '测试中…';
+      _statusColor = const Color(0xff2f6fd0);
+    });
+    try {
+      final reply = await AiClient.chat(cfg, [
+        AiChatMessage('user', '请回复"连接正常"四个字。'),
+      ], temperature: 0);
+      setState(() {
+        _status = '连接正常 ✓（返回：${reply.length > 30 ? reply.substring(0, 30) : reply}）';
+        _statusColor = const Color(0xff2f7d32);
+      });
+    } catch (e) {
+      setState(() {
+        _status = '连接失败：${aiFriendlyError(e)}';
+        _statusColor = const Color(0xffd8433b);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -111,9 +145,14 @@ class _AiConfigCardState extends State<AiConfigCard> {
                   children: [
                     FilledButton(onPressed: _save, child: const Text('保存设置')),
                     const SizedBox(width: 8),
+                    OutlinedButton(onPressed: _test, child: const Text('测试')),
+                    const SizedBox(width: 8),
                     OutlinedButton(onPressed: _clear, child: const Text('清除')),
                     const SizedBox(width: 8),
-                    Text(_status, style: TextStyle(fontSize: 13, color: _statusColor)),
+                    Flexible(
+                      child: Text(_status,
+                          style: TextStyle(fontSize: 13, color: _statusColor)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),

@@ -115,9 +115,9 @@ class _HomePageState extends State<HomePage> {
   Widget _bottomNav() {
     final items = [
       ('calligraphy', Icons.edit, '练字帖'),
-      ('chinese', Icons.menu_book, '语文'),
-      ('math', Icons.calculate, '数学'),
-      ('english', Icons.language, '英语'),
+      if (_supportedSubjects().contains('cally')) ('chinese', Icons.menu_book, '语文'),
+      if (_supportedSubjects().contains('math')) ('math', Icons.calculate, '数学'),
+      if (_supportedSubjects().contains('eng')) ('english', Icons.language, '英语'),
       ('ai', Icons.auto_awesome, 'AI'),
       ('aihelp', Icons.chat, '帮答'),
       ('about', Icons.info_outline, '关于'),
@@ -160,6 +160,7 @@ class _HomePageState extends State<HomePage> {
                 setState(() {
                   _version = k;
                   _normalizeGrade();
+                  _normalizeTab();
                 });
               },
             ),
@@ -229,6 +230,7 @@ class _HomePageState extends State<HomePage> {
               setState(() {
                 _version = k;
                 _normalizeGrade();
+                _normalizeTab();
               });
             },
           ),
@@ -312,12 +314,51 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 当前版本支持的科目（外研版仅英语，冀教版语文为 null 等）
+  Set<String> _supportedSubjects() {
+    final data = AppData();
+    final support = data.versionSupport[_version] ?? data.versionSupport['renjiao']!;
+    final set = <String>{};
+    if (support['cally'] != null) set.add('cally');
+    if (support['math'] != null) set.add('math');
+    if (support['eng'] != null) set.add('eng');
+    return set;
+  }
+
+  /// 版本切换后归一化标签页：当前标签对应的科目若不再支持，切回第一个可用标签
+  void _normalizeTab() {
+    final s = _supportedSubjects();
+    final curSubject = switch (_tab) {
+      'chinese' => 'cally',
+      'math' => 'math',
+      'english' => 'eng',
+      _ => null,
+    };
+    if (curSubject != null && !s.contains(curSubject)) {
+      _tab = _visibleTabKeys().firstWhere((t) => t != null, orElse: () => 'calligraphy')!;
+    }
+  }
+
+  /// 当前版本可见的标签 key（按支持科目过滤）
+  List<String?> _visibleTabKeys() {
+    final s = _supportedSubjects();
+    return [
+      'calligraphy',
+      if (s.contains('cally')) 'chinese',
+      if (s.contains('math')) 'math',
+      if (s.contains('eng')) 'english',
+      'ai',
+      'aihelp',
+      'about',
+    ];
+  }
+
   Widget _tabs() {
     final tabs = [
       ('calligraphy', '✍️ 练字帖'),
-      ('chinese', '📖 语文作业'),
-      ('math', '🔢 数学作业'),
-      ('english', '🇬🇧 英语作业'),
+      if (_supportedSubjects().contains('cally')) ('chinese', '📖 语文作业'),
+      if (_supportedSubjects().contains('math')) ('math', '🔢 数学作业'),
+      if (_supportedSubjects().contains('eng')) ('english', '🇬🇧 英语作业'),
       ('ai', '🤖 AI 出题'),
       ('aihelp', '💡 AI 帮答题'),
       ('about', 'ℹ️ 关于'),
