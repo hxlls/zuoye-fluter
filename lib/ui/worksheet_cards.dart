@@ -355,21 +355,21 @@ class _CnCard extends StatelessWidget {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(data.py,
+            Text('（${data.py}）',
                 style: const TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1,
                     color: Color(0xff333333))),
             const SizedBox(height: 8),
-            _ansLine(),
+            _bracketLine(width: 4),
           ],
         );
       case 'char2pinyin':
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _pinyinLine(),
+            _pinyinFourLine(),
             const SizedBox(height: 4),
             Text(data.ch,
                 style: const TextStyle(
@@ -384,9 +384,9 @@ class _CnCard extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
             const SizedBox(height: 4),
-            _ansLine(),
-            _ansLine(),
-            _ansLine(),
+            _bracketLine(width: 4),
+            _bracketLine(width: 4),
+            _bracketLine(width: 4),
           ],
         );
       case 'gushiFill':
@@ -497,13 +497,46 @@ class _CnCard extends StatelessWidget {
     );
   }
 
-  Widget _pinyinLine() {
-    return Container(
+  /// 括号式答题空位（全角括号内留空）
+  Widget _bracketLine({int width = 4}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        '（${'　' * width}）',
+        style: const TextStyle(
+            fontSize: 26, color: Color(0xff777777), height: 1.4),
+      ),
+    );
+  }
+
+  /// 四线三格（拼音书写）
+  Widget _pinyinFourLine() {
+    return SizedBox(
       width: 140,
-      height: 22,
-      margin: const EdgeInsets.only(bottom: 4),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+      height: 46,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < 4; i++)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: [10.0, 21.0, 32.0, 43.0][i],
+              child: Container(
+                height: 0,
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: i == 1
+                          ? const Color(0xff888888)
+                          : const Color(0xff999999),
+                      width: i == 1 ? 1.5 : 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

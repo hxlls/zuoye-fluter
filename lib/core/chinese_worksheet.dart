@@ -30,7 +30,7 @@ class ChineseOptions {
 
 /// 语文题型指令
 const CHINESE_INSTRUCTION = {
-  'pinyin2char': '看拼音，在横线上写出相应的汉字。',
+  'pinyin2char': '看拼音，在括号里写出相应的汉字。',
   'char2pinyin': '给下列汉字注上拼音。',
   'zuci': '照样子给生字组词，每个字组2-3个词语。',
   'gushiFill': '在下面空白处填入诗句，把古诗补充完整。',
