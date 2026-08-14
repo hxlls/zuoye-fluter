@@ -130,8 +130,9 @@ class AiChatMessage {
 /// OpenAI 兼容请求
 class AiClient {
   /// 发送消息并返回文本内容（原生 http，无 CORS）
+  /// [imageBase64] 传入 `data:image/...;base64,...` 时按多模态发送（OpenAI 兼容 image_url）
   static Future<String> chat(AiConfig cfg, List<AiChatMessage> messages,
-      {double temperature = 0.8}) async {
+      {double temperature = 0.8, String? imageBase64}) async {
     if (cfg.base.trim().isEmpty) {
       throw Exception('未配置 API 地址，请先填写 AI 设置');
     }
@@ -149,11 +150,23 @@ class AiClient {
       'Content-Type': 'application/json',
       if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
     };
+    final msgs = <Map<String, dynamic>>[
+      for (final m in messages) {'role': m.role, 'content': m.content},
+    ];
+    if (imageBase64 != null && imageBase64.isNotEmpty) {
+      // 最后一条 user 消息改为多模态：文本 + 图片
+      final last = msgs.last;
+      last['content'] = [
+        {'type': 'text', 'text': '${last['content'] ?? ''}'},
+        {
+          'type': 'image_url',
+          'image_url': {'url': imageBase64},
+        },
+      ];
+    }
     final body = json.encode({
       'model': cfg.model,
-      'messages': [
-        for (final m in messages) {'role': m.role, 'content': m.content},
-      ],
+      'messages': msgs,
       'temperature': temperature,
       'stream': false,
     });
@@ -206,10 +219,11 @@ String aiFriendlyError(Object e) {
       .hasMatch(msg)) {
     return '模型名称或接口地址有误（404）。请核对「AI 智能出题设置」中的 API 地址和模型名。';
   }
-  if (RegExp(r'网络请求失败|fetch failed|ENOTFOUND|ECONNREFUSED',
+  if (RegExp(
+          r'网络请求失败|fetch failed|ENOTFOUND|ECONNREFUSED|Failed host lookup|No address associated with hostname',
           caseSensitive: false)
       .hasMatch(msg)) {
-    return '网络请求失败，请检查网络连接或 API 地址（本地 Ollama 需先启动）。';
+    return '网络/DNS 解析失败，无法连接到 API 服务器。请检查网络连接或更换网络（部分网络/地区可能无法访问该 API 域名）；本地 Ollama 需先启动。';
   }
   return msg;
 }

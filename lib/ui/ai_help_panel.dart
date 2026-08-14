@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/app_data.dart';
@@ -45,8 +46,9 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
       return;
     }
     final withImage = _pendingImage.isNotEmpty;
+    final imgData = withImage ? _pendingImage : null;
     final userMsg = withImage
-        ? '（图片题目）$q'
+        ? '（请识别图片中的题目并解答）$q'
         : q;
     setState(() {
       _messages.add(('user', userMsg));
@@ -64,7 +66,7 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
       final content = await AiClient.chat(cfg, [
         sys,
         AiChatMessage('user', userMsg),
-      ]);
+      ], imageBase64: imgData);
       setState(() {
         _messages.add(('ai', content.isEmpty ? '（AI 未返回内容，请重试）' : content));
       });
@@ -91,7 +93,7 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
         _showSnack('图片太大（超过15MB）');
         return;
       }
-      setState(() => _pendingImage = 'data:image/jpeg;base64,');
+      setState(() => _pendingImage = 'data:image/jpeg;base64,${base64Encode(bytes)}');
     } catch (e) {
       _showSnack('拍照失败：$e');
     }
@@ -111,7 +113,7 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
         _showSnack('图片太大（超过15MB）');
         return;
       }
-      setState(() => _pendingImage = 'data:image/jpeg;base64,');
+      setState(() => _pendingImage = 'data:image/jpeg;base64,${base64Encode(bytes)}');
     } catch (e) {
       _showSnack('选择图片失败：$e');
     }
