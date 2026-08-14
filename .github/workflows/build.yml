@@ -66,12 +66,9 @@ jobs:
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
-            cat > android/key.properties <<EOF
-            storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-            keyPassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-            keyAlias=upload
-            storeFile=upload-keystore.jks
-            EOF
+            printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n' \
+              "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+              > android/key.properties
             echo "已配置 release 签名密钥"
           else
             echo "未配置 ANDROID_KEYSTORE_BASE64，使用 debug 签名"

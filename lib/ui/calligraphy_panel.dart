@@ -123,32 +123,29 @@ class _CalligraphyPanelState extends State<CalligraphyPanel> {
           ),
         FormGroup(
           label: '每字练习次数',
-          child: SegButtons(
-            options: [('2', '2 次'), ('4', '4 次'), ('6', '6 次')],
-            value: '${_opts.practice}',
-            onChanged: (v) => _regenerateWith(() => _opts.practice = int.parse(v)),
+          child: NumDropdown(
+            value: _opts.practice,
+            min: 1,
+            max: 10,
+            onChanged: (v) => _regenerateWith(() => _opts.practice = v),
           ),
         ),
         FormGroup(
           label: '每行字数（列）',
-          child: SegButtons(
-            options: [
-              ('4', '4'),
-              ('5', '5'),
-              ('6', '6'),
-              ('8', '8'),
-              ('10', '10'),
-            ],
-            value: '${_opts.perRow}',
-            onChanged: (v) => _regenerateWith(() => _opts.perRow = int.parse(v)),
+          child: NumDropdown(
+            value: _opts.perRow,
+            min: 1,
+            max: 10,
+            onChanged: (v) => _regenerateWith(() => _opts.perRow = v),
           ),
         ),
         FormGroup(
           label: '每页行数',
-          child: SegButtons(
-            options: [('5', '5 行'), ('6', '6 行'), ('8', '8 行'), ('10', '10 行')],
-            value: '${_opts.rows}',
-            onChanged: (v) => _regenerateWith(() => _opts.rows = int.parse(v)),
+          child: NumDropdown(
+            value: _opts.rows,
+            min: 1,
+            max: 10,
+            onChanged: (v) => _regenerateWith(() => _opts.rows = v),
           ),
         ),
         FormGroup(

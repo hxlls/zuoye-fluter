@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../data/app_data.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
@@ -77,19 +77,44 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
     }
   }
 
-  Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final f = result.files.first;
-    if (f.bytes == null) return;
-    if (f.bytes!.length > 15 * 1024 * 1024) {
-      _showSnack('图片太大（超过15MB）');
-      return;
+  /// 拍摄照片（直接调用手机相机）
+  Future<void> _takePhoto() async {
+    try {
+      final f = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+        maxWidth: 1600,
+      );
+      if (f == null) return;
+      final bytes = await f.readAsBytes();
+      if (bytes.length > 15 * 1024 * 1024) {
+        _showSnack('图片太大（超过15MB）');
+        return;
+      }
+      setState(() => _pendingImage = 'data:image/jpeg;base64,');
+    } catch (e) {
+      _showSnack('拍照失败：$e');
     }
-    setState(() => _pendingImage = 'data:${f.extension ?? 'image/jpeg'};base64,');
+  }
+
+  /// 从相册选择图片
+  Future<void> _pickImage() async {
+    try {
+      final f = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1600,
+      );
+      if (f == null) return;
+      final bytes = await f.readAsBytes();
+      if (bytes.length > 15 * 1024 * 1024) {
+        _showSnack('图片太大（超过15MB）');
+        return;
+      }
+      setState(() => _pendingImage = 'data:image/jpeg;base64,');
+    } catch (e) {
+      _showSnack('选择图片失败：$e');
+    }
   }
 
   void _showSnack(String msg) {
@@ -236,8 +261,13 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.photo_camera),
+                        onPressed: _takePhoto,
+                        tooltip: '拍照上传题目',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.photo_library_outlined),
                         onPressed: _pickImage,
-                        tooltip: '上传题目图片',
+                        tooltip: '从相册选择图片',
                       ),
                       Expanded(
                         child: TextField(

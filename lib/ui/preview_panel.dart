@@ -368,6 +368,7 @@ class _TianziCell extends StatelessWidget {
         border: Border.all(color: const Color(0xff111111), width: 2),
       ),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
             left: size / 2 - 0.75,

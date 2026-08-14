@@ -238,6 +238,39 @@ class TypeRow extends StatelessWidget {
   }
 }
 
+/// 数值下拉选择（1..max 可选，用于练字帖等数字设置）
+class NumDropdown extends StatelessWidget {
+  final int value;
+  final int min;
+  final int max;
+  final ValueChanged<int> onChanged;
+  const NumDropdown({
+    super.key,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<int>(
+        value: value,
+        isDense: true,
+        style: const TextStyle(fontSize: 14, color: Color(0xff333333)),
+        items: [
+          for (var i = min; i <= max; i++)
+            DropdownMenuItem(value: i, child: Text('$i')),
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      ),
+    );
+  }
+}
+
 /// 题量输入（带数值显示）
 class CountSlider extends StatelessWidget {
   final int value;
