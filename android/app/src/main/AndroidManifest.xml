@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 联网（AI 请求等）release 版必需 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- AI 帮答题拍照（相机）与相册图片 -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
