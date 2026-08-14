@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/app_data.dart';
 
 /// 关于面板
 class AboutPanel extends StatelessWidget {
   const AboutPanel({super.key});
+
+  Future<void> _openRepo(BuildContext context) async {
+    final uri = Uri.parse('https://github.com/hxlls/zuoye-fluter');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('无法打开浏览器')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +41,12 @@ class AboutPanel extends StatelessWidget {
                     const Text('中国小学作业生成工具 · 练字帖 / 语文 / 数学 / 英语 + AI 出题与帮答题',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13, color: Color(0xff666666))),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () => _openRepo(context),
+                      child: const Text('GitHub：github.com/hxlls/zuoye-fluter',
+                          style: TextStyle(fontSize: 13, color: Color(0xff2f6fd0))),
+                    ),
                   ],
                 ),
               ),
