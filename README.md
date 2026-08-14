@@ -20,7 +20,7 @@
 
 ## 使用说明
 
-- **AI 功能需自备大模型 API Key**：支持 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、本地 Ollama 等），在应用内「AI 智能出题设置」填入 API 地址、模型与 Key 即可
+- **AI 功能需自备大模型 API Key**：支持 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、小米 MiMo、本地 Ollama 等），在应用内「AI 智能出题设置」填入 API 地址、模型与 Key 即可
 - Key 以系统级加密保存（Windows DPAPI / 安卓系统密钥库 Keystore），仅存本机、不联网上传
 
 ## 开发

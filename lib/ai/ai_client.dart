@@ -17,6 +17,10 @@ const AI_PROVIDERS = {
     base: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-flash'
   ),
+  'mimo': (
+    base: 'https://api.xiaomimimo.com/v1',
+    model: 'mimo-v2.5'
+  ),
   'ollama': (base: 'http://localhost:11434/v1', model: 'qwen2.5:7b'),
   'custom': (base: '', model: ''),
 };
