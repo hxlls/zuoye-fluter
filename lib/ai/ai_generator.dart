@@ -107,20 +107,41 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
       .join('\n');
 
   final special = subject == 'chinese'
-      ? '题目中的生字/词语要适合该年级。'
+      ? '题目中的生字/词语要适合该年级，最好从下面该年级生字范围中选取（括号内为该册生字，供参考）：\n生字：${_gradeChineseChars(data, opts)}'
       : subject == 'english'
-          ? '英文题目词汇要属于该年级常用范围；若含阅读理解，短文须用英文。'
-          : '应用题要贴近生活，答案给出单位。';
+          ? '英文题目词汇要属于该年级常用范围，可参考下面该年级词汇表（供参考）：\n词汇：${_gradeEnglishVocab(data, opts)}'
+          : '应用题要贴近生活，答案给出单位。参考该年级数学知识范围：${_gradeMathTopics(data, opts)}';
 
   return '你是中国${subjectCN}教学出题专家。请为"${tb.name}${gname}${volName}"的学生出一套${diffText}难度的作业，共$total题，题型分配如下：\n'
       '$styleLines\n\n'
       '要求：\n'
       '1. 题目必须新颖、灵活，注重"举一反三"，不得照搬教材例题、课本原题或常见题库里的固定题目；\n'
-      '2. 难度要与${gname}学生的水平匹配；\n'
+      '2. 难度要与${gname}学生的水平匹配，严格贴合${gname}的知识范围（生字/词汇/知识点不得超纲）；\n'
       '3. ${withAnswer ? "每题必须给出正确答案，计算与拼写必须准确。" : "只要题目，不要给出答案。"}\n'
       '4. $special\n\n'
       '只输出一个 JSON 对象，格式严格如下，不要输出任何其他文字、不要用代码块包裹：\n'
       '${withAnswer ? '{"sections":[{"type":"题型名称","items":[{"q":"题目","a":"答案"}]}]}' : '{"sections":[{"type":"题型名称","items":[{"q":"题目"}]}]}'}';
+}
+
+/// 该年级语文写字表生字（用于约束 AI 生字/词语范围）
+String _gradeChineseChars(AppData data, AiPromptOpts opts) {
+  final list = data.vol(opts.version, opts.grade, opts.volume, 'cally')?.cally ?? [];
+  final chars = list.take(60).map((c) => c[0]).join('、');
+  return chars.isEmpty ? '（无）' : chars;
+}
+
+/// 该年级英语词汇表（用于约束 AI 词汇范围）
+String _gradeEnglishVocab(AppData data, AiPromptOpts opts) {
+  final list = data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [];
+  final words = list.take(50).map((w) => w[0]).join('、');
+  return words.isEmpty ? '（无）' : words;
+}
+
+/// 该年级数学题型/知识范围
+String _gradeMathTopics(AppData data, AiPromptOpts opts) {
+  final cfg = data.vol(opts.version, opts.grade, opts.volume, 'math')?.math ?? [];
+  final topics = cfg.map((t) => t.label).join('、');
+  return topics.isEmpty ? '（无）' : topics;
 }
 
 class AiPromptOpts {
@@ -381,9 +402,13 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
   final gname = data.gradeNames[opts.grade] ?? '小学';
   final volName = opts.volume == '下' ? '下册' : '上册';
   final count = opts.readingCount;
+  final chars = (data.vol(opts.version, opts.grade, opts.volume, 'cally')?.cally ?? [])
+      .take(80)
+      .map((c) => c[0])
+      .join('、');
   final prompt = '你是中国小学语文出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇原创阅读理解练习：\n'
-      '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等）；\n'
-      '2. 每篇配3-5道理解题（按原文找信息、概括内容、体会句子意思、明白道理等）；\n'
+      '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等），短文用字尽量控制在下面该年级生字范围（生字可作参考，允许少量延伸）：\n生字：${chars.isEmpty ? '（无）' : chars}\n'
+      '2. 每篇配3-5道理解题（按原文找信息、概括内容、体会句子意思、明白道理等），难度贴合${gname}；\n'
       '3. 题目必须原创、新颖，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
@@ -418,9 +443,13 @@ Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
   final gname = data.gradeNames[opts.grade] ?? '小学';
   final volName = opts.volume == '下' ? '下册' : '上册';
   final count = opts.readingCount;
+  final words = (data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [])
+      .take(50)
+      .map((w) => w[0])
+      .join('、');
   final prompt = '你是中国小学英语出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语阅读理解：\n'
-      '1. 每篇给一篇适合该年级的原创英文短文（40-120词，用词属于该年级常用范围）；\n'
-      '2. 每篇配3-5道理解题（用英文提问，如根据原文回答问题、判断正误等，可附中文提示）；\n'
+      '1. 每篇给一篇适合该年级的原创英文短文（40-120词），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
+      '2. 每篇配3-5道理解题（用英文提问，如根据原文回答问题、判断正误等，可附中文提示），难度贴合${gname}；\n'
       '3. 短文与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","text":"英文短文正文","questions":[{"q":"问题","a":"答案"}]}]}';

@@ -7,6 +7,7 @@ import 'package:zuoye_fluter/core/english_worksheet.dart';
 import 'package:zuoye_fluter/core/calligraphy_worksheet.dart';
 import 'package:zuoye_fluter/core/rand_gen.dart';
 import 'package:zuoye_fluter/core/worksheet_model.dart';
+import 'package:zuoye_fluter/ai/ai_generator.dart';
 
 void main() {
   setUpAll(() async {
@@ -211,6 +212,33 @@ void main() {
       // 通过 englishRenderPages 间接验证 blankWord 不出界
       expect('a'.split('').length, 1);
     });
+
+    test('连线题答案与右列标号一致', () {
+      final vocab = <List<String>>[
+        ['ice cream', '冰激凌'],
+        ['tiger', '老虎'],
+        ['grandpa', '爷爷'],
+        ['candy', '糖果'],
+        ['nine', '九'],
+        ['China', '中国'],
+        ['six', '六'],
+        ['big', '大的'],
+      ];
+      final built = buildMatchingRows(vocab);
+      final answers = buildMatchAnswer(vocab, built.rightCn);
+      expect(answers.length, vocab.length);
+      for (var i = 0; i < answers.length; i++) {
+        // 答案形如 "1. ice cream → b. 冰激凌"
+        final en = vocab[i][0];
+        expect(answers[i].contains(en), true, reason: '第${i + 1}行应含 $en');
+        // 标号对应的右列中文应等于该单词的释义
+        final letter = answers[i].split('→ ')[1].split('.')[0];
+        final letterIdx = letter.codeUnitAt(0) - 'a'.codeUnitAt(0);
+        final rightCn = built.rightCn[letterIdx][1];
+        expect(rightCn, vocab[i][1],
+            reason: '第${i + 1}行 $en 标号 $letter 应为 ${vocab[i][1]}，实际右列该位为 $rightCn');
+      }
+    });
   });
 
   group('calligraphy', () {
@@ -240,6 +268,28 @@ void main() {
         rows: 5,
       ));
       expect(pages.isNotEmpty, true);
+    });
+  });
+
+  group('ai', () {
+    test('AI 出题 prompt 含年级教材约束', () async {
+      await AppData().load();
+      // 语文：含该年级生字
+      final zh = aiBuildPrompt('chinese', [
+        AiStyleSpec('zuci', 2),
+      ], AiPromptOpts(version: 'renjiao', volume: '上', grade: 1, diff: 'easy', showAnswer: true));
+      expect(zh.contains('生字'), true);
+      expect(zh.contains('一年级'), true);
+      // 数学：含该年级知识范围
+      final math = aiBuildPrompt('math', [
+        AiStyleSpec('calc', 2),
+      ], AiPromptOpts(version: 'renjiao', volume: '上', grade: 3, diff: 'easy', showAnswer: true));
+      expect(math.contains('万以内加减法'), true);
+      // 英语：含该年级词汇
+      final en = aiBuildPrompt('english', [
+        AiStyleSpec('vocab', 2),
+      ], AiPromptOpts(version: 'renjiao', volume: '上', grade: 2, diff: 'easy', showAnswer: true));
+      expect(en.contains('词汇'), true);
     });
   });
 }

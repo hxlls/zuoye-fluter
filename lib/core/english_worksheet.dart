@@ -153,8 +153,10 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
 
   if (enabled('match')) {
     final mVocab = vocab.take(nFor('match')).toList();
-    final rows = buildMatchingRows(mVocab);
-    final ansLines = opts.showAnswer ? buildMatchAnswer(mVocab) : <String>[];
+    final built = buildMatchingRows(mVocab);
+    final rows = built.rows;
+    final ansLines =
+        opts.showAnswer ? buildMatchAnswer(mVocab, built.rightCn) : <String>[];
     for (final pg in chunkBlocks(rows, 15)) {
       pages.add(WsPage(
         title: opts.showTitle ? engTitleBar(opts) : null,
@@ -332,7 +334,14 @@ class WsGridData {
   WsGridData({required this.rows});
 }
 
-List<EngGridCardData> buildMatchingRows(List<List<String>> vocab) {
+/// 连线题结果：rows 为渲染行，rightCn 为右列中文选项顺序（答案须基于同一顺序）
+class MatchBuildResult {
+  final List<EngGridCardData> rows;
+  final List<List<String>> rightCn;
+  MatchBuildResult(this.rows, this.rightCn);
+}
+
+MatchBuildResult buildMatchingRows(List<List<String>> vocab) {
   final rightCn = shuffleCopy(vocab);
   final letters = 'abcdefghijklmnopqrstuvwxyz';
   final rows = <EngGridCardData>[];
@@ -348,17 +357,18 @@ List<EngGridCardData> buildMatchingRows(List<List<String>> vocab) {
       ),
     ));
   }
-  return rows;
+  return MatchBuildResult(rows, rightCn);
 }
 
-List<String> buildMatchAnswer(List<List<String>> vocab) {
+/// 连线题答案：基于与题目相同的 rightCn 顺序生成
+List<String> buildMatchAnswer(List<List<String>> vocab, List<List<String>> rightCn) {
   final letters = 'abcdefghijklmnopqrstuvwxyz';
-  final rightCn = shuffleCopy(vocab);
   final lines = <String>[];
   for (var i = 0; i < vocab.length; i++) {
-    final idx = rightCn.indexWhere((p) => p[0] == vocab[i][0] && p[1] == vocab[i][1]);
+    // 左列第 i 行英文 vocab[i]，其释义 vocab[i][1] 在右列中的位置 → 标号
+    final idx = rightCn.indexWhere((p) => p[1] == vocab[i][1]);
     final letter = idx >= 0 ? letters[idx] : '?';
-    lines.add('${i + 1}. ${vocab[i][0]} → $letter. ${rightCn[i][1]}');
+    lines.add('${i + 1}. ${vocab[i][0]} → $letter. ${vocab[i][1]}');
   }
   return lines;
 }
