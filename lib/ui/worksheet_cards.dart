@@ -683,9 +683,9 @@ class _WordQuestionCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: Color(0xff2f6fd0))),
               const SizedBox(width: 8),
-              Text(data.en,
+              Text(data.readText ?? data.en,
                   style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontFamily: 'Times New Roman',
                       color: Color(0xff888888))),
             ],

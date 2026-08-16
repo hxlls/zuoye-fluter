@@ -125,7 +125,8 @@ class _EnglishPanelState extends State<EnglishPanel> {
     final data = AppData();
     final vocab = pickVocab(
         data, widget.grade, _counts['listening'] ?? 8, widget.version, widget.volume);
-    final items = buildListeningItems(vocab, _counts['listening'] ?? 8);
+    final items =
+        buildListeningItems(vocab, _counts['listening'] ?? 8, grade: widget.grade);
     if (items.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -139,8 +140,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
       final chunks = <Uint8List>[];
       try {
         for (final it in items) {
-          final wav = await AiTts.speech(cfg, 'Number ${it.num}. ${it.en}.',
-              format: 'wav');
+          final wav = await AiTts.speech(cfg, it.readText, format: 'wav');
           chunks.add(wav);
         }
       } catch (e) {
@@ -170,7 +170,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   String _listeningText(List<ListeningItem> items) {
     final buf = StringBuffer();
     for (final it in items) {
-      buf.writeln('Number ${it.num}. ${it.en}.');
+      buf.writeln(it.readText);
     }
     return buf.toString();
   }

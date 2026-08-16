@@ -53,6 +53,7 @@ class EngCardData {
   // listening 听力
   final List<String>? options; // 中文选项
   final int? answerIdx; // 正确选项下标
+  final String? readText; // 朗读文本（按年级分级）
   // alphabet
   final bool alphabet;
 
@@ -66,6 +67,7 @@ class EngCardData {
     this.missing,
     this.options,
     this.answerIdx,
+    this.readText,
     this.alphabet = false,
   });
 }
@@ -86,7 +88,9 @@ List<String> defaultEngTypes(int grade) {
 /// spell（单词拼写）需要学生已具备拼写能力：
 /// - 外研三起点：3-4 年级黑体词为「三会」（听、说、读），5-6 年级才要求「四会」（听写拼写）；
 /// - 其余版本（人教/冀教/一起点）：三年级起要求拼写（低年级以字母、描红、抄写为主）。
+/// listening（听力）：外研三起点三年级才学英语，仅 3-6 年级开放；其余版本 1-6 年级均可。
 bool engTypeAllowed(String id, String ver, int grade) {
+  if (id == 'listening') return !(ver == 'waiyanSQ' && grade < 3);
   if (id != 'spell') return true;
   if (ver == 'waiyanSQ') return grade >= 5;
   return grade >= 3;
@@ -183,7 +187,7 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
 
   if (enabled('listening')) {
     final n = nFor('listening');
-    final items = buildListeningItems(vocab, n);
+    final items = buildListeningItems(vocab, n, grade: grade);
     final blocks = <EngGridCardData>[
       for (final it in items)
         EngGridCardData(
@@ -194,6 +198,7 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
             cn: it.correctCn,
             options: it.options,
             answerIdx: it.answerIdx,
+            readText: it.readText,
           ),
         ),
     ];
@@ -432,12 +437,14 @@ List<List<String>> pickVocab(AppData data, int grade, int count, String ver, Str
 class ListeningItem {
   final int num;
   final String en; // 录音文本（朗读的英文）
+  final String readText; // 实际朗读内容（按年级分级）
   final String correctCn; // 正确答案中文
   final List<String> options; // 4 个中文选项（含正确）
   final int answerIdx; // 正确选项下标（0-3）
   ListeningItem({
     required this.num,
     required this.en,
+    required this.readText,
     required this.correctCn,
     required this.options,
     required this.answerIdx,
@@ -445,8 +452,13 @@ class ListeningItem {
 }
 
 /// 生成听力题：每词 1 题，4 个中文选项（正确 + 3 干扰项）
-List<ListeningItem> buildListeningItems(List<List<String>> vocab, int count) {
-  final rng = RandGen();
+/// 朗读内容按年级分级：
+/// - 1-2 年级：直接朗读单词（听音选义）
+/// - 3-4 年级：朗读 "It's a/an ..." 短句（听句辨词）
+/// - 5-6 年级：朗读 "Number N. I have a ..." 情景句（听情景选词）
+List<ListeningItem> buildListeningItems(List<List<String>> vocab, int count,
+    {int grade = 1}) {
+  final rng = RandGen(grade: grade);
   final items = <ListeningItem>[];
   var n = 1;
   for (final pair in vocab.take(count)) {
@@ -469,15 +481,33 @@ List<ListeningItem> buildListeningItems(List<List<String>> vocab, int count) {
     final order = rng.shuffle(List<int>.generate(4, (i) => i));
     final finalOpts = <String>[for (final i in order) options[i]];
     final correctPos = order.indexOf(0);
+    // 朗读文本按年级分级
+    final readText = _readTextFor(grade, n, en);
     items.add(ListeningItem(
       num: n++,
       en: en,
+      readText: readText,
       correctCn: cn,
       options: finalOpts,
       answerIdx: correctPos,
     ));
   }
   return items;
+}
+
+String _readTextFor(int grade, int num, String en) {
+  if (grade <= 2) return 'Number $num. $en.';
+  if (grade <= 4) {
+    final a = _startsWithVowel(en) ? 'an' : 'a';
+    return 'Number $num. It is $a $en.';
+  }
+  return 'Number $num. I can see $en in the picture.';
+}
+
+bool _startsWithVowel(String s) {
+  if (s.isEmpty) return false;
+  final c = s.toLowerCase().substring(0, 1);
+  return 'aeiou'.contains(c);
 }
 
 /// 听力配音文本：返回「第n题：en. 选项A...」逐行文本（用于 TTS 生成音频）

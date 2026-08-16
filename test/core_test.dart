@@ -297,6 +297,17 @@ void main() {
         expect(it.options.toSet().length, 4, reason: '${it.en} 选项有重复');
       }
     });
+
+    test('听力朗读文本按年级分级', () async {
+      await AppData().load();
+      final vocab = AppData().vol('renjiao', 6, '上', 'eng')?.eng ?? [];
+      final g1 = buildListeningItems(vocab, 3, grade: 1);
+      final g3 = buildListeningItems(vocab, 3, grade: 3);
+      final g6 = buildListeningItems(vocab, 3, grade: 6);
+      expect(g1.first.readText.startsWith('Number 1.'), true);
+      expect(g3.first.readText.contains('It is a'), true);
+      expect(g6.first.readText.contains('I can see'), true);
+    });
   });
 
   group('wav', () {
