@@ -670,6 +670,48 @@ class _WordQuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (data.type == 'listening') {
+      final letters = 'ABCD';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🔊 听录音',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xff2f6fd0))),
+              const SizedBox(width: 8),
+              Text(data.en,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontFamily: 'Times New Roman',
+                      color: Color(0xff888888))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (var i = 0; i < (data.options?.length ?? 0); i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Text('${letters[i]}. ',
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xff333333))),
+                  Expanded(
+                    child: Text(data.options![i],
+                        style: const TextStyle(
+                            fontSize: 16, color: Color(0xff222222))),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
     if (data.type == 'cn2en') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

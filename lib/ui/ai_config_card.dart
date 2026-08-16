@@ -13,6 +13,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
   final _baseCtl = TextEditingController();
   final _modelCtl = TextEditingController();
   final _keyCtl = TextEditingController();
+  final _voiceCtl = TextEditingController();
   String _provider = 'deepseek';
   String _status = '';
   Color _statusColor = const Color(0xff888888);
@@ -30,6 +31,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
     _baseCtl.text = cfg.base;
     _modelCtl.text = cfg.model;
     _keyCtl.text = cfg.key;
+    _voiceCtl.text = cfg.voiceModel;
     if (cfg.decryptFailed) {
       _status = '上次保存的密钥无法解密，请重新输入';
       _statusColor = const Color(0xffd8433b);
@@ -43,6 +45,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
       base: _baseCtl.text.trim(),
       model: _modelCtl.text.trim(),
       key: _keyCtl.text.trim(),
+      voiceModel: _voiceCtl.text.trim(),
     );
     if (cfg.base.isEmpty || cfg.model.isEmpty) {
       setState(() {
@@ -101,6 +104,39 @@ class _AiConfigCardState extends State<AiConfigCard> {
     }
   }
 
+  Future<void> _testVoice() async {
+    final cfg = AiConfig(
+      provider: _provider,
+      base: _baseCtl.text.trim(),
+      model: _modelCtl.text.trim(),
+      key: _keyCtl.text.trim(),
+      voiceModel: _voiceCtl.text.trim(),
+    );
+    if (cfg.base.isEmpty || cfg.voiceModel.isEmpty) {
+      setState(() {
+        _status = '请填写 API 地址与语音模型';
+        _statusColor = const Color(0xffd8433b);
+      });
+      return;
+    }
+    setState(() {
+      _status = '语音测试中…';
+      _statusColor = const Color(0xff2f6fd0);
+    });
+    try {
+      final bytes = await AiTts.speech(cfg, 'Hello, how are you?');
+      setState(() {
+        _status = '语音接口正常 ✓（生成 ${bytes.length ~/ 1024} KB 音频）';
+        _statusColor = const Color(0xff2f7d32);
+      });
+    } catch (e) {
+      setState(() {
+        _status = '语音失败：${aiFriendlyError(e)}';
+        _statusColor = const Color(0xffd8433b);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -140,12 +176,15 @@ class _AiConfigCardState extends State<AiConfigCard> {
                 _field('API 地址', _baseCtl, 'https://api.deepseek.com'),
                 _field('模型', _modelCtl, 'deepseek-chat'),
                 _field('API Key', _keyCtl, 'sk-...', obscure: true),
+                _field('语音模型(可选)', _voiceCtl, '如 tts-1 / cosyvoice-v1（听力配音用）'),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     FilledButton(onPressed: _save, child: const Text('保存设置')),
                     const SizedBox(width: 8),
                     OutlinedButton(onPressed: _test, child: const Text('测试')),
+                    const SizedBox(width: 8),
+                    OutlinedButton(onPressed: _testVoice, child: const Text('试听语音')),
                     const SizedBox(width: 8),
                     OutlinedButton(onPressed: _clear, child: const Text('清除')),
                     const SizedBox(width: 8),

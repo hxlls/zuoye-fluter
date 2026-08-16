@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:typed_data';
 import 'package:zuoye_fluter/data/app_data.dart';
 import 'package:zuoye_fluter/core/math_worksheet.dart';
 import 'package:zuoye_fluter/core/math_gen.dart';
 import 'package:zuoye_fluter/core/chinese_worksheet.dart';
 import 'package:zuoye_fluter/core/english_worksheet.dart';
+import 'package:zuoye_fluter/core/wav_merge.dart';
 import 'package:zuoye_fluter/core/calligraphy_worksheet.dart';
 import 'package:zuoye_fluter/core/rand_gen.dart';
 import 'package:zuoye_fluter/core/worksheet_model.dart';
@@ -260,7 +262,7 @@ void main() {
       await AppData().load();
       List<String> allowed(int g) {
         final data = AppData();
-        return ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'aiyuedu']
+        return ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu']
             .where((id) {
               final r = data.engTypeGrades[id];
               return r == null || (g >= r[0] && g <= r[1]);
@@ -271,6 +273,7 @@ void main() {
       final g1 = allowed(1);
       expect(g1.contains('alphabet'), true); // 一年级字母
       expect(g1.contains('match'), true); // 连线一年级可做
+      expect(g1.contains('listening'), true); // 听力一年级可做
       expect(g1.contains('cn2en'), false); // 中译英二年级起
       expect(g1.contains('spell'), false); // 拼写三年级起
 
@@ -280,6 +283,68 @@ void main() {
 
       final g3 = allowed(3);
       expect(g3.contains('spell'), true);
+    });
+
+    test('听力题生成：选项含正确项且 4 项', () async {
+      await AppData().load();
+      final vocab = AppData().vol('renjiao', 3, '上', 'eng')?.eng ?? [];
+      expect(vocab.length >= 8, true);
+      final items = buildListeningItems(vocab, 8);
+      expect(items.length, 8);
+      for (final it in items) {
+        expect(it.options.length, 4);
+        expect(it.options[it.answerIdx], it.correctCn);
+        expect(it.options.toSet().length, 4, reason: '${it.en} 选项有重复');
+      }
+    });
+  });
+
+  group('wav', () {
+    Uint8List _makeWav(int rate, int sampleCount) {
+      // 生成 1 秒 16bit mono 正弦波 WAV
+      final bytes = 44 + sampleCount * 2;
+      final out = ByteData(bytes);
+      void writeStr(int pos, String s) {
+        for (var i = 0; i < s.length; i++) {
+          out.setUint8(pos + i, s.codeUnitAt(i));
+        }
+      }
+
+      writeStr(0, 'RIFF');
+      out.setUint32(4, 36 + sampleCount * 2, Endian.little);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      out.setUint32(16, 16, Endian.little);
+      out.setUint16(20, 1, Endian.little);
+      out.setUint16(22, 1, Endian.little);
+      out.setUint32(24, rate, Endian.little);
+      out.setUint32(28, rate * 2, Endian.little);
+      out.setUint16(32, 2, Endian.little);
+      out.setUint16(34, 16, Endian.little);
+      writeStr(36, 'data');
+      out.setUint32(40, sampleCount * 2, Endian.little);
+      for (var i = 0; i < sampleCount; i++) {
+        out.setInt16(44 + i * 2, 3000, Endian.little);
+      }
+      return out.buffer.asUint8List();
+    }
+
+    test('WAV 拼接含静音间隔', () {
+      final a = _makeWav(8000, 8000); // 1 秒
+      final b = _makeWav(8000, 8000); // 1 秒
+      final merged = WavMerge.merge([a, b], silenceMs: 2000);
+      // 2 段各 1 秒 + 1 段 2 秒静音 = 4 秒 @8000Hz = 32000 采样
+      final totalSamples = merged.length - 44;
+      expect(totalSamples, (8000 * 4) * 2);
+      // 中间 2 秒应为静音（近似 0）
+      final mid = 44 + 8000 * 2 + 4000; // 第 2.5 秒处
+      final b0 = ByteData.sublistView(merged);
+      expect(b0.getInt16(mid, Endian.little).abs() < 5, true,
+          reason: '间隔应为静音');
+      // 首段非静音
+      final head = ByteData.sublistView(merged);
+      expect(head.getInt16(44 + 1000, Endian.little).abs() > 5, true,
+          reason: '首段应有声音');
     });
   });
 

@@ -35,6 +35,7 @@ const ENG_TYPE_LABELS = {
   'cn2en': '中译英',
   'en2cn': '英译中',
   'spell': '单词拼写',
+  'listening': '听力练习（AI配音）',
   'aiyuedu': '阅读理解（AI生成）',
 };
 
@@ -49,6 +50,9 @@ class EngCardData {
   // spell
   final String? shown; // 带空白的单词
   final String? missing;
+  // listening 听力
+  final List<String>? options; // 中文选项
+  final int? answerIdx; // 正确选项下标
   // alphabet
   final bool alphabet;
 
@@ -60,6 +64,8 @@ class EngCardData {
     this.rightIdx,
     this.shown,
     this.missing,
+    this.options,
+    this.answerIdx,
     this.alphabet = false,
   });
 }
@@ -170,6 +176,49 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
       pages.add(WsPage(
         title: WsPageTitle(main: '连线题参考答案'),
         nodes: [WsMatchAnswer(ansLines)],
+        noSpread: true,
+      ));
+    }
+  }
+
+  if (enabled('listening')) {
+    final n = nFor('listening');
+    final items = buildListeningItems(vocab, n);
+    final blocks = <EngGridCardData>[
+      for (final it in items)
+        EngGridCardData(
+          'word',
+          EngCardData(
+            type: 'listening',
+            en: it.en,
+            cn: it.correctCn,
+            options: it.options,
+            answerIdx: it.answerIdx,
+          ),
+        ),
+    ];
+    for (final pg in chunkBlocks(blocks, 6)) {
+      pages.add(WsPage(
+        title: opts.showTitle ? engTitleBar(opts) : null,
+        nodes: [
+          WsHeading('听力练习（听录音，选出你听到的单词的中文意思）', engStyle: true),
+          WsGrid(
+            [for (final x in pg) WsCard('eng', x)],
+            cols: 1,
+            evenly: true,
+          ),
+        ],
+      ));
+    }
+    if (opts.showAnswer) {
+      final lines = <String>[];
+      for (final it in items) {
+        final letter = String.fromCharCode(65 + it.answerIdx);
+        lines.add('第${it.num}题：${it.en} → $letter. ${it.correctCn}');
+      }
+      pages.add(WsPage(
+        title: WsPageTitle(main: '听力参考答案'),
+        nodes: [WsMatchAnswer(lines)],
         noSpread: true,
       ));
     }
@@ -377,6 +426,67 @@ List<List<String>> pickVocab(AppData data, int grade, int count, String ver, Str
   final list = data.vol(ver, grade, vol, 'eng')?.eng ?? [];
   final shuffled = shuffleCopy(list);
   return shuffled.take(count < shuffled.length ? count : shuffled.length).toList();
+}
+
+/// 听力题：听英文，选中文意思
+class ListeningItem {
+  final int num;
+  final String en; // 录音文本（朗读的英文）
+  final String correctCn; // 正确答案中文
+  final List<String> options; // 4 个中文选项（含正确）
+  final int answerIdx; // 正确选项下标（0-3）
+  ListeningItem({
+    required this.num,
+    required this.en,
+    required this.correctCn,
+    required this.options,
+    required this.answerIdx,
+  });
+}
+
+/// 生成听力题：每词 1 题，4 个中文选项（正确 + 3 干扰项）
+List<ListeningItem> buildListeningItems(List<List<String>> vocab, int count) {
+  final rng = RandGen();
+  final items = <ListeningItem>[];
+  var n = 1;
+  for (final pair in vocab.take(count)) {
+    final en = pair[0];
+    final cn = pair[1];
+    // 干扰项：其他词的中文（去重）
+    final distractors = <String>[];
+    final shuffled = shuffleCopy(vocab);
+    for (final p in shuffled) {
+      if (p[1] == cn) continue;
+      if (distractors.contains(p[1])) continue;
+      distractors.add(p[1]);
+      if (distractors.length >= 3) break;
+    }
+    while (distractors.length < 3) {
+      distractors.add('其他选项${distractors.length + 1}');
+    }
+    final options = <String>[cn, ...distractors];
+    // 洗牌得到最终选项，记录正确答案位置
+    final order = rng.shuffle(List<int>.generate(4, (i) => i));
+    final finalOpts = <String>[for (final i in order) options[i]];
+    final correctPos = order.indexOf(0);
+    items.add(ListeningItem(
+      num: n++,
+      en: en,
+      correctCn: cn,
+      options: finalOpts,
+      answerIdx: correctPos,
+    ));
+  }
+  return items;
+}
+
+/// 听力配音文本：返回「第n题：en. 选项A...」逐行文本（用于 TTS 生成音频）
+String listeningNarration(List<ListeningItem> items) {
+  final buf = StringBuffer();
+  for (final it in items) {
+    buf.writeln('Number ${it.num}. ${it.en}.');
+  }
+  return buf.toString();
 }
 
 WsPageTitle? engTitleBar(EnglishOptions opts) {

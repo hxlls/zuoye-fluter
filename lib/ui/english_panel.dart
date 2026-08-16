@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import '../data/app_data.dart';
 import '../core/english_worksheet.dart';
+import '../core/wav_merge.dart';
 import '../core/worksheet_model.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
 import 'preview_panel.dart';
+import 'web_download.dart' if (dart.library.html) 'web_download_web.dart';
 
 /// 英语作业面板
 class EnglishPanel extends StatefulWidget {
@@ -30,7 +37,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   bool _loading = false;
   List<ReadingBlockData> _aiItems = [];
 
-  static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'aiyuedu'];
+  static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu'];
 
   @override
   void initState() {
@@ -102,6 +109,100 @@ class _EnglishPanelState extends State<EnglishPanel> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// 生成听力音频（AI TTS）：把当前听力题的朗读文本合成为 mp3 供下载
+  Future<void> _generateListeningAudio() async {
+    final cfg = await AiStore.load();
+    if (cfg.base.isEmpty || cfg.voiceModel.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('请先在顶部「AI 智能出题设置」中填写 API 地址与语音模型（如 tts-1 / cosyvoice-v1）。')));
+      }
+      return;
+    }
+    // 生成与预览一致的听力题
+    final data = AppData();
+    final vocab = pickVocab(
+        data, widget.grade, _counts['listening'] ?? 8, widget.version, widget.volume);
+    final items = buildListeningItems(vocab, _counts['listening'] ?? 8);
+    if (items.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('当前册暂无听力词汇。')));
+      }
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      // 逐题朗读并生成音频，题间插入约 3.5 秒静音（给学生思考时间）
+      final chunks = <Uint8List>[];
+      try {
+        for (final it in items) {
+          final wav = await AiTts.speech(cfg, 'Number ${it.num}. ${it.en}.',
+              format: 'wav');
+          chunks.add(wav);
+        }
+      } catch (e) {
+        // 部分语音接口不支持 wav：回退为 mp3（逐题生成单文件，无静音间隔）
+        final mp3 = await AiTts.speech(
+            cfg, _listeningText(items), format: 'mp3');
+        await _saveAudioBytes(mp3);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('当前语音接口不支持 wav 静音拼接，已改为 mp3 单文件。')));
+        }
+        return;
+      }
+      final merged = WavMerge.merge(chunks, silenceMs: 3500);
+      await _saveAudioBytes(merged, ext: 'wav');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('听力音频生成失败：${aiFriendlyError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// 拼合听力朗读文本（用于 mp3 回退）
+  String _listeningText(List<ListeningItem> items) {
+    final buf = StringBuffer();
+    for (final it in items) {
+      buf.writeln('Number ${it.num}. ${it.en}.');
+    }
+    return buf.toString();
+  }
+
+  /// 保存音频字节（跨平台另存为对话框）
+  Future<void> _saveAudioBytes(Uint8List bytes, {String ext = 'mp3'}) async {
+    final filename = 'listening_g${widget.grade}_${widget.version}.$ext';
+    final mime = ext == 'wav' ? 'audio/wav' : 'audio/mpeg';
+    if (kIsWeb) {
+      webDownloadBytes(bytes, filename, mimeType: mime);
+      return;
+    }
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await FlutterFileDialog.saveFile(
+        params: SaveFileDialogParams(
+          data: bytes,
+          fileName: filename,
+          mimeTypesFilter: const ['audio/*'],
+        ),
+      );
+      return;
+    }
+    final location = await getSaveLocation(
+      suggestedName: filename,
+      acceptedTypeGroups: [
+        XTypeGroup(label: ext.toUpperCase() == 'WAV' ? 'WAV 音频' : 'MP3 音频',
+            extensions: [ext]),
+      ],
+    );
+    if (location == null) return;
+    final file = File(location.path);
+    await file.writeAsBytes(bytes, flush: true);
   }
 
   @override
@@ -188,6 +289,18 @@ class _EnglishPanelState extends State<EnglishPanel> {
             ],
           ),
         ),
+        if ((_counts['listening'] ?? 0) > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _loading ? null : _generateListeningAudio,
+                icon: const Icon(Icons.audiotrack, size: 18),
+                label: Text(_loading ? '⏳ 生成中…' : '生成听力音频（AI配音·下载MP3）'),
+              ),
+            ),
+          ),
         SizedBox(
           width: double.infinity,
           child: FilledButton(

@@ -33,6 +33,8 @@ class AiConfig {
   String key;
   bool encrypted;
   bool decryptFailed;
+  /// 语音合成模型（听力配音用，如 OpenAI tts-1 / 通义 cosyvoice-v1 / 智谱 glm-4v-voice）
+  String voiceModel;
 
   AiConfig({
     this.provider = 'deepseek',
@@ -41,6 +43,7 @@ class AiConfig {
     this.key = '',
     this.encrypted = false,
     this.decryptFailed = false,
+    this.voiceModel = '',
   });
 
   factory AiConfig.fromJson(Map<String, dynamic> j) => AiConfig(
@@ -50,6 +53,7 @@ class AiConfig {
         key: (j['key'] as String?) ?? '',
         encrypted: (j['encrypted'] as bool?) ?? false,
         decryptFailed: (j['decryptFailed'] as bool?) ?? false,
+        voiceModel: (j['voiceModel'] as String?) ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +63,7 @@ class AiConfig {
         'key': key,
         'encrypted': encrypted,
         'decryptFailed': decryptFailed,
+        'voiceModel': voiceModel,
       };
 }
 
@@ -225,6 +230,68 @@ Future<(int, String)> httpPostJson(String url, Map<String, String> headers, Stri
       .post(Uri.parse(url), headers: headers, body: body)
       .timeout(const Duration(seconds: 180));
   return (resp.statusCode, resp.body);
+}
+
+/// 语音合成（听力配音）：调用 OpenAI 兼容 /audio/speech 端点生成音频
+class AiTts {
+  /// 生成音频字节（默认 mp3）
+  /// 需在 AI 设置中配置 voiceModel（语音模型名），否则抛异常
+  /// [format] 支持 mp3/wav（wav 用于面板内拼接静音）
+  static Future<Uint8List> speech(AiConfig cfg, String text,
+      {String voice = 'alloy', String format = 'mp3'}) async {
+    if (cfg.base.trim().isEmpty) {
+      throw Exception('未配置 API 地址，请先填写 AI 设置');
+    }
+    if (cfg.voiceModel.trim().isEmpty) {
+      throw Exception(
+          '未配置语音模型。请在「AI 智能出题设置」中填写 voiceModel（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice）。');
+    }
+    var base = cfg.base.trim();
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+    // 若 base 以 /v1 结尾，OpenAI 兼容 audio 端点通常是 /v1/audio/speech
+    final url = base.endsWith('/audio/speech')
+        ? base
+        : '$base/audio/speech';
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
+    };
+    final body = json.encode({
+      'model': cfg.voiceModel.trim(),
+      'input': text,
+      'voice': voice,
+      'response_format': format,
+    });
+    try {
+      final resp = await httpPostBytes(url, headers, body);
+      if (resp.$1 < 200 || resp.$1 >= 300) {
+        final msg =
+            utf8.decode(resp.$2, allowMalformed: true);
+        throw Exception(
+            '语音接口返回错误 ${resp.$1}：${msg.length > 300 ? msg.substring(0, 300) : msg}');
+      }
+      final bytes = resp.$2;
+      if (bytes.isEmpty) {
+        throw Exception('语音接口返回空音频，请重试或核对语音模型名称。');
+      }
+      return bytes;
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('语音合成网络请求失败：$e');
+    }
+  }
+}
+
+/// 辅助：POST JSON 返回二进制（用于 audio/speech）
+Future<(int, Uint8List)> httpPostBytes(
+    String url, Map<String, String> headers, String body) async {
+  final resp = await http
+      .post(Uri.parse(url), headers: headers, body: body)
+      .timeout(const Duration(seconds: 180));
+  return (resp.statusCode, resp.bodyBytes);
 }
 
 /// 错误友好化
