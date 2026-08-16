@@ -70,7 +70,7 @@ class AboutPanel extends StatelessWidget {
                 'AI 生成的题目与答案由大模型提供，可能存在错误，使用前建议人工核对。本地模板题目由程序生成，计算题答案准确可靠。受版权保护的课文内容请购买正版后自行整理导入并自行向版权方付费，本应用不提供也不代收任何受版权保护内容。'
               ]),
               _block('🔧 技术说明', [
-                'Flutter 跨平台应用（Windows / Android / Web）。AI 功能需自备大模型 API Key，支持 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、小米 MiMo、本地 Ollama 等）；听力配音需在 AI 设置中另填语音模型（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice）；Key 以系统级加密保存（Windows DPAPI / 安卓 Keystore），数据仅存本机。'
+                'Flutter 跨平台应用（Windows / Android / Web）。AI 功能需自备大模型 API Key，支持 OpenAI 兼容接口（DeepSeek、通义、Kimi、智谱、小米 MiMo、本地 Ollama 等）；听力配音需在 AI 设置中另填语音模型（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）；Key 以系统级加密保存（Windows DPAPI / 安卓 Keystore），数据仅存本机。'
               ]),
             ],
           ),

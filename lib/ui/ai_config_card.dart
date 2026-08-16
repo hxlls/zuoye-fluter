@@ -168,6 +168,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
                           final p = AI_PROVIDERS[_provider]!;
                           _baseCtl.text = p.base;
                           _modelCtl.text = p.model;
+                          _voiceCtl.text = p.voice;
                         });
                       },
                     ),

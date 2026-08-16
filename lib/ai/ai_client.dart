@@ -4,25 +4,44 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// AI 提供商预设
+/// AI 提供商预设（含语音模型：听力配音用，可能因账号/模型而异，可在设置中修改）
 const AI_PROVIDERS = {
-  'deepseek': (base: 'https://api.deepseek.com', model: 'deepseek-v4-flash'),
-  'openai': (base: 'https://api.openai.com/v1', model: 'gpt-4o-mini'),
+  'deepseek': (
+    base: 'https://api.deepseek.com',
+    model: 'deepseek-v4-flash',
+    voice: ''
+  ),
+  'openai': (
+    base: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    voice: 'tts-1'
+  ),
   'qwen': (
     base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    model: 'qwen-plus'
+    model: 'qwen-plus',
+    voice: 'cosyvoice-v1'
   ),
-  'kimi': (base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k'),
+  'kimi': (
+    base: 'https://api.moonshot.cn/v1',
+    model: 'moonshot-v1-8k',
+    voice: ''
+  ),
   'glm': (
     base: 'https://open.bigmodel.cn/api/paas/v4',
-    model: 'glm-4-flash'
+    model: 'glm-4-flash',
+    voice: 'glm-4v-voice'
   ),
   'mimo': (
     base: 'https://api.xiaomimimo.com/v1',
-    model: 'mimo-v2.5'
+    model: 'mimo-v2.5',
+    voice: 'mimo-v2.5-tts'
   ),
-  'ollama': (base: 'http://localhost:11434/v1', model: 'qwen2.5:7b'),
-  'custom': (base: '', model: ''),
+  'ollama': (
+    base: 'http://localhost:11434/v1',
+    model: 'qwen2.5:7b',
+    voice: ''
+  ),
+  'custom': (base: '', model: '', voice: ''),
 };
 
 /// AI 配置
