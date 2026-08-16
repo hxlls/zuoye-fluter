@@ -255,6 +255,32 @@ void main() {
             reason: '第${i + 1}行 $en 标号 $letter 应为 ${vocab[i][1]}，实际右列该位为 $rightCn');
       }
     });
+
+    test('英语题型按年级过滤', () async {
+      await AppData().load();
+      List<String> allowed(int g) {
+        final data = AppData();
+        return ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'aiyuedu']
+            .where((id) {
+              final r = data.engTypeGrades[id];
+              return r == null || (g >= r[0] && g <= r[1]);
+            })
+            .toList();
+      }
+
+      final g1 = allowed(1);
+      expect(g1.contains('alphabet'), true); // 一年级字母
+      expect(g1.contains('match'), true); // 连线一年级可做
+      expect(g1.contains('cn2en'), false); // 中译英二年级起
+      expect(g1.contains('spell'), false); // 拼写三年级起
+
+      final g2 = allowed(2);
+      expect(g2.contains('cn2en'), true);
+      expect(g2.contains('spell'), false);
+
+      final g3 = allowed(3);
+      expect(g3.contains('spell'), true);
+    });
   });
 
   group('calligraphy', () {
@@ -306,6 +332,30 @@ void main() {
         AiStyleSpec('vocab', 2),
       ], AiPromptOpts(version: 'renjiao', volume: '上', grade: 2, diff: 'easy', showAnswer: true));
       expect(en.contains('词汇'), true);
+    });
+
+    test('AI 题型按年级过滤', () async {
+      await AppData().load();
+      // 一年级语文：有 zuci/zaoju/ktian，无 jinyi（近反义词二年级起）
+      final g1 = AI_STYLE_OPTIONS['chinese']!
+          .where((o) => o.grades.isEmpty || (1 >= o.grades[0] && 1 <= o.grades[1]))
+          .map((o) => o.id)
+          .toList();
+      expect(g1.contains('jinyi'), false);
+      expect(g1.contains('zaoju'), true);
+      // 三年级英语：trans（互译）四年级起，三年级不出现
+      final g3en = AI_STYLE_OPTIONS['english']!
+          .where((o) => o.grades.isEmpty || (3 >= o.grades[0] && 3 <= o.grades[1]))
+          .map((o) => o.id)
+          .toList();
+      expect(g3en.contains('trans'), false);
+      expect(g3en.contains('vocab'), true);
+      // 五年级英语：trans 出现
+      final g5en = AI_STYLE_OPTIONS['english']!
+          .where((o) => o.grades.isEmpty || (5 >= o.grades[0] && 5 <= o.grades[1]))
+          .map((o) => o.id)
+          .toList();
+      expect(g5en.contains('trans'), true);
     });
   });
 }

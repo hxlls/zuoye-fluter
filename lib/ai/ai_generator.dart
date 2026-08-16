@@ -19,14 +19,14 @@ final AI_STYLE_OPTIONS = {
   ],
   'english': [
     AiStyleOption('vocab', '词汇练习', [1, 6]),
-    AiStyleOption('sent', '句子填空', [3, 6]),
-    AiStyleOption('trans', '中英互译', [2, 6]),
+    AiStyleOption('sent', '句子填空', [2, 6]),
+    AiStyleOption('trans', '中英互译', [4, 6]),
     AiStyleOption('yuedu', '阅读理解', [3, 6]),
   ],
   'chinese': [
     AiStyleOption('zuci', '生字组词', [1, 6]),
-    AiStyleOption('zaoju', '词语造句', [2, 6]),
-    AiStyleOption('ktian', '词语填空', [2, 6]),
+    AiStyleOption('zaoju', '词语造句', [1, 6]),
+    AiStyleOption('ktian', '词语填空', [1, 6]),
     AiStyleOption('jinyi', '近义词·反义词', [2, 6]),
     AiStyleOption('yuedu', '阅读理解', [3, 6]),
   ],
