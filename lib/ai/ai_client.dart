@@ -251,11 +251,14 @@ Future<(int, String)> httpPostJson(String url, Map<String, String> headers, Stri
   return (resp.statusCode, resp.body);
 }
 
-/// 语音合成（听力配音）：调用 OpenAI 兼容 /audio/speech 端点生成音频
+/// 语音合成（听力配音）
+/// 两种接口：
+/// 1) OpenAI 风格：POST /audio/speech（OpenAI tts-1、通义 cosyvoice 等）
+/// 2) MiMo 风格：POST /chat/completions，assistant 消息 content 为要合成的文本，
+///    响应 choices[0].message.audio.data 为 base64 音频（模型名以 mimo- 开头）
 class AiTts {
-  /// 生成音频字节（默认 mp3）
+  /// 生成音频字节（默认 mp3；wav 用于面板内拼接静音）
   /// 需在 AI 设置中配置 voiceModel（语音模型名），否则抛异常
-  /// [format] 支持 mp3/wav（wav 用于面板内拼接静音）
   static Future<Uint8List> speech(AiConfig cfg, String text,
       {String voice = 'alloy', String format = 'mp3'}) async {
     if (cfg.base.trim().isEmpty) {
@@ -263,13 +266,69 @@ class AiTts {
     }
     if (cfg.voiceModel.trim().isEmpty) {
       throw Exception(
-          '未配置语音模型。请在「AI 智能出题设置」中填写 voiceModel（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice）。');
+          '未配置语音模型。请在「AI 智能出题设置」中填写 voiceModel（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
     }
+    final model = cfg.voiceModel.trim();
+    return model.startsWith('mimo-')
+        ? await _speechChat(cfg, text, model, format, voice)
+        : await _speechAudioEndpoint(cfg, text, model, format, voice);
+  }
+
+  /// MiMo 风格：chat/completions + assistant 消息指定合成文本
+  static Future<Uint8List> _speechChat(
+      AiConfig cfg, String text, String model, String format, String voice) async {
     var base = cfg.base.trim();
     while (base.endsWith('/')) {
       base = base.substring(0, base.length - 1);
     }
-    // 若 base 以 /v1 结尾，OpenAI 兼容 audio 端点通常是 /v1/audio/speech
+    final url = base.endsWith('/chat/completions')
+        ? base
+        : '$base/chat/completions';
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
+    };
+    // MiMo 内置音色：mimo_default / 冰糖 / 茉莉 / 苏打 / 白桦 / Mia / Chloe / Milo / Dean
+    final v = voice == 'alloy' ? 'mimo_default' : voice;
+    final body = json.encode({
+      'model': model,
+      'messages': [
+        {'role': 'assistant', 'content': text},
+      ],
+      'audio': {
+        'format': format == 'mp3' ? 'mp3' : 'wav',
+        'voice': v,
+      },
+      'stream': false,
+    });
+    try {
+      final resp = await httpPostJson(url, headers, body);
+      if (resp.$1 < 200 || resp.$1 >= 300) {
+        throw Exception(
+            '语音接口返回错误 ${resp.$1}：${resp.$2.length > 300 ? resp.$2.substring(0, 300) : resp.$2}');
+      }
+      final data = json.decode(resp.$2) as Map<String, dynamic>;
+      final audio = data['choices']?[0]?['message']?['audio'];
+      final b64 = audio?['data'];
+      if (b64 is! String || b64.isEmpty) {
+        throw Exception(
+            '语音接口未返回音频数据（message.audio.data）。请核对语音模型名称。返回：${resp.$2.length > 200 ? resp.$2.substring(0, 200) : resp.$2}');
+      }
+      return base64.decode(b64);
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('语音合成网络请求失败：$e');
+    }
+  }
+
+  /// OpenAI 风格：/audio/speech 返回二进制
+  static Future<Uint8List> _speechAudioEndpoint(AiConfig cfg, String text,
+      String model, String format, String voice) async {
+    var base = cfg.base.trim();
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
     final url = base.endsWith('/audio/speech')
         ? base
         : '$base/audio/speech';
@@ -278,7 +337,7 @@ class AiTts {
       if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
     };
     final body = json.encode({
-      'model': cfg.voiceModel.trim(),
+      'model': model,
       'input': text,
       'voice': voice,
       'response_format': format,
@@ -286,8 +345,7 @@ class AiTts {
     try {
       final resp = await httpPostBytes(url, headers, body);
       if (resp.$1 < 200 || resp.$1 >= 300) {
-        final msg =
-            utf8.decode(resp.$2, allowMalformed: true);
+        final msg = utf8.decode(resp.$2, allowMalformed: true);
         throw Exception(
             '语音接口返回错误 ${resp.$1}：${msg.length > 300 ? msg.substring(0, 300) : msg}');
       }
