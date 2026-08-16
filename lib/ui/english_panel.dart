@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../data/app_data.dart';
 import '../core/english_worksheet.dart';
 import '../core/worksheet_model.dart';
 import '../ai/ai_generator.dart';
@@ -52,11 +51,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   }
 
   void _ensureCounts() {
-    final data = AppData();
-    final valid = _typeIds.where((id) {
-      final r = data.engTypeGrades[id];
-      return r == null || (widget.grade >= r[0] && widget.grade <= r[1]);
-    }).toList();
+    final valid = allowedEngTypes(widget.version, widget.grade, _typeIds);
     _counts.removeWhere((k, v) => !valid.contains(k));
     for (final t in valid) {
       if (!_counts.containsKey(t)) _counts[t] = 8;
@@ -126,11 +121,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   }
 
   Widget _config() {
-    final data = AppData();
-    final validTypes = _typeIds.where((id) {
-      final r = data.engTypeGrades[id];
-      return r == null || (widget.grade >= r[0] && widget.grade <= r[1]);
-    }).toList();
+    final validTypes = allowedEngTypes(widget.version, widget.grade, _typeIds);
     final total = _counts.values.fold<int>(0, (s, v) => s + v);
 
     return Column(

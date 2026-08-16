@@ -76,6 +76,26 @@ List<String> defaultEngTypes(int grade) {
   return ['trace', 'match'];
 }
 
+/// 题型是否对当前版本+年级可用
+/// spell（单词拼写）需要学生已具备拼写能力：
+/// - 外研三起点：3-4 年级黑体词为「三会」（听、说、读），5-6 年级才要求「四会」（听写拼写）；
+/// - 其余版本（人教/冀教/一起点）：三年级起要求拼写（低年级以字母、描红、抄写为主）。
+bool engTypeAllowed(String id, String ver, int grade) {
+  if (id != 'spell') return true;
+  if (ver == 'waiyanSQ') return grade >= 5;
+  return grade >= 3;
+}
+
+/// 过滤出对当前版本+年级可用的题型（与面板一致）
+List<String> allowedEngTypes(String ver, int grade, List<String> ids) {
+  final data = AppData();
+  return ids.where((id) {
+    final r = data.engTypeGrades[id];
+    final inRange = r == null || (grade >= r[0] && grade <= r[1]);
+    return inRange && engTypeAllowed(id, ver, grade);
+  }).toList();
+}
+
 List<WsPage> englishRenderPages(EnglishOptions opts) {
   final data = AppData();
   final grade = opts.grade;
@@ -154,9 +174,10 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   }
 
   final qTypes = ['cn2en', 'en2cn', 'spell'].where(enabled).toList();
-  if (qTypes.isNotEmpty) {
+  final allowedQ = allowedEngTypes(ver, grade, qTypes);
+  if (allowedQ.isNotEmpty) {
     final answerList = <(String, String)>[]; // key, ans
-    for (final t in qTypes) {
+    for (final t in allowedQ) {
       final blocks = <EngGridCardData>[];
       for (final pair in vocab.take(nFor(t))) {
         blocks.add(EngGridCardData('word', wordQuestionBlock(pair[0], pair[1], t, answerList)));

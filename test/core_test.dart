@@ -39,6 +39,35 @@ void main() {
       expect(p.ans, p.a + p.b);
     });
 
+    test('一年级比较大小限 20 以内', () {
+      final g = RandGen(grade: 1);
+      for (var i = 0; i < 200; i++) {
+        final p = genMathProblem('compare', g);
+        expect(p.a <= 20 && p.b <= 20, true);
+      }
+    });
+
+    test('一年级下两位数加减一位数(100以内)', () {
+      final g = RandGen(grade: 1);
+      for (var i = 0; i < 200; i++) {
+        final p = genMathProblem('add100a', g);
+        expect(p.a >= 11 && p.a <= 99, true);
+        // b 为一位数(1-9)或整十数(10-90)
+        expect(p.b >= 1 && p.b <= 9 || (p.b % 10 == 0 && p.b <= 90), true);
+        final ans = p.op == '+' ? p.a + p.b : p.a - p.b;
+        expect(ans >= 0 && ans <= 100, true);
+      }
+    });
+
+    test('二年级下两步混合运算结果不溢出', () {
+      final g = RandGen(grade: 2);
+      for (var i = 0; i < 200; i++) {
+        final p = genMathProblem('mix20', g);
+        final num ans = p.ans as num;
+        expect(ans >= 0 && ans <= 90, true);
+      }
+    });
+
     test('分数化简', () {
       expect(fracStr(4, 8), '1/2');
       expect(fracStr(6, 3), '2');

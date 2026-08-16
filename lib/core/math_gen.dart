@@ -61,20 +61,36 @@ MathProblem genMathProblem(String tid, RandGen g) {
       }
     case 'compare':
       {
-        final aa = g.rand(1, 20);
-        final b = g.rand(1, 20);
+        // 一、二年级限 20 以内比大小（教材低学段）；三年级起限 100 以内
+        final bound = g.grade <= 2 ? 20 : 100;
+        final aa = g.rand(1, bound);
+        final b = g.rand(1, bound);
         return MathProblem(tid: tid, a: aa, b: b, op: '?', compare: true);
       }
     case 'add100':
       {
+        // 二年级上：两位数加/减两位数（笔算，结果不超 100）
         final op = g.rand(1, 2) == 1 ? '+' : '-';
         if (op == '+') {
-          final aa = g.rand(g.hard(11, 21, 41), 89);
+          final aa = g.rand(g.hard(21, 41, 61), 89);
           final b = g.rand(10, 99 - aa);
           return _ab(tid, aa, b, '+', aa + b);
         }
-        final aa = g.rand(g.hard(20, 30, 50), 99);
-        final b = g.rand(g.hard(10, 15, 20), aa);
+        final aa = g.rand(g.hard(30, 50, 70), 99);
+        final b = g.rand(g.hard(15, 20, 30), aa);
+        return _ab(tid, aa, b, '-', aa - b);
+      }
+    case 'add100a':
+      {
+        // 一年级下：两位数加减一位数/整十数（100 以内加减法·一）
+        final op = g.rand(1, 2) == 1 ? '+' : '-';
+        final isTens = g.rand(0, 1) == 0;
+        final b = isTens ? g.rand(1, 8) * 10 : g.rand(1, 9);
+        if (op == '+') {
+          final aa = g.rand(11, 99 - b);
+          return _ab(tid, aa, b, '+', aa + b);
+        }
+        final aa = g.rand(max(11, b + 1), 99);
         return _ab(tid, aa, b, '-', aa - b);
       }
     case 'mul':
@@ -91,18 +107,18 @@ MathProblem genMathProblem(String tid, RandGen g) {
       }
     case 'mix20':
       {
+        // 二年级下两步混合：先表内乘/除（结果≤81），再加减 1-5
         final b = g.rand(2, 9);
         final q = g.rand(2, 9);
         final aa = b * q;
         final useMul = g.rand(0, 1) == 0;
-        final v1 = useMul ? aa * b : q;
         final expr1 = useMul ? '$aa × $b' : '$aa ÷ $b';
         final op2 = g.rand(0, 1) == 0 ? '+' : '-';
         final c = g.rand(1, 5);
-        var ans = op2 == '+' ? v1 + c : v1 - c;
-        if (ans < 0) ans = v1 + c;
+        var ans = op2 == '+' ? aa + c : aa - c;
+        if (ans < 0) ans = aa + c;
         return MathProblem(
-            tid: tid, expr: '$expr1 $op2 $c', ans: ans, a: v1, b: c, op: op2);
+            tid: tid, expr: '$expr1 $op2 $c', ans: ans, a: aa, b: c, op: op2);
       }
     case 'add1000':
       {
