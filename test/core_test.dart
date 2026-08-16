@@ -69,6 +69,22 @@ void main() {
       }
     });
 
+    test('图形与生活题型可生成且答案非空', () {
+      final cases = <(String, int)>[
+        ('tensComp', 1), ('perimeter', 3), ('areaRect', 3), ('timeCalc', 3),
+        ('avg', 4), ('polyArea', 5), ('surface', 5), ('volume', 5),
+        ('ratio', 6), ('circle', 6), ('cylinder', 6), ('discount', 6),
+      ];
+      for (final (tid, gr) in cases) {
+        final g = RandGen(grade: gr);
+        for (var i = 0; i < 50; i++) {
+          final p = genMathProblem(tid, g);
+          expect(p.ans != null, true, reason: '$tid 答案为空');
+          expect(p.expr != null && p.expr!.isNotEmpty, true, reason: '$tid 题目为空');
+        }
+      }
+    });
+
     test('分数化简', () {
       expect(fracStr(4, 8), '1/2');
       expect(fracStr(6, 3), '2');

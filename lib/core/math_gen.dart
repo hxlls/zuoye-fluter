@@ -316,6 +316,219 @@ MathProblem genMathProblem(String tid, RandGen g) {
       }
     case 'word':
       return genWord(tid, g);
+    case 'tensComp':
+      {
+        // 一年级上：数的分与合（10 以内）
+        final n = g.rand(3, 10);
+        final a = g.rand(1, n - 1);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '$n 可以分成（　　　）和（　　　）。',
+            ans: '$a 和 ${n - a}');
+      }
+    case 'perimeter':
+      {
+        // 三年级上：长方形/正方形周长
+        if (g.rand(0, 1) == 0) {
+          final a = g.rand(3, 9) * 10;
+          final b = g.rand(2, 9) * 10;
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一个长方形的长是 $a 米，宽是 $b 米，它的周长是多少米？',
+              ans: (a + b) * 2);
+        }
+        final a = g.rand(3, 9) * 10;
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个正方形的边长是 $a 米，它的周长是多少米？',
+            ans: a * 4);
+      }
+    case 'areaRect':
+      {
+        // 三年级下：长方形/正方形面积
+        if (g.rand(0, 1) == 0) {
+          final a = g.rand(3, 9);
+          final b = g.rand(2, 9);
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一块长方形菜地，长 $a 米，宽 $b 米，它的面积是多少平方米？',
+              ans: a * b);
+        }
+        final a = g.rand(3, 9);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个正方形的边长是 $a 米，它的面积是多少平方米？',
+            ans: a * a);
+      }
+    case 'timeCalc':
+      {
+        // 三年级上：经过时间
+        final h1 = g.rand(8, 16);
+        final h2 = g.rand(h1 + 1, 17);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一节课从上午 $h1:00 开始，到上午 $h2:00 结束，经过了（　　　）小时。',
+            ans: h2 - h1);
+      }
+    case 'avg':
+      {
+        // 四年级下：平均数
+        final n = g.rand(2, 4);
+        final base = g.rand(60, 95);
+        var total = 0;
+        final nums = <int>[];
+        for (var i = 0; i < n; i++) {
+          final v = base + g.rand(0, 20);
+          nums.add(v);
+          total += v;
+        }
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '${nums.join('、')} 的平均数是（　　　）。',
+            ans: total / n);
+      }
+    case 'polyArea':
+      {
+        // 五年级上：三角形/平行四边形/梯形面积
+        final kind = g.rand(0, 2);
+        if (kind == 0) {
+          final base = g.rand(4, 12);
+          final h = g.rand(3, 8);
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一个三角形的底是 $base 厘米，高是 $h 厘米，它的面积是多少平方厘米？',
+              ans: base * h / 2);
+        }
+        if (kind == 1) {
+          final base = g.rand(4, 12);
+          final h = g.rand(3, 8);
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一个平行四边形的底是 $base 厘米，高是 $h 厘米，它的面积是多少平方厘米？',
+              ans: base * h);
+        }
+        final a = g.rand(4, 10);
+        final b = g.rand(2, a - 1);
+        final h = g.rand(3, 8);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个梯形的上底是 $a 厘米，下底是 $b 厘米，高是 $h 厘米，它的面积是多少平方厘米？',
+            ans: (a + b) * h / 2);
+      }
+    case 'surface':
+      {
+        // 五年级下：长方体表面积
+        final a = g.rand(2, 5);
+        final b = g.rand(2, 5);
+        final h = g.rand(2, 5);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个长方体长 $a 分米、宽 $b 分米、高 $h 分米，它的表面积是多少平方分米？',
+            ans: 2 * (a * b + a * h + b * h));
+      }
+    case 'volume':
+      {
+        // 五年级下：长方体体积
+        final a = g.rand(2, 6);
+        final b = g.rand(2, 6);
+        final h = g.rand(2, 6);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个长方体长 $a 分米、宽 $b 分米、高 $h 分米，它的体积是多少立方分米？',
+            ans: a * b * h);
+      }
+    case 'ratio':
+      {
+        // 六年级上：化简比/求比值
+        final kind = g.rand(0, 1);
+        if (kind == 0) {
+          final a = g.rand(12, 48);
+          final b = g.rand(6, a ~/ 2);
+          final gcdv = _gcd(a, b);
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '$a : $b 化成最简单的整数比是（　　　）。',
+              ans: '${a ~/ gcdv} : ${b ~/ gcdv}');
+        }
+        final a = g.rand(3, 9) * 10;
+        final b = g.rand(3, 9) * 10;
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '$a : $b 的比值是（　　　）。',
+            ans: a / b);
+      }
+    case 'circle':
+      {
+        // 六年级上：圆周长/面积
+        final kind = g.rand(0, 1);
+        final r = g.rand(2, 10);
+        if (kind == 0) {
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一个圆的半径是 $r 厘米，它的周长是多少厘米？（圆周率取 3.14）',
+              ans: _round2(2 * 3.14 * r));
+        }
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个圆的半径是 $r 厘米，它的面积是多少平方厘米？（圆周率取 3.14）',
+            ans: _round2(3.14 * r * r));
+      }
+    case 'cylinder':
+      {
+        // 六年级下：圆柱体积
+        final r = g.rand(2, 5);
+        final h = g.rand(3, 9);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '一个圆柱的底面半径是 $r 厘米，高是 $h 厘米，它的体积是多少立方厘米？（圆周率取 3.14）',
+            ans: _round2(3.14 * r * r * h));
+      }
+    case 'discount':
+      {
+        // 六年级下：折扣/成数/利率
+        final kind = g.rand(0, 2);
+        final price = g.rand(2, 9) * 100;
+        if (kind == 0) {
+          final z = g.rand(5, 9);
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一件商品原价 $price 元，打 $z 折出售，现价是多少元？',
+              ans: price * z / 10);
+        }
+        if (kind == 1) {
+          final pct = g.rand(2, 9);
+          return MathProblem(
+              tid: tid,
+              word: true,
+              expr: '一件商品原价 $price 元，降价 $pct 成出售，现价是多少元？',
+              ans: price * (10 - pct) / 10);
+        }
+        final pct = g.rand(2, 5);
+        final years = g.rand(1, 3);
+        return MathProblem(
+            tid: tid,
+            word: true,
+            expr: '存入银行 $price 元，年利率是 $pct%，存 $years 年，到期可得利息多少元？',
+            ans: price * pct / 100 * years);
+      }
     case 'unitconv':
       return genUnitConv(tid, g);
     default:
@@ -324,6 +537,17 @@ MathProblem genMathProblem(String tid, RandGen g) {
 }
 
 int max(int a, int b) => a > b ? a : b;
+
+int _gcd(int a, int b) {
+  a = a.abs();
+  b = b.abs();
+  while (b != 0) {
+    final t = a % b;
+    a = b;
+    b = t;
+  }
+  return a == 0 ? 1 : a;
+}
 
 MathProblem _ab(String tid, num aa, num b, String op, num ans,
     {int precision = 0}) {
