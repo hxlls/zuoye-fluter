@@ -60,8 +60,10 @@ class _EnglishPanelState extends State<EnglishPanel> {
   void _ensureCounts() {
     final valid = allowedEngTypes(widget.version, widget.grade, _typeIds);
     _counts.removeWhere((k, v) => !valid.contains(k));
+    // 默认只勾选常用的题型，其余归 0（不选），避免默认作业带上字母书写等
+    final defaults = defaultEngTypes(widget.grade);
     for (final t in valid) {
-      if (!_counts.containsKey(t)) _counts[t] = 8;
+      if (!_counts.containsKey(t)) _counts[t] = defaults.contains(t) ? 8 : 0;
     }
   }
 

@@ -308,6 +308,61 @@ void main() {
       expect(g3.first.readText.contains('It is a'), true);
       expect(g6.first.readText.contains('I can see'), true);
     });
+
+    test('默认只启用默认题型，未勾选/年级不支持的题型不出现', () async {
+      await AppData().load();
+      List<WsHeading> headings(List<WsPage> pages) => [
+            for (final p in pages)
+              for (final n in p.nodes)
+                if (n is WsHeading) n
+          ];
+
+      // 二年级：字母书写、拼写、AI 阅读均不在默认/允许范围，不应出现
+      final g2 = englishRenderPages(EnglishOptions(
+        grade: 2,
+        version: 'renjiao',
+        volume: '上',
+        types: ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu'],
+        counts: {
+          'trace': 4,
+          'cn2en': 0,
+          'en2cn': 0,
+          'listening': 0,
+        },
+      ));
+      final t2 = headings(g2).map((h) => h.title).join('|');
+      expect(t2.contains('字母书写'), false, reason: t2);
+      expect(t2.contains('单词拼写'), false, reason: t2);
+      expect(t2.contains('阅读理解'), false, reason: t2);
+      expect(t2.contains('单词抄写'), true, reason: t2);
+
+      // 外研三起点三年级：字母书写仅限一年级、拼写需 5 年级起，均不应出现
+      final sq3 = englishRenderPages(EnglishOptions(
+        grade: 3,
+        version: 'waiyanSQ',
+        volume: '上',
+        types: ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu'],
+        counts: {'alphabet': 8, 'trace': 4, 'spell': 8, 'cn2en': 0, 'en2cn': 0, 'listening': 0, 'aiyuedu': 0},
+      ));
+      final t3 = headings(sq3).map((h) => h.title).join('|');
+      expect(t3.contains('字母书写'), false, reason: t3);
+      expect(t3.contains('单词拼写'), false, reason: t3);
+      expect(t3.contains('单词抄写'), true, reason: t3);
+    });
+
+    test('多题型同页紧凑排布，减少页数', () async {
+      await AppData().load();
+      // 4 个题型各 4 题：若每题型独占一页则至少 4 页；紧凑排布后应更少
+      final pages = englishRenderPages(EnglishOptions(
+        grade: 3,
+        version: 'renjiao',
+        volume: '上',
+        types: ['trace', 'match', 'cn2en', 'en2cn', 'spell'],
+        counts: {'trace': 4, 'match': 4, 'cn2en': 4, 'en2cn': 4, 'spell': 4},
+      ));
+      final qPages = pages.where((p) => p.title?.main.startsWith('英语练习') ?? false).length;
+      expect(qPages, lessThan(5), reason: '共 $qPages 个题目页（4 个题型不应各占一页）');
+    });
   });
 
   group('wav', () {

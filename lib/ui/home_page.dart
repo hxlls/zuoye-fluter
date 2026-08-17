@@ -401,24 +401,26 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 各标签页面板（IndexedStack 常驻，切换标签不丢各面板的设置/预览状态）
   Widget _panel() {
-    switch (_tab) {
-      case 'calligraphy':
-        return CalligraphyPanel(grade: _grade, version: _version, volume: _volume);
-      case 'chinese':
-        return ChinesePanel(grade: _grade, version: _version, volume: _volume);
-      case 'math':
-        return MathPanel(grade: _grade, version: _version, volume: _volume);
-      case 'english':
-        return EnglishPanel(grade: _grade, version: _version, volume: _volume);
-      case 'ai':
-        return AiPanel(grade: _grade, version: _version, volume: _volume);
-      case 'aihelp':
-        return AiHelpPanel(grade: _grade, version: _version, volume: _volume);
-      case 'about':
-        return const AboutPanel();
-      default:
-        return const SizedBox();
-    }
+    final widgets = <String, Widget>{
+      'calligraphy': CalligraphyPanel(grade: _grade, version: _version, volume: _volume),
+      if (_supportedSubjects().contains('cally'))
+        'chinese': ChinesePanel(grade: _grade, version: _version, volume: _volume),
+      if (_supportedSubjects().contains('math'))
+        'math': MathPanel(grade: _grade, version: _version, volume: _volume),
+      if (_supportedSubjects().contains('eng'))
+        'english': EnglishPanel(grade: _grade, version: _version, volume: _volume),
+      'ai': AiPanel(grade: _grade, version: _version, volume: _volume),
+      'aihelp': AiHelpPanel(grade: _grade, version: _version, volume: _volume),
+      'about': const AboutPanel(),
+    };
+    final keys = _visibleTabKeys().whereType<String>().toList();
+    final list = [for (final k in keys) widgets[k]!];
+    final idx = keys.indexOf(_tab);
+    return IndexedStack(
+      index: idx < 0 ? 0 : idx,
+      children: list,
+    );
   }
 }

@@ -112,112 +112,122 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   final ver = opts.version;
   final vol = opts.volume;
   final types = opts.types.isNotEmpty ? opts.types : defaultEngTypes(grade);
+  // 未显式传题型（如单测/外部调用）→ 使用默认题型并按默认题量输出
+  final defaulted = opts.types.isEmpty;
+  // 题型可用性必须同时满足：当前版本+年级允许（教材要求）、且已勾选（显式题量>0）
+  final allowed = allowedEngTypes(ver, grade, types).toSet();
 
   int nFor(String t) =>
       opts.counts[t] == null ? (opts.count > 0 ? opts.count : 8) : (opts.counts[t] ?? 0).clamp(0, 60);
   bool enabled(String t) =>
-      types.contains(t) && (opts.counts[t] == null || (opts.counts[t] ?? 0) > 0);
+      allowed.contains(t) && (defaulted || (opts.counts[t] ?? 0) > 0);
   final maxN = [opts.count, ...types.map(nFor)].reduce((a, b) => a > b ? a : b);
   final vocab = pickVocab(data, grade, maxN, ver, vol);
 
-  final pages = <WsPage>[];
+  // 各题型排版分节（多题型同页紧凑排布，避免每题型独占一页浪费纸张）
+  final sections = <_EngSection>[];
+  List<List<String>>? matchVocab;
+  List<List<String>>? matchRightCn;
+  List<ListeningItem>? listeningItems;
+  final answerList = <(String, String)>[]; // key, ans
 
   if (enabled('alphabet')) {
-    final blocks = buildAlphabet();
-    final pg = chunkBlocks(blocks, 17);
-    for (final b in pg) {
-      pages.add(WsPage(
-        title: opts.showTitle ? engTitleBar(opts) : null,
-        nodes: [
-          WsHeading('字母书写练习（先描后写）', engStyle: true),
-          WsGrid(
-            [for (final x in b) WsCard('eng', x)],
-            cols: 2,
-            evenly: true,
-          ),
-        ],
-      ));
-    }
+    sections.add(_EngSection(
+      heading: '字母书写练习（先描后写）',
+      rows: _pairRows(buildAlphabet(), 2),
+      cols: 2,
+      rowH: _engRowH('letter'),
+    ));
   }
 
   if (enabled('trace')) {
-    final blocks = <EngGridCardData>[];
-    final n = nFor('trace');
-    for (final pair in vocab.take(n)) {
-      blocks.add(EngGridCardData('trace', EngCardData(type: 'trace', en: pair[0], cn: pair[1])));
-    }
-    for (final b in chunkBlocks(blocks, 10)) {
-      pages.add(WsPage(
-        title: opts.showTitle ? engTitleBar(opts) : null,
-        nodes: [
-          WsHeading('单词抄写（先描红，再自己写两遍）', engStyle: true),
-          WsGrid(
-            [for (final x in b) WsCard('eng', x)],
-            cols: 2,
-            evenly: true,
-          ),
-        ],
-      ));
-    }
+    final cards = <EngGridCardData>[
+      for (final pair in vocab.take(nFor('trace')))
+        EngGridCardData('trace', EngCardData(type: 'trace', en: pair[0], cn: pair[1])),
+    ];
+    sections.add(_EngSection(
+      heading: '单词抄写（先描红，再自己写两遍）',
+      rows: _pairRows(cards, 2),
+      cols: 2,
+      rowH: _engRowH('trace'),
+    ));
   }
 
   if (enabled('match')) {
-    final mVocab = vocab.take(nFor('match')).toList();
-    final built = buildMatchingRows(mVocab);
-    final rows = built.rows;
-    final ansLines =
-        opts.showAnswer ? buildMatchAnswer(mVocab, built.rightCn) : <String>[];
-    for (final pg in chunkBlocks(rows, 15)) {
-      pages.add(WsPage(
-        title: opts.showTitle ? engTitleBar(opts) : null,
-        nodes: [
-          WsHeading('中英连线（把英文单词与正确的中文意思连起来）', engStyle: true),
-          WsBlock(WsGridData(rows: pg)),
-        ],
-      ));
-    }
-    if (ansLines.isNotEmpty) {
-      pages.add(WsPage(
-        title: WsPageTitle(main: '连线题参考答案'),
-        nodes: [WsMatchAnswer(ansLines)],
-        noSpread: true,
-      ));
-    }
+    matchVocab = vocab.take(nFor('match')).toList();
+    final built = buildMatchingRows(matchVocab);
+    matchRightCn = built.rightCn;
+    sections.add(_EngSection(
+      heading: '中英连线（把英文单词与正确的中文意思连起来）',
+      rows: [for (final r in built.rows) [r]],
+      block: true,
+      rowH: _engRowH('match'),
+    ));
   }
 
   if (enabled('listening')) {
-    final n = nFor('listening');
-    final items = buildListeningItems(vocab, n, grade: grade);
-    final blocks = <EngGridCardData>[
-      for (final it in items)
-        EngGridCardData(
-          'word',
-          EngCardData(
-            type: 'listening',
-            en: it.en,
-            cn: it.correctCn,
-            options: it.options,
-            answerIdx: it.answerIdx,
-            readText: it.readText,
-          ),
-        ),
-    ];
-    for (final pg in chunkBlocks(blocks, 6)) {
-      pages.add(WsPage(
-        title: opts.showTitle ? engTitleBar(opts) : null,
-        nodes: [
-          WsHeading('听力练习（听录音，选出你听到的单词的中文意思）', engStyle: true),
-          WsGrid(
-            [for (final x in pg) WsCard('eng', x)],
-            cols: 1,
-            evenly: true,
-          ),
-        ],
-      ));
+    final items = buildListeningItems(vocab, nFor('listening'), grade: grade);
+    listeningItems = items;
+    sections.add(_EngSection(
+      heading: '听力练习（听录音，选出你听到的单词的中文意思）',
+      rows: [
+        for (final it in items)
+          [
+            EngGridCardData(
+              'word',
+              EngCardData(
+                type: 'listening',
+                en: it.en,
+                cn: it.correctCn,
+                options: it.options,
+                answerIdx: it.answerIdx,
+                readText: it.readText,
+              ),
+            ),
+          ],
+      ],
+      cols: 1,
+      rowH: _engRowH('listening'),
+    ));
+  }
+
+  const qLabels = {
+    'cn2en': '中译英（看中文，写出英文单词）',
+    'en2cn': '英译中（写出单词的中文意思）',
+    'spell': '单词拼写（补全单词中缺少的字母）',
+  };
+  final allowedQ = allowedEngTypes(
+      ver, grade, ['cn2en', 'en2cn', 'spell'].where(enabled).toList());
+  for (final t in allowedQ) {
+    final cards = <EngGridCardData>[];
+    for (final pair in vocab.take(nFor(t))) {
+      cards.add(EngGridCardData('word', wordQuestionBlock(pair[0], pair[1], t, answerList)));
     }
-    if (opts.showAnswer) {
+    if (cards.isEmpty) continue;
+    sections.add(_EngSection(
+      heading: qLabels[t] ?? '',
+      rows: _pairRows(cards, 2),
+      cols: 2,
+      rowH: _engRowH(t),
+    ));
+  }
+
+  final pages = _packEngSections(sections, opts);
+
+  if (opts.showAnswer) {
+    if (matchVocab != null && matchRightCn != null) {
+      final ansLines = buildMatchAnswer(matchVocab, matchRightCn);
+      if (ansLines.isNotEmpty) {
+        pages.add(WsPage(
+          title: WsPageTitle(main: '连线题参考答案'),
+          nodes: [WsMatchAnswer(ansLines)],
+          noSpread: true,
+        ));
+      }
+    }
+    if (listeningItems != null) {
       final lines = <String>[];
-      for (final it in items) {
+      for (final it in listeningItems) {
         final letter = String.fromCharCode(65 + it.answerIdx);
         lines.add('第${it.num}题：${it.en} → $letter. ${it.correctCn}');
       }
@@ -227,38 +237,7 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
         noSpread: true,
       ));
     }
-  }
-
-  final qTypes = ['cn2en', 'en2cn', 'spell'].where(enabled).toList();
-  final allowedQ = allowedEngTypes(ver, grade, qTypes);
-  if (allowedQ.isNotEmpty) {
-    final answerList = <(String, String)>[]; // key, ans
-    for (final t in allowedQ) {
-      final blocks = <EngGridCardData>[];
-      for (final pair in vocab.take(nFor(t))) {
-        blocks.add(EngGridCardData('word', wordQuestionBlock(pair[0], pair[1], t, answerList)));
-      }
-      if (blocks.isEmpty) continue;
-      final labels = {
-        'cn2en': '中译英（看中文，写出英文单词）',
-        'en2cn': '英译中（写出单词的中文意思）',
-        'spell': '单词拼写（补全单词中缺少的字母）',
-      };
-      for (final pg in chunkBlocks(blocks, 10)) {
-        pages.add(WsPage(
-          title: opts.showTitle ? engTitleBar(opts) : null,
-          nodes: [
-            WsHeading(labels[t] ?? '', engStyle: true),
-            WsGrid(
-              [for (final x in pg) WsCard('eng', x)],
-              cols: 2,
-              evenly: true,
-            ),
-          ],
-        ));
-      }
-    }
-    if (opts.showAnswer && answerList.isNotEmpty) {
+    if (answerList.isNotEmpty) {
       final lines = <String>[];
       for (var i = 0; i < answerList.length; i++) {
         lines.add('${i + 1}. ${answerList[i].$1} → ${answerList[i].$2}');
@@ -533,10 +512,114 @@ WsPageTitle? engTitleBar(EnglishOptions opts) {
   );
 }
 
-List<List<T>> chunkBlocks<T>(List<T> blocks, int capacity) {
-  final pages = <List<T>>[];
-  for (var i = 0; i < blocks.length; i += capacity) {
-    pages.add(blocks.sublist(i, i + capacity > blocks.length ? blocks.length : i + capacity));
+/// 英语排版分节：一个题型（含标题 + 若干行卡片）
+class _EngSection {
+  final String heading;
+  final List<List<EngGridCardData>> rows; // 每元素 = 一行（cols 个卡片，或 block 一整行）
+  final int cols;
+  final bool block; // 连线题：整行块（WsBlock/WsGridData）
+  final double rowH; // 预估行高（px）
+  _EngSection({
+    required this.heading,
+    required this.rows,
+    this.cols = 2,
+    this.block = false,
+    required this.rowH,
+  });
+}
+
+/// 按预估行高取各题型单行高度（估高偏保守，避免内容超 A4 被裁剪）
+double _engRowH(String t) {
+  switch (t) {
+    case 'letter':
+      return 90;
+    case 'trace':
+      return 134;
+    case 'cn2en':
+      return 94;
+    case 'en2cn':
+      return 70;
+    case 'spell':
+      return 86;
+    case 'listening':
+      return 140;
+    case 'match':
+      return 62;
   }
+  return 100;
+}
+
+/// 把卡片按列数两两成行
+List<List<EngGridCardData>> _pairRows(List<EngGridCardData> cards, int cols) {
+  final rows = <List<EngGridCardData>>[];
+  for (var i = 0; i < cards.length; i += cols) {
+    rows.add(cards.sublist(i, i + cols > cards.length ? cards.length : i + cols));
+  }
+  return rows;
+}
+
+WsNode _engNodeFor(_EngSection sec, List<List<EngGridCardData>> subRows) {
+  if (sec.block) {
+    return WsBlock(WsGridData(rows: [for (final r in subRows) r.first]));
+  }
+  return WsGrid(
+    [for (final r in subRows) for (final c in r) WsCard('eng', c)],
+    cols: sec.cols,
+    evenly: true,
+  );
+}
+
+// A4 (1123px) 减去上下留白与标题栏后的可用内容高度；行高与间距均为保守预估
+const _engPageContent = 920.0;
+const _engHeadingH = 36.0;
+const _engRowGap = 8.0;
+
+/// 把多个题型按预估高度紧凑排进 A4 页面（同页可混排多个题型，节省纸张）
+List<WsPage> _packEngSections(List<_EngSection> sections, EnglishOptions opts) {
+  final pages = <WsPage>[];
+  var nodes = <WsNode>[];
+  var used = 0.0;
+  String? curHeading;
+
+  void flush() {
+    if (nodes.isEmpty) return;
+    pages.add(WsPage(
+      title: opts.showTitle ? engTitleBar(opts) : null,
+      nodes: nodes,
+    ));
+    nodes = [];
+    used = 0;
+    curHeading = null;
+  }
+
+  for (final sec in sections) {
+    var gridRows = <List<EngGridCardData>>[];
+    for (final row in sec.rows) {
+      final rh = sec.rowH + _engRowGap;
+      final needHeading = curHeading != sec.heading;
+      if (nodes.isNotEmpty &&
+          used + (needHeading ? _engHeadingH : 0) + rh > _engPageContent) {
+        // 当前页放不下：先收拢本节的格子，再另起一页
+        if (gridRows.isNotEmpty) {
+          nodes.add(_engNodeFor(sec, gridRows));
+          gridRows = [];
+        }
+        flush();
+      }
+      if (curHeading != sec.heading) {
+        nodes.add(WsHeading(sec.heading, engStyle: true));
+        used += _engHeadingH;
+        curHeading = sec.heading;
+      }
+      gridRows.add(row);
+      used += rh;
+    }
+    if (gridRows.isNotEmpty) {
+      nodes.add(_engNodeFor(sec, gridRows));
+      gridRows = [];
+      curHeading = null;
+    }
+  }
+  flush();
   return pages;
 }
