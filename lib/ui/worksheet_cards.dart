@@ -657,7 +657,7 @@ class _TraceCard extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Text(data.cn,
-              style: const TextStyle(fontSize: 13, color: Color(0xff5f5f5f))),
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Color(0xff242424))),
         ),
         const _FourLine(),
       ],
