@@ -13,6 +13,11 @@ import 'panel_widgets.dart';
 import 'preview_panel.dart';
 import 'web_download.dart' if (dart.library.html) 'web_download_web.dart';
 
+/// 清理选项文本中的字母前缀（如 "A. 博物馆" → "博物馆"）
+String _stripOptionPrefix(String s) {
+  return s.replaceFirst(RegExp(r'^[A-Da-d][.、．)\s]+'), '').trim();
+}
+
 /// 英语作业面板
 class EnglishPanel extends StatefulWidget {
   final int grade;
