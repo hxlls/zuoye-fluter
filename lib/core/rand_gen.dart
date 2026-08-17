@@ -65,9 +65,21 @@ String fracStr(int n, int d) {
   return d == 1 ? '$n' : '$n/$d';
 }
 
-/// 去掉数字字符串末尾无意义的 .0
+/// 数字显示：整数去掉小数点；浮点尾差（如 2.8600000000000003）规整到 2 位小数
 String fmtNum(num v) {
   if (v is int) return v.toString();
   if (v == v.roundToDouble()) return v.toInt().toString();
-  return v.toString();
+  final s = v.toString();
+  final dot = s.indexOf('.');
+  if (dot > 0 && s.length - dot - 1 > 3) {
+    return _trimZeros(v.toStringAsFixed(2));
+  }
+  return s;
+}
+
+String _trimZeros(String s) {
+  if (!s.contains('.')) return s;
+  var t = s.replaceAll(RegExp(r'0+$'), '');
+  if (t.endsWith('.')) t = t.substring(0, t.length - 1);
+  return t;
 }

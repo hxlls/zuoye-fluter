@@ -244,9 +244,12 @@ MathProblem genMathProblem(String tid, RandGen g) {
       }
     case 'decdiv':
       {
-        final aa = g.rand(11, 99) / 10;
-        final b = g.rand(11, 99) / 10;
-        return _ab(tid, (aa * b), b, '÷', aa, precision: 2);
+        // 用整数先乘再缩放，避免浮点误差（如 2.2×1.3 → 2.8600000000000003）
+        final ai = g.rand(11, 99);
+        final bi = g.rand(11, 99);
+        final prod = _round2((ai * bi) / 100); // 被除数（精确到 2 位）
+        final b = bi / 10; // 除数（1 位小数）
+        return _ab(tid, prod, b, '÷', _round2(ai / 10), precision: 2);
       }
     case 'fracadd':
       {

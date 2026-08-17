@@ -93,6 +93,31 @@ void main() {
       expect(fracStr(0, 5), '0');
     });
 
+    test('小数除法不出现浮点尾差', () {
+      final g = RandGen(seed: 7);
+      for (var i = 0; i < 3000; i++) {
+        final p = genMathProblem('decdiv', g);
+        final a = fmtNum(p.a);
+        final b = fmtNum(p.b);
+        final ans = fmtNum(p.ans as num);
+        final s = '$a ÷ $b = $ans';
+        expect(s.contains('000000'), false, reason: s);
+        expect(s.contains('99999'), false, reason: s);
+        int dec(String x) => x.contains('.') ? x.split('.')[1].length : 0;
+        expect(dec(a) <= 2, true, reason: '被除数 $s');
+        expect(dec(b) <= 1, true, reason: '除数 $s');
+        expect(dec(ans) <= 1, true, reason: '商 $s');
+      }
+    });
+
+    test('fmtNum 规整浮点尾差', () {
+      expect(fmtNum(2.8600000000000003), '2.86');
+      expect(fmtNum(30.800000000000004), '30.8');
+      expect(fmtNum(7.0), '7');
+      expect(fmtNum(2.2), '2.2');
+      expect(fmtNum(5), '5');
+    });
+
     test('生成数学作业页面', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/app_data.dart';
 import '../core/worksheet_model.dart';
+import '../core/rand_gen.dart';
 import '../core/math_worksheet.dart';
 import '../core/chinese_worksheet.dart';
 import '../core/english_worksheet.dart';
@@ -162,11 +163,7 @@ class _MathCard extends StatelessWidget {
     );
   }
 
-  String fmt(num v) {
-    if (v is int) return '$v';
-    if (v == v.roundToDouble()) return v.toInt().toString();
-    return v.toString();
-  }
+  String fmt(num v) => fmtNum(v);
 }
 
 class _ExprText extends StatelessWidget {
@@ -340,7 +337,7 @@ class _LongDiv extends StatelessWidget {
     );
   }
 
-  String fmt(num v) => v == v.roundToDouble() ? v.toInt().toString() : '$v';
+  String fmt(num v) => fmtNum(v);
 }
 
 /// 语文卡片
