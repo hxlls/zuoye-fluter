@@ -474,7 +474,8 @@ Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
 }
 
 /// AI 听力短文生成（英语）
-Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
+/// [narrationOnly] 为 true 时强制使用叙述形式（单人配音适用），false 时允许对话形式
+Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts, {bool narrationOnly = true}) async {
   final cfg = await AiStore.load();
   if (cfg.base.isEmpty || cfg.model.isEmpty) {
     throw Exception('请先在顶部「AI 智能出题设置」中填写 API 地址和模型并保存。');
@@ -503,6 +504,13 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
     questionDesc = '4-5道选择题、判断题或填空题';
   }
 
+  // 根据 narrationOnly 决定对话限制
+  final dialogRule = narrationOnly
+      ? '- 【重要】听力材料必须用第三人称叙述（如"Tom goes to school. He likes math."），绝对不要出现对话（禁止使用 says/asks/replies/answers 等对话动词，禁止冒号引号等对话格式）；\n'
+        '- 【重要】不要出现任何人物之间的直接对话或间接对话，全程用叙述描述事件和场景。'
+      : '- 听力材料可以用对话形式（如 "Hello!" "How are you?"）或叙述形式，贴近真实生活场景；\n'
+        '- 如果使用对话，注意节奏感，让朗读时有自然停顿。';
+
   final prompt = '你是中国小学英语听力出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语听力材料：\n'
       '1. 每篇给出一段适合该年级的原创英文听力材料（$lengthDesc），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
       '2. 听力材料类型：小故事、简单通知、描述性短文等，贴近学生生活；\n'
@@ -514,8 +522,7 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
       '- options字段只放纯选项内容（如"博物馆"），不要加"A."/"B."等字母前缀；\n'
       '- a字段为正确答案内容（如"A"或选项内容）；\n'
       '- 判断题不需要options字段，a字段为"T"或"F"；\n'
-      '- 【重要】听力材料必须用第三人称叙述（如"Tom goes to school. He likes math."），绝对不要出现对话（禁止使用 says/asks/replies/answers 等对话动词，禁止冒号引号等对话格式）；\n'
-      '- 【重要】不要出现任何人物之间的直接对话或间接对话，全程用叙述描述事件和场景。';
+      '$dialogRule';
   final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
       jsonMode: true);
   final data2 = aiExtractJson(content);

@@ -38,6 +38,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   final Map<String, int> _counts = {};
   bool _showTitle = true;
   bool _showAnswer = true;
+  bool _listeningNarrationOnly = true; // 听力短文：仅叙述形式（单人配音适用）
   List<WsPage> _pages = [];
   bool _loading = false;
   List<ReadingBlockData> _aiItems = [];
@@ -134,7 +135,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
         diff: 'easy',
         showAnswer: true,
         readingCount: (_counts['ailistening'] ?? 2).clamp(1, 4),
-      ));
+      ), narrationOnly: _listeningNarrationOnly);
       _aiListeningItems = items;
       _regenerate();
     } catch (e) {
@@ -165,7 +166,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
         diff: 'easy',
         showAnswer: true,
         readingCount: (_counts['ailistening'] ?? 2).clamp(1, 4),
-      ));
+      ), narrationOnly: _listeningNarrationOnly);
       _aiItems = readingItems;
       _aiListeningItems = listeningItems;
       _regenerate();
@@ -437,6 +438,19 @@ class _EnglishPanelState extends State<EnglishPanel> {
             ],
           ),
         ),
+        if ((_counts['ailistening'] ?? 0) > 0)
+          FormGroup(
+            label: '听力短文选项',
+            child: CheckLabel(
+              label: '仅叙述形式（单人配音适用，禁用对话）',
+              value: _listeningNarrationOnly,
+              onChanged: (v) {
+                setState(() {
+                  _listeningNarrationOnly = v;
+                });
+              },
+            ),
+          ),
         if ((_counts['listening'] ?? 0) > 0)
           Padding(
             padding: const EdgeInsets.only(top: 8),
