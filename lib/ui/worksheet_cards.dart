@@ -441,8 +441,8 @@ class _CnCard extends StatelessWidget {
             Flexible(
               child: Text(data.meaning ?? '',
                   style: const TextStyle(
-                      fontSize: 15,
-                      color: Color(0xff222222),
+                      fontSize: 18,
+                      color: Color(0xff000000),
                       height: 1.6,
                       fontWeight: FontWeight.w500)),
             ),
