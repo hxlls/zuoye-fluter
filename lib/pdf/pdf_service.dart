@@ -19,7 +19,9 @@ class PdfService {
     for (final key in pageKeys) {
       final boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) continue;
-      final image = await boundary.toImage(pixelRatio: 2.0);
+      // A4 页 794px 宽对应 595pt(≈8.27")，pixelRatio 3.1 ≈ 297 DPI，接近打印标准 300 DPI。
+      // 高分辨率截图可避免打印时降采样把细线/浅色冲淡（低于 ~200 DPI 会整体偏淡）。
+      final image = await boundary.toImage(pixelRatio: 3.1);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       if (bytes == null) continue;
       final provider = pw.MemoryImage(bytes.buffer.asUint8List());
