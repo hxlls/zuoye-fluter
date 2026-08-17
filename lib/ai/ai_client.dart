@@ -259,8 +259,9 @@ Future<(int, String)> httpPostJson(String url, Map<String, String> headers, Stri
 class AiTts {
   /// 生成音频字节（默认 mp3；wav 用于面板内拼接静音）
   /// 需在 AI 设置中配置 voiceModel（语音模型名），否则抛异常
+  /// [speed] 语速控制（0.25-4.0，默认 1.0，听力场景建议 0.8）
   static Future<Uint8List> speech(AiConfig cfg, String text,
-      {String voice = 'alloy', String format = 'mp3'}) async {
+      {String voice = 'alloy', String format = 'mp3', double speed = 1.0}) async {
     if (cfg.base.trim().isEmpty) {
       throw Exception('未配置 API 地址，请先填写 AI 设置');
     }
@@ -270,13 +271,13 @@ class AiTts {
     }
     final model = cfg.voiceModel.trim();
     return model.startsWith('mimo-')
-        ? await _speechChat(cfg, text, model, format, voice)
-        : await _speechAudioEndpoint(cfg, text, model, format, voice);
+        ? await _speechChat(cfg, text, model, format, voice, speed)
+        : await _speechAudioEndpoint(cfg, text, model, format, voice, speed);
   }
 
   /// MiMo 风格：chat/completions + assistant 消息指定合成文本
   static Future<Uint8List> _speechChat(
-      AiConfig cfg, String text, String model, String format, String voice) async {
+      AiConfig cfg, String text, String model, String format, String voice, double speed) async {
     var base = cfg.base.trim();
     while (base.endsWith('/')) {
       base = base.substring(0, base.length - 1);
@@ -298,6 +299,7 @@ class AiTts {
       'audio': {
         'format': format == 'mp3' ? 'mp3' : 'wav',
         'voice': v,
+        if (speed != 1.0) 'speed': speed,
       },
       'stream': false,
     });
@@ -324,7 +326,7 @@ class AiTts {
 
   /// OpenAI 风格：/audio/speech 返回二进制
   static Future<Uint8List> _speechAudioEndpoint(AiConfig cfg, String text,
-      String model, String format, String voice) async {
+      String model, String format, String voice, double speed) async {
     var base = cfg.base.trim();
     while (base.endsWith('/')) {
       base = base.substring(0, base.length - 1);
@@ -341,6 +343,7 @@ class AiTts {
       'input': text,
       'voice': voice,
       'response_format': format,
+      if (speed != 1.0) 'speed': speed,
     });
     try {
       final resp = await httpPostBytes(url, headers, body);

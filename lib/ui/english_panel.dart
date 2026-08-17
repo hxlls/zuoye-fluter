@@ -205,17 +205,17 @@ class _EnglishPanelState extends State<EnglishPanel> {
     }
     setState(() => _loading = true);
     try {
-      // 逐题朗读并生成音频，题间插入约 3.5 秒静音（给学生思考时间）
+      // 逐题朗读并生成音频，题间插入约 5 秒静音（给学生写答案时间）
       final chunks = <Uint8List>[];
       try {
         for (final it in items) {
-          final wav = await AiTts.speech(cfg, it.readText, format: 'wav');
+          final wav = await AiTts.speech(cfg, it.readText, format: 'wav', speed: 0.85);
           chunks.add(wav);
         }
       } catch (e) {
         // 部分语音接口不支持 wav：回退为 mp3（逐题生成单文件，无静音间隔）
         final mp3 = await AiTts.speech(
-            cfg, _listeningText(items), format: 'mp3');
+            cfg, _listeningText(items), format: 'mp3', speed: 0.85);
         await _saveAudioBytes(mp3);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -223,7 +223,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
         }
         return;
       }
-      final merged = WavMerge.merge(chunks, silenceMs: 3500);
+      final merged = WavMerge.merge(chunks, silenceMs: 5000);
       await _saveAudioBytes(merged, ext: 'wav');
     } catch (e) {
       if (mounted) {
@@ -267,13 +267,13 @@ class _EnglishPanelState extends State<EnglishPanel> {
       try {
         for (var i = 0; i < _aiListeningItems.length; i++) {
           final it = _aiListeningItems[i];
-          // 1. 朗读短文正文（稍慢语速）
+          // 1. 朗读短文正文（慢语速 0.8）
           final passageText = 'Number ${i + 1}. ${it.text}';
-          final wav = await AiTts.speech(cfg, passageText, format: 'wav');
+          final wav = await AiTts.speech(cfg, passageText, format: 'wav', speed: 0.8);
           chunks.add(wav);
-          // 2. 正文与问题之间停顿 3 秒
-          chunks.add(WavMerge.silence(3000));
-          // 3. 逐个朗读问题，每个问题后停顿 2.5 秒
+          // 2. 正文与问题之间停顿 5 秒
+          chunks.add(WavMerge.silence(5000));
+          // 3. 逐个朗读问题，每个问题后停顿 4 秒（给学生写答案）
           for (var j = 0; j < it.questions.length; j++) {
             final q = it.questions[j];
             final qText = 'Question ${j + 1}. ${q.q}';
@@ -281,18 +281,18 @@ class _EnglishPanelState extends State<EnglishPanel> {
               final optsText = q.options!.asMap().entries
                   .map((e) => '${String.fromCharCode(65 + e.key)}. ${_stripOptionPrefix(e.value)}')
                   .join('. ');
-              final qWav = await AiTts.speech(cfg, '$qText $optsText', format: 'wav');
+              final qWav = await AiTts.speech(cfg, '$qText $optsText', format: 'wav', speed: 0.8);
               chunks.add(qWav);
             } else {
-              final qWav = await AiTts.speech(cfg, qText, format: 'wav');
+              final qWav = await AiTts.speech(cfg, qText, format: 'wav', speed: 0.8);
               chunks.add(qWav);
             }
-            // 每个问题后停顿 2.5 秒（给学生写答案）
-            chunks.add(WavMerge.silence(2500));
+            // 每个问题后停顿 4 秒（给学生写答案）
+            chunks.add(WavMerge.silence(4000));
           }
-          // 4. 篇与篇之间停顿 8 秒（最后一题不加）
+          // 4. 篇与篇之间停顿 10 秒（最后一题不加）
           if (i < _aiListeningItems.length - 1) {
-            chunks.add(WavMerge.silence(8000));
+            chunks.add(WavMerge.silence(10000));
           }
         }
       } catch (e) {
@@ -303,7 +303,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
               .join(' ');
           return 'Number ${e.key + 1}. ${e.value.text} $questions';
         }).join('\n\n');
-        final mp3 = await AiTts.speech(cfg, allText, format: 'mp3');
+        final mp3 = await AiTts.speech(cfg, allText, format: 'mp3', speed: 0.8);
         await _saveAudioBytes(mp3, filename: 'listening_passage_g${widget.grade}_${widget.version}.mp3');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
