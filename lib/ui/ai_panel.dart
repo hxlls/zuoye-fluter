@@ -4,6 +4,7 @@ import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
 import 'preview_panel.dart';
+import 'ai_config_card.dart';
 
 /// AI 出题面板
 class AiPanel extends StatefulWidget {
@@ -85,6 +86,24 @@ class _AiPanelState extends State<AiPanel> {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _openApiConfig(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              child: AiConfigCard(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PanelLayout(
@@ -112,11 +131,42 @@ class _AiPanelState extends State<AiPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('AI 出题设置',
+        const Text('🤖 AI 智能出题',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Text('🤖 大模型随机出题，避免照搬课本/题库，达到举一反三',
+        const Text('大模型随机出题，避免照搬课本/题库，达到举一反三',
             style: TextStyle(fontSize: 12, color: Color(0xff888888))),
+        const SizedBox(height: 12),
+        // API 设置（可折叠）
+        Card(
+          margin: EdgeInsets.zero,
+          color: const Color(0xfff8f9fa),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.cloud_outlined, size: 18, color: Color(0xff2f6fd0)),
+                    const SizedBox(width: 6),
+                    const Text('API 连接设置',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => _openApiConfig(context),
+                      icon: const Icon(Icons.settings, size: 16),
+                      label: const Text('配置'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text('首次使用需配置大模型 API（DeepSeek / OpenAI 等）',
+                    style: TextStyle(fontSize: 12, color: Color(0xff888888))),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 14),
         FormGroup(
           label: '科目',

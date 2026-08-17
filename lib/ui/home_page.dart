@@ -6,7 +6,6 @@ import 'math_panel.dart';
 import 'english_panel.dart';
 import 'ai_panel.dart';
 import 'ai_help_panel.dart';
-import 'ai_config_card.dart';
 import 'about_panel.dart';
 
 /// 主页面：教材版本/学期/年级选择 + 标签页 + 配置面板 + 预览
@@ -50,10 +49,6 @@ class _HomePageState extends State<HomePage> {
           children: [
             _topBar(),
             _versionBar(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: AiConfigCard(),
-            ),
             _tabs(),
             Expanded(
               child: _panel(),
