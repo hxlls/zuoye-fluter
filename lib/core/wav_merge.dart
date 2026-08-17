@@ -100,4 +100,34 @@ class WavMerge {
     if (dataSize <= 0 || dataOff + dataSize > wav.length) return null;
     return (rate: rate, samples: wav.sublist(dataOff, dataOff + dataSize));
   }
+
+  /// 生成指定时长的静音 WAV（16bit PCM, 24kHz, mono）
+  static Uint8List silence(int ms, {int sampleRate = 24000}) {
+    final samples = sampleRate * ms ~/ 1000;
+    final dataSize = samples * 2; // 16bit = 2 bytes per sample
+    final out = ByteData(44 + dataSize);
+
+    void writeStr(int pos, String s) {
+      for (var i = 0; i < s.length; i++) {
+        out.setUint8(pos + i, s.codeUnitAt(i));
+      }
+    }
+
+    writeStr(0, 'RIFF');
+    out.setUint32(4, 36 + dataSize, Endian.little);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    out.setUint32(16, 16, Endian.little);
+    out.setUint16(20, 1, Endian.little); // PCM
+    out.setUint16(22, 1, Endian.little); // mono
+    out.setUint32(24, sampleRate, Endian.little);
+    out.setUint32(28, sampleRate * 2, Endian.little);
+    out.setUint16(32, 2, Endian.little);
+    out.setUint16(34, 16, Endian.little);
+    writeStr(36, 'data');
+    out.setUint32(40, dataSize, Endian.little);
+    // data 区域默认为 0（静音）
+
+    return out.buffer.asUint8List();
+  }
 }
