@@ -181,12 +181,159 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   Future<void> _clearCorpus() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认清除'),
+        content: const Text('确定要清除已导入的语料库吗？此操作不可撤销。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_corpusKey);
     _cachedCorpus = null;
     await _loadCorpusStatus();
     _regenerate();
     if (mounted) setState(() {});
+  }
+
+  void _previewCorpus() {
+    final corpus = _corpus;
+    if (corpus.isEmpty) {
+      _showSnack('暂无语料，请先导入');
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 500),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const Text('语料库预览',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('共 ${corpus.length} 篇',
+                        style: const TextStyle(fontSize: 13, color: Color(0xff888888))),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: corpus.length,
+                  itemBuilder: (ctx, i) {
+                    final item = corpus[i];
+                    return ExpansionTile(
+                      title: Text('${item.title}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      subtitle: Text(
+                        '${item.grade ?? '?'}年级${item.volume ?? '?'} · ${item.author ?? ''}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xff888888)),
+                      ),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.text,
+                                  style: const TextStyle(fontSize: 13, height: 1.6)),
+                              if (item.questions.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                const Text('问题：',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                for (final q in item.questions)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text('• ${q.q} → ${q.a}',
+                                        style: const TextStyle(fontSize: 12)),
+                                  ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _downloadSample() {
+    final sample = {
+      "name": "示例语料库",
+      "note": "这是示例格式，请参照此格式准备您自己的语料",
+      "items": [
+        {
+          "grade": 3,
+          "volume": "上",
+          "title": "示例课文标题",
+          "author": "作者",
+          "text": "这里是课文正文内容...",
+          "questions": [
+            {"q": "问题1？", "a": "答案1"},
+            {"q": "问题2？", "a": "答案2"}
+          ]
+        }
+      ]
+    };
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(sample);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('示例格式'),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('请参照以下JSON格式准备语料文件：',
+                    style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff5f5f5),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(jsonStr,
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                ),
+                const SizedBox(height: 12),
+                const Text('字段说明：',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                const Text('• grade: 年级（1-6）\n• volume: 册别（上/下）\n• title: 课文标题\n• author: 作者\n• text: 正文\n• questions: 问题数组（q=问题, a=答案）',
+                    style: TextStyle(fontSize: 11, height: 1.6)),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
+        ],
+      ),
+    );
   }
 
   Future<void> _generateAIReading() async {
@@ -310,14 +457,27 @@ class _ChinesePanelState extends State<ChinesePanel> {
             children: [
               Wrap(
                 spacing: 8,
+                runSpacing: 4,
                 children: [
-                  OutlinedButton(
+                  OutlinedButton.icon(
                     onPressed: _importCorpus,
-                    child: const Text('📂 导入语料文件(.json)'),
+                    icon: const Icon(Icons.upload_file, size: 16),
+                    label: const Text('导入语料(.json)'),
                   ),
-                  OutlinedButton(
+                  OutlinedButton.icon(
+                    onPressed: _previewCorpus,
+                    icon: const Icon(Icons.preview, size: 16),
+                    label: const Text('预览语料'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _downloadSample,
+                    icon: const Icon(Icons.download, size: 16),
+                    label: const Text('下载示例格式'),
+                  ),
+                  OutlinedButton.icon(
                     onPressed: _clearCorpus,
-                    child: const Text('清除语料库'),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('清除'),
                   ),
                 ],
               ),
