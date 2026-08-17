@@ -43,6 +43,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   bool _loading = false;
   List<ReadingBlockData> _aiItems = [];
   List<ReadingBlockData> _aiListeningItems = [];
+  List<ListeningItem> _listeningItems = []; // 保存预览生成的听力题目
 
   static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu', 'ailistening'];
 
@@ -75,7 +76,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
   }
 
   void _regenerate() {
-    _pages = englishRenderPages(EnglishOptions(
+    final result = englishRenderPagesWithResult(EnglishOptions(
       grade: widget.grade,
       version: widget.version,
       volume: widget.volume,
@@ -86,6 +87,8 @@ class _EnglishPanelState extends State<EnglishPanel> {
       aiReadingItems: _aiItems.isEmpty ? null : _aiItems,
       aiListeningItems: _aiListeningItems.isEmpty ? null : _aiListeningItems,
     ));
+    _pages = result.pages;
+    _listeningItems = result.listeningItems;
   }
 
   void _refresh() => setState(_regenerate);
@@ -190,16 +193,12 @@ class _EnglishPanelState extends State<EnglishPanel> {
       }
       return;
     }
-    // 生成与预览一致的听力题
-    final data = AppData();
-    final vocab = pickVocab(
-        data, widget.grade, _counts['listening'] ?? 8, widget.version, widget.volume);
-    final items =
-        buildListeningItems(vocab, _counts['listening'] ?? 8, grade: widget.grade);
+    // 使用预览生成时的听力题目数据
+    final items = _listeningItems;
     if (items.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('当前册暂无听力词汇。')));
+            .showSnackBar(const SnackBar(content: Text('请先生成听力预览。')));
       }
       return;
     }

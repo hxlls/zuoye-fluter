@@ -318,6 +318,38 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   return pages;
 }
 
+/// 英语作业渲染结果
+class EnglishRenderResult {
+  final List<WsPage> pages;
+  final List<ListeningItem> listeningItems;
+  EnglishRenderResult(this.pages, this.listeningItems);
+}
+
+EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
+  final pages = englishRenderPages(opts);
+  // 重新生成听力题目数据（与预览一致）
+  List<ListeningItem> listeningItems = [];
+  if (opts.types.contains('listening') && (opts.counts['listening'] ?? 0) > 0) {
+    final data = AppData();
+    final grade = opts.grade;
+    final ver = opts.version;
+    final vol = opts.volume;
+    final count = (opts.counts['listening'] ?? 8).clamp(0, 60);
+    final vocab = pickVocab(data, grade, count, ver, vol);
+    if (vocab.isNotEmpty) {
+      final allGradeVocab = <List<String>>[];
+      for (final v in ['上', '下']) {
+        final volData = data.vol(ver, grade, v, 'eng');
+        if (volData?.eng != null) {
+          allGradeVocab.addAll(volData!.eng!);
+        }
+      }
+      listeningItems = buildListeningItems(vocab, count, grade: grade, allGradeVocab: allGradeVocab);
+    }
+  }
+  return EnglishRenderResult(pages, listeningItems);
+}
+
 List<WsPage> renderENReadingPages(List<ReadingBlockData> items, EnglishOptions opts) {
   final pages = <WsPage>[];
   var cur = <WsNode>[];
