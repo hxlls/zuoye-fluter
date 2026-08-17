@@ -71,13 +71,6 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(fontSize: 11, color: Colors.white70)),
           ],
         ),
-        actions: [
-          IconButton(
-            onPressed: _openAiConfig,
-            icon: const Icon(Icons.settings, size: 20, color: Colors.white),
-            tooltip: 'AI 设置',
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -87,11 +80,6 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: _bottomNav(),
     );
-  }
-
-  void _openAiConfig() {
-    // API 设置已移到 AI 出题面板中
-    setState(() => _tab = 'ai');
   }
 
   Widget _bottomNav() {
