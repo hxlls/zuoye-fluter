@@ -257,12 +257,13 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     curContent.add(WsSection(CHINESE_INSTRUCTION[type] ?? '按要求做题。'));
     curH += instrH;
 
-    final colFlow = type == 'chengyuGuess' || type == 'chengyuFill' || type == 'mingjuFill';
-    final twoCol = type == 'gushiFill';
+    final colFlow = type == 'chengyuGuess' || type == 'chengyuFill';
+    final twoCol = type == 'gushiFill' || type == 'mingjuFill';
     final perRow = colFlow ? 1 : (twoCol ? 2 : 3);
 
     double rowH(String t) {
-      if (t == 'gushiFill' || t == 'mingjuFill') return 156;
+      if (t == 'gushiFill') return 156;
+      if (t == 'mingjuFill') return 100;
       if (t == 'chengyuFill') return 132;
       if (t == 'zuci') return 146;
       if (t == 'chengyuGuess') return 116;
