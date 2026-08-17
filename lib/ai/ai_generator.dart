@@ -525,6 +525,7 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
           title: '${it['title'] ?? '听力材料'}',
           text: '${it['text'] ?? ''}',
           en: true,
+          isListening: true,
           questions: [
             for (final q in (it['questions'] as List? ?? []))
               if (q is Map)

@@ -82,6 +82,7 @@ class ReadingBlockData {
   final String author;
   final String text;
   final bool en; // 英文短文
+  final bool isListening; // 听力短文（不显示原文）
   final int? grade;
   final String? volume;
   final List<ReadingQuestion> questions;
@@ -90,6 +91,7 @@ class ReadingBlockData {
     this.author = "",
     required this.text,
     this.en = false,
+    this.isListening = false,
     this.grade,
     this.volume,
     List<ReadingQuestion>? questions,

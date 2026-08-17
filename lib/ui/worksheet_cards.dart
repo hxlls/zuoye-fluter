@@ -904,20 +904,26 @@ class _ReadingBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '《${data.title}》${data.author.isNotEmpty ? ' · ${data.author}' : ''}',
+            data.isListening ? '🎧 ${data.title}' : '《${data.title}》${data.author.isNotEmpty ? ' · ${data.author}' : ''}',
             style: const TextStyle(
                 fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xff2f6fd0)),
           ),
           const SizedBox(height: 8),
-          Text(
-            data.text,
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.9,
-              color: const Color(0xff333333),
-              fontFamily: data.en ? 'Times New Roman' : null,
+          if (data.isListening)
+            const Text(
+              '（听录音，回答问题。）',
+              style: TextStyle(fontSize: 14, color: Color(0xff888888), fontStyle: FontStyle.italic),
+            )
+          else
+            Text(
+              data.text,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.9,
+                color: const Color(0xff333333),
+                fontFamily: data.en ? 'Times New Roman' : null,
+              ),
             ),
-          ),
           const SizedBox(height: 10),
           for (final q in data.questions)
             Padding(
