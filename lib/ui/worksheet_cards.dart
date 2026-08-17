@@ -921,6 +921,20 @@ class _ReadingBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(q.q, style: const TextStyle(fontSize: 15, height: 1.7)),
+                  if (q.options != null && q.options!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < q.options!.length; i++)
+                            Text(
+                              '${String.fromCharCode(65 + i)}. ${q.options![i]}',
+                              style: const TextStyle(fontSize: 14, height: 1.6),
+                            ),
+                        ],
+                      ),
+                    ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [

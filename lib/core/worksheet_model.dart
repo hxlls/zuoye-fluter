@@ -99,7 +99,8 @@ class ReadingBlockData {
 class ReadingQuestion {
   final String q;
   final String a;
-  ReadingQuestion(this.q, this.a);
+  final List<String>? options; // 选择题选项（如A/B/C）
+  ReadingQuestion(this.q, this.a, {this.options});
 }
 
 /// 中央提示块（无语料/AI 未生成等占位）

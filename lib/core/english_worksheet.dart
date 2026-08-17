@@ -13,6 +13,7 @@ class EnglishOptions {
   final bool showAnswer;
   final bool showTitle;
   final List<ReadingBlockData>? aiReadingItems;
+  final List<ReadingBlockData>? aiListeningItems;
 
   EnglishOptions({
     this.grade = 1,
@@ -24,6 +25,7 @@ class EnglishOptions {
     this.showAnswer = true,
     this.showTitle = true,
     this.aiReadingItems,
+    this.aiListeningItems,
   })  : types = types ?? [],
         counts = counts ?? {};
 }
@@ -37,6 +39,7 @@ const ENG_TYPE_LABELS = {
   'spell': '单词拼写',
   'listening': '听力练习（AI配音）',
   'aiyuedu': '阅读理解（AI生成）',
+  'ailistening': '听力短文（AI生成）',
 };
 
 /// 英语卡片数据
@@ -183,7 +186,16 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   }
 
   if (enabled('listening') && listeningVocab.isNotEmpty) {
-    final items = buildListeningItems(listeningVocab, nFor('listening'), grade: grade);
+    // 获取整个年级的词汇库（包括上册和下册），用于补充干扰项
+    final allGradeVocab = <List<String>>[];
+    for (final v in ['上', '下']) {
+      final volData = data.vol(ver, grade, v, 'eng');
+      if (volData?.eng != null) {
+        allGradeVocab.addAll(volData!.eng!);
+      }
+    }
+    final items = buildListeningItems(listeningVocab, nFor('listening'),
+        grade: grade, allGradeVocab: allGradeVocab);
     listeningItems = items;
     sections.add(_EngSection(
       heading: '听力练习（听录音，选出你听到的单词的中文意思）',
@@ -284,6 +296,23 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     }
   }
 
+  // AI 听力短文
+  if (enabled('ailistening')) {
+    final aiListeningItems = opts.aiListeningItems;
+    if (aiListeningItems != null && aiListeningItems.isNotEmpty) {
+      pages.addAll(renderENListeningPages(aiListeningItems, opts));
+      if (opts.showAnswer) pages.addAll(renderENListeningAnswer(aiListeningItems, opts));
+    } else {
+      pages.add(WsPage(
+        title: opts.showTitle ? engTitleBar(opts) : null,
+        nodes: [
+          WsPlaceholder('🎧', '听力短文 · AI 生成（英文）',
+              '点击「生成预览」按钮，AI 将实时生成英文听力材料与理解题（需先在顶部「AI 智能出题设置」配置 API 并保存）。'),
+        ],
+      ));
+    }
+  }
+
   return pages;
 }
 
@@ -332,6 +361,54 @@ List<WsPage> renderENReadingAnswer(List<ReadingBlockData> items, EnglishOptions 
   }
   return [
     WsPage(title: WsPageTitle(main: '参考答案'), nodes: nodes, noSpread: true),
+  ];
+}
+
+List<WsPage> renderENListeningPages(List<ReadingBlockData> items, EnglishOptions opts) {
+  final pages = <WsPage>[];
+  var cur = <WsNode>[];
+  var curH = 0.0;
+  for (final it in items) {
+    final en = ReadingBlockData(
+      title: it.title,
+      text: it.text,
+      en: true,
+      questions: it.questions,
+    );
+    final h = 200 + (it.questions.length * 52).toDouble();
+    if (cur.isNotEmpty && curH + h > 880) {
+      pages.add(_enListeningPage(opts, cur));
+      cur = [];
+      curH = 0;
+    }
+    cur.add(WsBlock(en));
+    curH += h;
+  }
+  if (cur.isNotEmpty) pages.add(_enListeningPage(opts, cur));
+  return pages;
+}
+
+WsPage _enListeningPage(EnglishOptions opts, List<WsNode> nodes) {
+  return WsPage(
+    title: opts.showTitle ? engTitleBar(opts) : null,
+    nodes: [
+      WsSection('Listen to the passage and answer the questions.（听录音，回答问题。）'),
+      ...nodes,
+    ],
+  );
+}
+
+List<WsPage> renderENListeningAnswer(List<ReadingBlockData> items, EnglishOptions opts) {
+  final nodes = <WsNode>[];
+  nodes.add(WsHeading('听力参考答案'));
+  var n = 1;
+  for (final it in items) {
+    for (final q in it.questions) {
+      nodes.add(WsAnswerLine(n++, '${it.title} · ${q.q}', '答：${q.a.isEmpty ? "—" : q.a}'));
+    }
+  }
+  return [
+    WsPage(title: WsPageTitle(main: '听力参考答案'), nodes: nodes, noSpread: true),
   ];
 }
 
@@ -452,15 +529,16 @@ class ListeningItem {
 /// - 1-2 年级：直接朗读单词（听音选义）
 /// - 3-4 年级：朗读 "It's a/an ..." 短句（听句辨词）
 /// - 5-6 年级：朗读 "Number N. I have a ..." 情景句（听情景选词）
+/// [allGradeVocab] 为整个年级的词汇库（用于补充干扰项）
 List<ListeningItem> buildListeningItems(List<List<String>> vocab, int count,
-    {int grade = 1}) {
+    {int grade = 1, List<List<String>>? allGradeVocab}) {
   final rng = RandGen(grade: grade);
   final items = <ListeningItem>[];
   var n = 1;
   for (final pair in vocab.take(count)) {
     final en = pair[0];
     final cn = pair[1];
-    // 干扰项：其他词的中文（去重）
+    // 干扰项：优先从当前题目词汇中选取，不足时从整个年级词汇库中补充
     final distractors = <String>[];
     final shuffled = shuffleCopy(vocab);
     for (final p in shuffled) {
@@ -469,12 +547,21 @@ List<ListeningItem> buildListeningItems(List<List<String>> vocab, int count,
       distractors.add(p[1]);
       if (distractors.length >= 3) break;
     }
-    while (distractors.length < 3) {
-      distractors.add('其他选项${distractors.length + 1}');
+    // 如果当前题目词汇不足，从整个年级词汇库中补充干扰项
+    if (distractors.length < 3 && allGradeVocab != null) {
+      final allShuffled = shuffleCopy(allGradeVocab);
+      for (final p in allShuffled) {
+        if (p[1] == cn) continue;
+        if (distractors.contains(p[1])) continue;
+        distractors.add(p[1]);
+        if (distractors.length >= 3) break;
+      }
     }
+    // 如果仍然不足，动态调整选项数量
+    final optionCount = 1 + distractors.length;
     final options = <String>[cn, ...distractors];
     // 洗牌得到最终选项，记录正确答案位置
-    final order = rng.shuffle(List<int>.generate(4, (i) => i));
+    final order = rng.shuffle(List<int>.generate(optionCount, (i) => i));
     final finalOpts = <String>[for (final i in order) options[i]];
     final correctPos = order.indexOf(0);
     // 朗读文本按年级分级

@@ -472,3 +472,65 @@ Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
         )
   ];
 }
+
+/// AI 听力短文生成（英语）
+Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
+  final cfg = await AiStore.load();
+  if (cfg.base.isEmpty || cfg.model.isEmpty) {
+    throw Exception('请先在顶部「AI 智能出题设置」中填写 API 地址和模型并保存。');
+  }
+  final data = AppData();
+  final tb = data.textbooks[opts.version] ?? data.textbooks['renjiao']!;
+  final gname = data.gradeNames[opts.grade] ?? '小学';
+  final volName = opts.volume == '下' ? '下册' : '上册';
+  final count = opts.readingCount;
+  final words = (data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [])
+      .take(50)
+      .map((w) => w[0])
+      .join('、');
+
+  // 根据年级确定听力材料难度
+  String lengthDesc;
+  String questionDesc;
+  if (opts.grade <= 2) {
+    lengthDesc = '20-40词，简单句子，日常用语';
+    questionDesc = '2-3道选择题（每题3个选项）';
+  } else if (opts.grade <= 4) {
+    lengthDesc = '40-80词，简短对话或小故事';
+    questionDesc = '3-4道选择题或判断题';
+  } else {
+    lengthDesc = '60-120词，稍长对话或短文';
+    questionDesc = '4-5道选择题、判断题或填空题';
+  }
+
+  final prompt = '你是中国小学英语听力出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语听力材料：\n'
+      '1. 每篇给出一段适合该年级的原创英文听力材料（$lengthDesc），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
+      '2. 听力材料类型：日常对话、小故事、简单通知等，贴近学生生活；\n'
+      '3. 每篇配$questionDesc（选择题给出A/B/C选项，判断题给出T/F），问题用中文提问；\n'
+      '4. 听力材料与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
+      '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+      '{"items":[{"title":"标题","text":"英文听力材料正文","questions":[{"q":"问题","options":["选项A","选项B","选项C"],"a":"正确答案"}]}]}\n'
+      '注意：选择题的options字段为选项列表，a字段为正确答案内容（如"A"或选项内容）；判断题不需要options字段，a字段为"T"或"F"。';
+  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
+      jsonMode: true);
+  final data2 = aiExtractJson(content);
+  final items = data2['items'] is List ? data2['items'] as List : [];
+  return [
+    for (final it in items)
+      if (it is Map && '${it['text'] ?? ''}'.trim().isNotEmpty)
+        ReadingBlockData(
+          title: '${it['title'] ?? '听力材料'}',
+          text: '${it['text'] ?? ''}',
+          en: true,
+          questions: [
+            for (final q in (it['questions'] as List? ?? []))
+              if (q is Map)
+                ReadingQuestion(
+                  '${q['q'] ?? ''}',
+                  '${q['a'] ?? ''}',
+                  options: (q['options'] as List?)?.map((o) => '$o').toList(),
+                )
+          ],
+        )
+  ];
+}

@@ -36,8 +36,9 @@ class _EnglishPanelState extends State<EnglishPanel> {
   List<WsPage> _pages = [];
   bool _loading = false;
   List<ReadingBlockData> _aiItems = [];
+  List<ReadingBlockData> _aiListeningItems = [];
 
-  static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu'];
+  static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu', 'ailistening'];
 
   @override
   void initState() {
@@ -77,14 +78,19 @@ class _EnglishPanelState extends State<EnglishPanel> {
       showTitle: _showTitle,
       showAnswer: _showAnswer,
       aiReadingItems: _aiItems.isEmpty ? null : _aiItems,
+      aiListeningItems: _aiListeningItems.isEmpty ? null : _aiListeningItems,
     ));
   }
 
   void _refresh() => setState(_regenerate);
 
   void _generate() {
-    if ((_counts['aiyuedu'] ?? 0) > 0) {
+    if ((_counts['aiyuedu'] ?? 0) > 0 && (_counts['ailistening'] ?? 0) > 0) {
+      _generateENReadingAndListening();
+    } else if ((_counts['aiyuedu'] ?? 0) > 0) {
       _generateENReading();
+    } else if ((_counts['ailistening'] ?? 0) > 0) {
+      _generateENListening();
     } else {
       _refresh();
     }
@@ -107,6 +113,61 @@ class _EnglishPanelState extends State<EnglishPanel> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('AI 英语阅读理解生成失败：${aiFriendlyError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _generateENListening() async {
+    setState(() => _loading = true);
+    try {
+      final items = await aiGenerateListeningEN(AiPromptOpts(
+        version: widget.version,
+        volume: widget.volume,
+        grade: widget.grade,
+        diff: 'easy',
+        showAnswer: true,
+        readingCount: (_counts['ailistening'] ?? 2).clamp(1, 4),
+      ));
+      _aiListeningItems = items;
+      _regenerate();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('AI 英语听力短文生成失败：${aiFriendlyError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _generateENReadingAndListening() async {
+    setState(() => _loading = true);
+    try {
+      final readingItems = await aiGenerateReadingEN(AiPromptOpts(
+        version: widget.version,
+        volume: widget.volume,
+        grade: widget.grade,
+        diff: 'easy',
+        showAnswer: true,
+        readingCount: (_counts['aiyuedu'] ?? 2).clamp(1, 4),
+      ));
+      final listeningItems = await aiGenerateListeningEN(AiPromptOpts(
+        version: widget.version,
+        volume: widget.volume,
+        grade: widget.grade,
+        diff: 'easy',
+        showAnswer: true,
+        readingCount: (_counts['ailistening'] ?? 2).clamp(1, 4),
+      ));
+      _aiItems = readingItems;
+      _aiListeningItems = listeningItems;
+      _regenerate();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('AI 英语题目生成失败：${aiFriendlyError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
