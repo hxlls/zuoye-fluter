@@ -852,7 +852,7 @@ class _MatchList extends StatelessWidget {
                 Expanded(
                   flex: 2,
                   child: Text('${i + 1}. ${rows[i].data.en}',
-                      style: const TextStyle(fontSize: 18, fontFamily: 'Times New Roman')),
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFamily: 'Times New Roman')),
                 ),
                 Expanded(
                   flex: 3,
