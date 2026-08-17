@@ -268,7 +268,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
         for (var i = 0; i < _aiListeningItems.length; i++) {
           final it = _aiListeningItems[i];
           // 1. 朗读短文正文（慢语速 0.8）
-          final passageText = 'Number ${i + 1}. ${it.text}';
+          final passageText = '第${i + 1}题。${it.text}';
           final wav = await AiTts.speech(cfg, passageText, format: 'wav', speed: 0.8);
           chunks.add(wav);
           // 2. 正文与问题之间停顿 5 秒
@@ -276,11 +276,11 @@ class _EnglishPanelState extends State<EnglishPanel> {
           // 3. 逐个朗读问题，每个问题后停顿 4 秒（给学生写答案）
           for (var j = 0; j < it.questions.length; j++) {
             final q = it.questions[j];
-            final qText = 'Question ${j + 1}. ${q.q}';
+            final qText = '第${j + 1}小题。${q.q}';
             if (q.options != null && q.options!.isNotEmpty) {
               final optsText = q.options!.asMap().entries
-                  .map((e) => '${String.fromCharCode(65 + e.key)}. ${_stripOptionPrefix(e.value)}')
-                  .join('. ');
+                  .map((e) => '${String.fromCharCode(65 + e.key)}，${_stripOptionPrefix(e.value)}')
+                  .join('。');
               final qWav = await AiTts.speech(cfg, '$qText $optsText', format: 'wav', speed: 0.8);
               chunks.add(qWav);
             } else {
@@ -299,9 +299,9 @@ class _EnglishPanelState extends State<EnglishPanel> {
         // 部分语音接口不支持 wav：回退为 mp3
         final allText = _aiListeningItems.asMap().entries.map((e) {
           final questions = e.value.questions.asMap().entries
-              .map((q) => 'Question ${q.key + 1}. ${q.value.q}')
+              .map((q) => '第${q.key + 1}小题。${q.value.q}')
               .join(' ');
-          return 'Number ${e.key + 1}. ${e.value.text} $questions';
+          return '第${e.key + 1}题。${e.value.text} $questions';
         }).join('\n\n');
         final mp3 = await AiTts.speech(cfg, allText, format: 'mp3', speed: 0.8);
         await _saveAudioBytes(mp3, filename: 'listening_passage_g${widget.grade}_${widget.version}.mp3');
