@@ -111,15 +111,21 @@ List<String> allowedEngTypes(String ver, int grade, List<String> ids) {
   }).toList();
 }
 
-List<WsPage> englishRenderPages(EnglishOptions opts) {
+
+/// 英语作业渲染结果
+class EnglishRenderResult {
+  final List<WsPage> pages;
+  final List<ListeningItem> listeningItems;
+  EnglishRenderResult(this.pages, this.listeningItems);
+}
+
+EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
   final data = AppData();
   final grade = opts.grade;
   final ver = opts.version;
   final vol = opts.volume;
   final types = opts.types.isNotEmpty ? opts.types : defaultEngTypes(grade);
-  // 未显式传题型（如单测/外部调用）→ 使用默认题型并按默认题量输出
   final defaulted = opts.types.isEmpty;
-  // 题型可用性必须同时满足：当前版本+年级允许（教材要求）、且已勾选（显式题量>0）
   final allowed = allowedEngTypes(ver, grade, types).toSet();
 
   int nFor(String t) =>
@@ -127,7 +133,6 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   bool enabled(String t) =>
       allowed.contains(t) && (defaulted || (opts.counts[t] ?? 0) > 0);
 
-  // 计算各题型需要的单词数量，确保不同题型使用不同单词
   final traceN = enabled('trace') ? nFor('trace') : 0;
   final matchN = enabled('match') ? nFor('match') : 0;
   final listeningN = enabled('listening') ? nFor('listening') : 0;
@@ -136,7 +141,6 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   final totalN = traceN + matchN + listeningN + qN;
   final allVocab = pickVocab(data, grade, totalN, ver, vol);
 
-  // 为每个题型分配不同的单词子集，避免答案泄露
   var offset = 0;
   final traceVocab = traceN > 0 ? allVocab.sublist(offset, offset + traceN) : <List<String>>[];
   offset += traceN;
@@ -146,12 +150,11 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   offset += listeningN;
   final questionVocab = qN > 0 ? allVocab.sublist(offset, offset + qN) : <List<String>>[];
 
-  // 各题型排版分节（多题型同页紧凑排布，避免每题型独占一页浪费纸张）
   final sections = <_EngSection>[];
   List<List<String>>? matchVocab;
   List<List<String>>? matchRightCn;
   List<ListeningItem>? listeningItems;
-  final answerList = <(String, String)>[]; // key, ans
+  final answerList = <(String, String)>[];
 
   if (enabled('alphabet')) {
     sections.add(_EngSection(
@@ -188,7 +191,6 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
   }
 
   if (enabled('listening') && listeningVocab.isNotEmpty) {
-    // 获取整个年级的词汇库（包括上册和下册），用于补充干扰项
     final allGradeVocab = <List<String>>[];
     for (final v in ['上', '下']) {
       final volData = data.vol(ver, grade, v, 'eng');
@@ -227,8 +229,7 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     'en2cn': '英译中（写出单词的中文意思）',
     'spell': '单词拼写（补全单词中缺少的字母）',
   };
-  final allowedQ = allowedEngTypes(
-      ver, grade, qTypes);
+  final allowedQ = allowedEngTypes(ver, grade, qTypes);
   for (final t in allowedQ) {
     final cards = <EngGridCardData>[];
     for (final pair in questionVocab) {
@@ -281,7 +282,6 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     }
   }
 
-  // AI 阅读理解
   if (enabled('aiyuedu')) {
     final aiItems = opts.aiReadingItems;
     if (aiItems != null && aiItems.isNotEmpty) {
@@ -298,7 +298,6 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     }
   }
 
-  // AI 听力短文
   if (enabled('ailistening')) {
     final aiListeningItems = opts.aiListeningItems;
     if (aiListeningItems != null && aiListeningItems.isNotEmpty) {
@@ -315,39 +314,11 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     }
   }
 
-  return pages;
+  return EnglishRenderResult(pages, listeningItems ?? []);
 }
 
-/// 英语作业渲染结果
-class EnglishRenderResult {
-  final List<WsPage> pages;
-  final List<ListeningItem> listeningItems;
-  EnglishRenderResult(this.pages, this.listeningItems);
-}
-
-EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
-  final pages = englishRenderPages(opts);
-  // 重新生成听力题目数据（与预览一致）
-  List<ListeningItem> listeningItems = [];
-  if (opts.types.contains('listening') && (opts.counts['listening'] ?? 0) > 0) {
-    final data = AppData();
-    final grade = opts.grade;
-    final ver = opts.version;
-    final vol = opts.volume;
-    final count = (opts.counts['listening'] ?? 8).clamp(0, 60);
-    final vocab = pickVocab(data, grade, count, ver, vol);
-    if (vocab.isNotEmpty) {
-      final allGradeVocab = <List<String>>[];
-      for (final v in ['上', '下']) {
-        final volData = data.vol(ver, grade, v, 'eng');
-        if (volData?.eng != null) {
-          allGradeVocab.addAll(volData!.eng!);
-        }
-      }
-      listeningItems = buildListeningItems(vocab, count, grade: grade, allGradeVocab: allGradeVocab);
-    }
-  }
-  return EnglishRenderResult(pages, listeningItems);
+List<WsPage> englishRenderPages(EnglishOptions opts) {
+  return englishRenderPagesWithResult(opts).pages;
 }
 
 List<WsPage> renderENReadingPages(List<ReadingBlockData> items, EnglishOptions opts) {
