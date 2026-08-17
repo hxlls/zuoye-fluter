@@ -90,21 +90,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openAiConfig() {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              child: AiConfigCard(),
-            ),
-          ),
-        ),
-      ),
-    );
+    // API 设置已移到 AI 出题面板中
+    setState(() => _tab = 'ai');
   }
 
   Widget _bottomNav() {
