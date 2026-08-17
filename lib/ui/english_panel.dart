@@ -343,7 +343,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
       return;
     }
     final location = await getSaveLocation(
-      suggestedName: filename,
+      suggestedName: name,
       acceptedTypeGroups: [
         XTypeGroup(label: ext.toUpperCase() == 'WAV' ? 'WAV 音频' : 'MP3 音频',
             extensions: [ext]),
