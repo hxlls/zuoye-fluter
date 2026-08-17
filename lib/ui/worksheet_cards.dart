@@ -881,6 +881,11 @@ class _MatchList extends StatelessWidget {
   }
 }
 
+/// 清理选项文本中的字母前缀（如 "A. 博物馆" → "博物馆"）
+String _stripOptionPrefix(String s) {
+  return s.replaceFirst(RegExp(r'^[A-Da-d][.、．)\s]+'), '').trim();
+}
+
 /// 阅读短文块
 class _ReadingBlock extends StatelessWidget {
   final ReadingBlockData data;
@@ -929,7 +934,7 @@ class _ReadingBlock extends StatelessWidget {
                         children: [
                           for (var i = 0; i < q.options!.length; i++)
                             Text(
-                              '${String.fromCharCode(65 + i)}. ${q.options![i]}',
+                              '${String.fromCharCode(65 + i)}. ${_stripOptionPrefix(q.options![i])}',
                               style: const TextStyle(fontSize: 14, height: 1.6),
                             ),
                         ],

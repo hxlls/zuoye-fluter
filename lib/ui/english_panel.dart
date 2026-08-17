@@ -238,19 +238,69 @@ class _EnglishPanelState extends State<EnglishPanel> {
     return buf.toString();
   }
 
+  /// 生成听力短文音频（AI TTS）：把听力短文朗读文本合成为 mp3 供下载
+  Future<void> _generateListeningPassageAudio() async {
+    if (_aiListeningItems.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('请先生成听力短文内容。')));
+      }
+      return;
+    }
+    final cfg = await AiStore.load();
+    if (cfg.base.isEmpty || cfg.voiceModel.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('请先在顶部「AI 智能出题设置」中填写 API 地址与语音模型（如 tts-1 / cosyvoice-v1）。')));
+      }
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      // 逐篇朗读听力短文，篇间插入约 5 秒静音
+      final chunks = <Uint8List>[];
+      try {
+        for (final it in _aiListeningItems) {
+          final wav = await AiTts.speech(cfg, it.text, format: 'wav');
+          chunks.add(wav);
+        }
+      } catch (e) {
+        // 部分语音接口不支持 wav：回退为 mp3（合并所有短文生成单文件）
+        final allText = _aiListeningItems.map((it) => it.text).join('\n\n');
+        final mp3 = await AiTts.speech(cfg, allText, format: 'mp3');
+        await _saveAudioBytes(mp3, filename: 'listening_passage_g${widget.grade}_${widget.version}.mp3');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('当前语音接口不支持 wav 静音拼接，已改为 mp3 单文件。')));
+        }
+        return;
+      }
+      final merged = WavMerge.merge(chunks, silenceMs: 5000);
+      await _saveAudioBytes(merged, ext: 'wav',
+          filename: 'listening_passage_g${widget.grade}_${widget.version}.wav');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('听力短文音频生成失败：${aiFriendlyError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   /// 保存音频字节（跨平台另存为对话框）
-  Future<void> _saveAudioBytes(Uint8List bytes, {String ext = 'mp3'}) async {
-    final filename = 'listening_g${widget.grade}_${widget.version}.$ext';
+  Future<void> _saveAudioBytes(Uint8List bytes, {String ext = 'mp3', String? filename}) async {
+    final name = filename ?? 'listening_g${widget.grade}_${widget.version}.$ext';
     final mime = ext == 'wav' ? 'audio/wav' : 'audio/mpeg';
     if (kIsWeb) {
-      webDownloadBytes(bytes, filename, mimeType: mime);
+      webDownloadBytes(bytes, name, mimeType: mime);
       return;
     }
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       await FlutterFileDialog.saveFile(
         params: SaveFileDialogParams(
           data: bytes,
-          fileName: filename,
+          fileName: name,
           mimeTypesFilter: const ['audio/*'],
         ),
       );
@@ -361,6 +411,18 @@ class _EnglishPanelState extends State<EnglishPanel> {
                 onPressed: _loading ? null : _generateListeningAudio,
                 icon: const Icon(Icons.audiotrack, size: 18),
                 label: Text(_loading ? '⏳ 生成中…' : '生成听力音频（AI配音·下载MP3）'),
+              ),
+            ),
+          ),
+        if ((_counts['ailistening'] ?? 0) > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _loading ? null : _generateListeningPassageAudio,
+                icon: const Icon(Icons.headphones, size: 18),
+                label: Text(_loading ? '⏳ 生成中…' : '生成听力短文音频（AI配音·下载）'),
               ),
             ),
           ),

@@ -509,8 +509,11 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
       '3. 每篇配$questionDesc（选择题给出A/B/C选项，判断题给出T/F），问题用中文提问；\n'
       '4. 听力材料与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
-      '{"items":[{"title":"标题","text":"英文听力材料正文","questions":[{"q":"问题","options":["选项A","选项B","选项C"],"a":"正确答案"}]}]}\n'
-      '注意：选择题的options字段为选项列表，a字段为正确答案内容（如"A"或选项内容）；判断题不需要options字段，a字段为"T"或"F"。';
+      '{"items":[{"title":"标题","text":"英文听力材料正文","questions":[{"q":"问题","options":["选项内容","选项内容","选项内容"],"a":"正确答案"}]}]}\n'
+      '注意：\n'
+      '- options字段只放纯选项内容（如"博物馆"），不要加"A."/"B."等字母前缀；\n'
+      '- a字段为正确答案内容（如"A"或选项内容）；\n'
+      '- 判断题不需要options字段，a字段为"T"或"F"。';
   final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
       jsonMode: true);
   final data2 = aiExtractJson(content);
