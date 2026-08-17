@@ -786,11 +786,13 @@ class _FourLine extends StatelessWidget {
     const top = [12.0, 25.0, 38.0, 51.0];
     const colors = [
       Color(0xff9d9a93),
-      Color(0xff8e8e8e),
-      Color(0xff9d9a93),
+      Color(0xffa0a0a0),
+      Color(0xffa0a0a0),
       Color(0xff9d9a93),
     ];
-    const widths = [0.8, 1.2, 0.8, 0.8];
+    const widths = [1.0, 0.8, 0.8, 1.0];
+    // 第1根和第4根是实线，第2根和第3根是虚线
+    const isDashed = [false, true, true, false];
     return SizedBox(
       height: 56,
       child: Stack(
@@ -800,12 +802,24 @@ class _FourLine extends StatelessWidget {
               left: 0,
               right: 0,
               top: top[i],
-              child: CustomPaint(
-                painter: _DashedLinePainter(
-                  color: colors[i],
-                  strokeWidth: widths[i],
-                ),
-              ),
+              child: isDashed[i]
+                  ? CustomPaint(
+                      painter: _DashedLinePainter(
+                        color: colors[i],
+                        strokeWidth: widths[i],
+                      ),
+                    )
+                  : Container(
+                      height: 0,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                            color: colors[i],
+                            width: widths[i],
+                          ),
+                        ),
+                      ),
+                    ),
             ),
           if (word != null)
             Positioned(
