@@ -16,7 +16,7 @@ TextStyle _mathStyle(double size, {FontWeight w = FontWeight.w600}) => TextStyle
       fontSize: size,
       fontWeight: w,
       letterSpacing: 1,
-      color: const Color(0xff222222),
+      color: const Color(0xff181818),
       fontFamily: _mathFamily,
       fontFamilyFallback: _mathFallback,
     );
@@ -93,7 +93,7 @@ class _MathCard extends StatelessWidget {
               margin: const EdgeInsets.only(left: 4),
               width: 56,
               height: 1.5,
-              color: const Color(0xff333333),
+              color: const Color(0xff242424),
             ),
           ],
         ),
@@ -111,7 +111,7 @@ class _MathCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: const Color(0xffe2ddd2)),
+        border: Border.all(color: const Color(0xff9d9a93)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -120,7 +120,7 @@ class _MathCard extends StatelessWidget {
         children: [
           Text('${numLabel ?? ""}.',
               style: const TextStyle(
-                  fontSize: 12, color: Color(0xff999999), fontWeight: FontWeight.w700)),
+                  fontSize: 12, color: Color(0xff6a6a6a), fontWeight: FontWeight.w700)),
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Center(child: body),
@@ -154,7 +154,7 @@ class _MathCard extends StatelessWidget {
           Container(
             height: 2,
             width: 90,
-            color: const Color(0xff333333),
+            color: const Color(0xff242424),
           ),
           // 横线下方留空，供学生写答案
           const SizedBox(height: 28),
@@ -193,7 +193,7 @@ class _ExprText extends StatelessWidget {
               margin: const EdgeInsets.only(left: 4),
               width: 56,
               height: 1.5,
-              color: const Color(0xff333333),
+              color: const Color(0xff242424),
             ),
         ],
       ),
@@ -239,7 +239,7 @@ class _MathText extends StatelessWidget {
           margin: const EdgeInsets.only(left: 2),
           width: 56,
           height: 1.5,
-          color: const Color(0xff333333),
+          color: const Color(0xff242424),
         ));
       }
     }
@@ -257,7 +257,7 @@ class _MathText extends StatelessWidget {
         fontSize: size,
         fontWeight: w,
         letterSpacing: ls,
-        color: const Color(0xff222222),
+        color: const Color(0xff181818),
         fontFamily: _mathFamily,
         fontFamilyFallback: _mathFallback,
       );
@@ -275,7 +275,7 @@ class _WordExpr extends StatelessWidget {
       children: [
         Text(expr,
             textAlign: TextAlign.left,
-            style: const TextStyle(fontSize: 17, height: 1.8, color: Color(0xff222222))),
+            style: const TextStyle(fontSize: 17, height: 1.8, color: Color(0xff181818))),
         const SizedBox(height: 6),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -284,12 +284,12 @@ class _WordExpr extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xff333333))),
+                    color: Color(0xff242424))),
             Expanded(
               child: Container(
                 height: 24,
                 decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+                  border: Border(bottom: BorderSide(color: Color(0xff242424), width: 1.5)),
                 ),
               ),
             ),
@@ -318,7 +318,7 @@ class _LongDiv extends StatelessWidget {
           Text('${fmt(b)} ',
               style: _mathStyle(18).copyWith(letterSpacing: 0)),
           Text('⟌',
-              style: const TextStyle(fontSize: 34, height: 0.8, color: Color(0xff333333))),
+              style: const TextStyle(fontSize: 34, height: 0.8, color: Color(0xff242424))),
           Container(
             width: dw,
             alignment: Alignment.bottomCenter,
@@ -357,7 +357,7 @@ class _CnCard extends StatelessWidget {
                     fontSize: 21,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1,
-                    color: Color(0xff333333))),
+                    color: Color(0xff242424))),
             const SizedBox(height: 8),
             _bracketLine(width: 4),
           ],
@@ -370,7 +370,7 @@ class _CnCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(data.ch,
                 style: const TextStyle(
-                    fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
+                    fontSize: 38, color: Color(0xff181818), fontFamily: _kaiTi)),
           ],
         );
       case 'zuci':
@@ -379,7 +379,7 @@ class _CnCard extends StatelessWidget {
           children: [
             Text(data.ch,
                 style: const TextStyle(
-                    fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
+                    fontSize: 38, color: Color(0xff181818), fontFamily: _kaiTi)),
             const SizedBox(height: 4),
             _bracketLine(width: 4),
             _bracketLine(width: 4),
@@ -404,14 +404,14 @@ class _CnCard extends StatelessWidget {
                 child: i == data.blank
                     ? const Text('（　　　　　　）',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 26, color: Color(0xff777777)))
+                        style: TextStyle(fontSize: 26, color: Color(0xff535353)))
                     : Text(data.segs![i],
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                             fontSize: 26,
                             height: 1.6,
                             fontFamily: _kaiTi,
-                            color: Color(0xff222222))),
+                            color: Color(0xff181818))),
               ),
           ],
         );
@@ -425,11 +425,11 @@ class _CnCard extends StatelessWidget {
           children: [
             Text(shown,
                 style: const TextStyle(
-                    fontSize: 38, color: Color(0xff222222), fontFamily: _kaiTi)),
+                    fontSize: 38, color: Color(0xff181818), fontFamily: _kaiTi)),
             const SizedBox(height: 6),
             Text('释义：${data.meaning}',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Color(0xff555555), height: 1.6)),
+                style: const TextStyle(fontSize: 14, color: Color(0xff3b3b3b), height: 1.6)),
           ],
         );
       case 'chengyuGuess':
@@ -454,7 +454,7 @@ class _CnCard extends StatelessWidget {
                 decoration: const BoxDecoration(
                   border: Border(
                       bottom:
-                          BorderSide(color: Color(0xff333333), width: 1.5)),
+                          BorderSide(color: Color(0xff242424), width: 1.5)),
                 ),
               ),
             ),
@@ -476,7 +476,7 @@ class _CnCard extends StatelessWidget {
                     height: 1.6,
                     fontFamily: _kaiTi,
                     color: i == data.blank
-                        ? const Color(0xff666666)
+                        ? const Color(0xff474747)
                         : const Color(0xff000000)),
               ),
             if (data.source != null)
@@ -484,7 +484,7 @@ class _CnCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text('出处：${data.source}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13, color: Color(0xff666666))),
+                    style: const TextStyle(fontSize: 13, color: Color(0xff474747))),
               ),
           ],
         );
@@ -499,7 +499,7 @@ class _CnCard extends StatelessWidget {
       height: 26,
       margin: const EdgeInsets.only(top: 4),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+        border: Border(bottom: BorderSide(color: Color(0xff242424), width: 1.5)),
       ),
     );
   }
@@ -511,7 +511,7 @@ class _CnCard extends StatelessWidget {
       child: Text(
         '（${'　' * width}）',
         style: const TextStyle(
-            fontSize: 26, color: Color(0xff777777), height: 1.4),
+            fontSize: 26, color: Color(0xff535353), height: 1.4),
       ),
     );
   }
@@ -535,8 +535,8 @@ class _CnCard extends StatelessWidget {
                   border: Border(
                     top: BorderSide(
                       color: i == 1
-                          ? const Color(0xff888888)
-                          : const Color(0xff999999),
+                          ? const Color(0xff5f5f5f)
+                          : const Color(0xff6a6a6a),
                       width: i == 1 ? 1.5 : 1.0,
                     ),
                   ),
@@ -561,7 +561,7 @@ class _AiCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 2),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xffe2ddd2)),
+        border: Border.all(color: const Color(0xff9d9a93)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -572,7 +572,7 @@ class _AiCard extends StatelessWidget {
               TextSpan(
                 text: '${num ?? ''}. ',
                 style: const TextStyle(
-                    fontSize: 13, color: Color(0xff999999), fontWeight: FontWeight.w700),
+                    fontSize: 13, color: Color(0xff6a6a6a), fontWeight: FontWeight.w700),
               ),
               TextSpan(
                   text: data.q,
@@ -589,14 +589,14 @@ class _AiCard extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xff333333))),
+                          color: Color(0xff242424))),
                   Expanded(
                     child: Container(
                       height: 20,
                       decoration: BoxDecoration(
                         border: Border(
                             bottom:
-                                BorderSide(color: Color(0xff333333), width: 1.5)),
+                                BorderSide(color: Color(0xff242424), width: 1.5)),
                       ),
                     ),
                   ),
@@ -609,7 +609,7 @@ class _AiCard extends StatelessWidget {
               margin: const EdgeInsets.only(top: 4),
               decoration: const BoxDecoration(
                 border: Border(
-                    bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+                    bottom: BorderSide(color: Color(0xff242424), width: 1.5)),
               ),
             ),
         ],
@@ -633,7 +633,7 @@ class _LetterCard extends StatelessWidget {
                 fontSize: 30,
                 fontFamily: 'Times New Roman',
                 height: 1.1,
-                color: Color(0xffc9c9c9))),
+                color: Color(0xff8e8e8e))),
         const _FourLine(),
       ],
     );
@@ -652,12 +652,12 @@ class _TraceCard extends StatelessWidget {
       children: [
         _FourLine(
           word: data.en,
-          color: const Color(0xffa0a0a0),
+          color: const Color(0xff707070),
         ),
         Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Text(data.cn,
-              style: const TextStyle(fontSize: 13, color: Color(0xff888888))),
+              style: const TextStyle(fontSize: 13, color: Color(0xff5f5f5f))),
         ),
         const _FourLine(),
       ],
@@ -689,7 +689,7 @@ class _WordQuestionCard extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 12,
                       fontFamily: 'Times New Roman',
-                      color: Color(0xff888888))),
+                      color: Color(0xff5f5f5f))),
             ],
           ),
           const SizedBox(height: 8),
@@ -702,11 +702,11 @@ class _WordQuestionCard extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xff333333))),
+                          color: Color(0xff242424))),
                   Expanded(
                     child: Text(data.options![i],
                         style: const TextStyle(
-                            fontSize: 16, color: Color(0xff222222))),
+                            fontSize: 16, color: Color(0xff181818))),
                   ),
                 ],
               ),
@@ -722,7 +722,7 @@ class _WordQuestionCard extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xff333333))),
+                  color: Color(0xff242424))),
           const SizedBox(height: 6),
           _FourLine(),
         ],
@@ -744,7 +744,7 @@ class _WordQuestionCard extends StatelessWidget {
             margin: const EdgeInsets.only(top: 4),
             decoration: const BoxDecoration(
               border: Border(
-                  bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+                  bottom: BorderSide(color: Color(0xff242424), width: 1.5)),
             ),
           ),
         ],
@@ -760,14 +760,14 @@ class _WordQuestionCard extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
           child: Text('中文：${data.cn}',
-              style: const TextStyle(fontSize: 12, color: Color(0xff888888))),
+              style: const TextStyle(fontSize: 12, color: Color(0xff5f5f5f))),
         ),
         Container(
           width: 180,
           height: 26,
           decoration: const BoxDecoration(
             border: Border(
-                bottom: BorderSide(color: Color(0xff333333), width: 1.5)),
+                bottom: BorderSide(color: Color(0xff242424), width: 1.5)),
           ),
         ),
       ],
@@ -785,10 +785,10 @@ class _FourLine extends StatelessWidget {
   Widget build(BuildContext context) {
     const top = [12.0, 25.0, 38.0, 51.0];
     const colors = [
-      Color(0xff999999),
-      Color(0xff888888),
-      Color(0xff999999),
-      Color(0xff999999),
+      Color(0xff6a6a6a),
+      Color(0xff5f5f5f),
+      Color(0xff6a6a6a),
+      Color(0xff6a6a6a),
     ];
     const widths = [1.0, 1.5, 1.0, 1.0];
     return SizedBox(
@@ -822,7 +822,7 @@ class _FourLine extends StatelessWidget {
                       height: 1,
                       fontFamily: 'Times New Roman',
                       letterSpacing: 4,
-                      color: color ?? const Color(0xffa0a0a0))),
+                      color: color ?? const Color(0xff707070))),
             ),
         ],
       ),
@@ -844,7 +844,7 @@ class _MatchList extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xffe2ddd2)),
+              border: Border.all(color: const Color(0xff9d9a93)),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -861,7 +861,7 @@ class _MatchList extends StatelessWidget {
                     height: 12,
                     decoration: const BoxDecoration(
                       border: Border(
-                          bottom: BorderSide(color: Color(0xff888888), width: 1.5)),
+                          bottom: BorderSide(color: Color(0xff5f5f5f), width: 1.5)),
                     ),
                   ),
                 ),
@@ -897,7 +897,7 @@ class _ReadingBlock extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xffe2ddd2)),
+        border: Border.all(color: const Color(0xff9d9a93)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -912,7 +912,7 @@ class _ReadingBlock extends StatelessWidget {
           if (data.isListening)
             const Text(
               '（听录音，回答问题。）',
-              style: TextStyle(fontSize: 14, color: Color(0xff888888), fontStyle: FontStyle.italic),
+              style: TextStyle(fontSize: 14, color: Color(0xff5f5f5f), fontStyle: FontStyle.italic),
             )
           else
             Text(
@@ -920,7 +920,7 @@ class _ReadingBlock extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 height: 1.9,
-                color: const Color(0xff333333),
+                color: const Color(0xff242424),
                 fontFamily: data.en ? 'Times New Roman' : null,
               ),
             ),
@@ -950,14 +950,14 @@ class _ReadingBlock extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       const Text('答：',
-                          style: TextStyle(fontSize: 15, color: Color(0xff333333))),
+                          style: TextStyle(fontSize: 15, color: Color(0xff242424))),
                       Expanded(
                         child: Container(
                           height: 24,
                           decoration: const BoxDecoration(
                             border: Border(
                                 bottom: BorderSide(
-                                    color: Color(0xff333333), width: 1.5)),
+                                    color: Color(0xff242424), width: 1.5)),
                           ),
                         ),
                       ),
