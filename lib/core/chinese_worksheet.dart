@@ -223,7 +223,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
   }
 
   final pages = <WsPage>[];
-  final usableH = 860.0;
+  final usableH = 950.0;
   var curContent = <WsNode>[];
   var curH = 0.0;
 
@@ -257,10 +257,8 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     curContent.add(WsSection(CHINESE_INSTRUCTION[type] ?? '按要求做题。'));
     curH += instrH;
 
-    final colFlow = type == 'chengyuGuess';
-    final twoCol = type == 'gushiFill' ||
-        type == 'chengyuFill' ||
-        type == 'mingjuFill';
+    final colFlow = type == 'chengyuGuess' || type == 'chengyuFill' || type == 'mingjuFill';
+    final twoCol = type == 'gushiFill';
     final perRow = colFlow ? 1 : (twoCol ? 2 : 3);
 
     double rowH(String t) {

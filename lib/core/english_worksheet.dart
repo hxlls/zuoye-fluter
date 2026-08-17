@@ -121,8 +121,25 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
       opts.counts[t] == null ? (opts.count > 0 ? opts.count : 8) : (opts.counts[t] ?? 0).clamp(0, 60);
   bool enabled(String t) =>
       allowed.contains(t) && (defaulted || (opts.counts[t] ?? 0) > 0);
-  final maxN = [opts.count, ...types.map(nFor)].reduce((a, b) => a > b ? a : b);
-  final vocab = pickVocab(data, grade, maxN, ver, vol);
+
+  // 计算各题型需要的单词数量，确保不同题型使用不同单词
+  final traceN = enabled('trace') ? nFor('trace') : 0;
+  final matchN = enabled('match') ? nFor('match') : 0;
+  final listeningN = enabled('listening') ? nFor('listening') : 0;
+  final qTypes = ['cn2en', 'en2cn', 'spell'].where(enabled).toList();
+  final qN = qTypes.isNotEmpty ? nFor(qTypes.first) : 0;
+  final totalN = traceN + matchN + listeningN + qN;
+  final allVocab = pickVocab(data, grade, totalN, ver, vol);
+
+  // 为每个题型分配不同的单词子集，避免答案泄露
+  var offset = 0;
+  final traceVocab = traceN > 0 ? allVocab.sublist(offset, offset + traceN) : <List<String>>[];
+  offset += traceN;
+  final matchVocabList = matchN > 0 ? allVocab.sublist(offset, offset + matchN) : <List<String>>[];
+  offset += matchN;
+  final listeningVocab = listeningN > 0 ? allVocab.sublist(offset, offset + listeningN) : <List<String>>[];
+  offset += listeningN;
+  final questionVocab = qN > 0 ? allVocab.sublist(offset, offset + qN) : <List<String>>[];
 
   // 各题型排版分节（多题型同页紧凑排布，避免每题型独占一页浪费纸张）
   final sections = <_EngSection>[];
@@ -142,7 +159,7 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
 
   if (enabled('trace')) {
     final cards = <EngGridCardData>[
-      for (final pair in vocab.take(nFor('trace')))
+      for (final pair in traceVocab)
         EngGridCardData('trace', EngCardData(type: 'trace', en: pair[0], cn: pair[1])),
     ];
     sections.add(_EngSection(
@@ -153,9 +170,9 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     ));
   }
 
-  if (enabled('match')) {
-    matchVocab = vocab.take(nFor('match')).toList();
-    final built = buildMatchingRows(matchVocab);
+  if (enabled('match') && matchVocabList.isNotEmpty) {
+    matchVocab = matchVocabList;
+    final built = buildMatchingRows(matchVocab!);
     matchRightCn = built.rightCn;
     sections.add(_EngSection(
       heading: '中英连线（把英文单词与正确的中文意思连起来）',
@@ -165,8 +182,8 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     ));
   }
 
-  if (enabled('listening')) {
-    final items = buildListeningItems(vocab, nFor('listening'), grade: grade);
+  if (enabled('listening') && listeningVocab.isNotEmpty) {
+    final items = buildListeningItems(listeningVocab, nFor('listening'), grade: grade);
     listeningItems = items;
     sections.add(_EngSection(
       heading: '听力练习（听录音，选出你听到的单词的中文意思）',
@@ -197,10 +214,10 @@ List<WsPage> englishRenderPages(EnglishOptions opts) {
     'spell': '单词拼写（补全单词中缺少的字母）',
   };
   final allowedQ = allowedEngTypes(
-      ver, grade, ['cn2en', 'en2cn', 'spell'].where(enabled).toList());
+      ver, grade, qTypes);
   for (final t in allowedQ) {
     final cards = <EngGridCardData>[];
-    for (final pair in vocab.take(nFor(t))) {
+    for (final pair in questionVocab) {
       cards.add(EngGridCardData('word', wordQuestionBlock(pair[0], pair[1], t, answerList)));
     }
     if (cards.isEmpty) continue;
