@@ -455,9 +455,9 @@ class _EnglishPanelState extends State<EnglishPanel> {
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: _loading ? null : _generateListeningPassageAudio,
+                onPressed: _loading || _aiListeningItems.isEmpty ? null : _generateListeningPassageAudio,
                 icon: const Icon(Icons.headphones, size: 18),
-                label: Text(_loading ? '⏳ 生成中…' : '生成听力短文音频（AI配音·下载）'),
+                label: Text(_loading ? '⏳ 生成中…' : _aiListeningItems.isEmpty ? '请先点击「生成预览」' : '生成听力短文音频（AI配音·下载）'),
               ),
             ),
           ),
