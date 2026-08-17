@@ -92,8 +92,10 @@ List<String> defaultEngTypes(int grade) {
 /// - 外研三起点：3-4 年级黑体词为「三会」（听、说、读），5-6 年级才要求「四会」（听写拼写）；
 /// - 其余版本（人教/冀教/一起点）：三年级起要求拼写（低年级以字母、描红、抄写为主）。
 /// listening（听力）：外研三起点三年级才学英语，仅 3-6 年级开放；其余版本 1-6 年级均可。
+/// ailistening（听力短文）：需要一定听力理解能力，3-6 年级开放。
 bool engTypeAllowed(String id, String ver, int grade) {
   if (id == 'listening') return !(ver == 'waiyanSQ' && grade < 3);
+  if (id == 'ailistening') return grade >= 3;
   if (id != 'spell') return true;
   if (ver == 'waiyanSQ') return grade >= 5;
   return grade >= 3;
