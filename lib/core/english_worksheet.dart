@@ -136,9 +136,10 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
   final traceN = enabled('trace') ? nFor('trace') : 0;
   final matchN = enabled('match') ? nFor('match') : 0;
   final listeningN = enabled('listening') ? nFor('listening') : 0;
-  final qTypes = ['cn2en', 'en2cn', 'spell'].where(enabled).toList();
-  final qN = qTypes.isNotEmpty ? nFor(qTypes.first) : 0;
-  final totalN = traceN + matchN + listeningN + qN;
+  final cn2enN = enabled('cn2en') ? nFor('cn2en') : 0;
+  final en2cnN = enabled('en2cn') ? nFor('en2cn') : 0;
+  final spellN = enabled('spell') ? nFor('spell') : 0;
+  final totalN = traceN + matchN + listeningN + cn2enN + en2cnN + spellN;
   final allVocab = pickVocab(data, grade, totalN, ver, vol);
 
   var offset = 0;
@@ -148,7 +149,11 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
   offset += matchN;
   final listeningVocab = listeningN > 0 ? allVocab.sublist(offset, offset + listeningN) : <List<String>>[];
   offset += listeningN;
-  final questionVocab = qN > 0 ? allVocab.sublist(offset, offset + qN) : <List<String>>[];
+  final cn2enVocab = cn2enN > 0 ? allVocab.sublist(offset, offset + cn2enN) : <List<String>>[];
+  offset += cn2enN;
+  final en2cnVocab = en2cnN > 0 ? allVocab.sublist(offset, offset + en2cnN) : <List<String>>[];
+  offset += en2cnN;
+  final spellVocab = spellN > 0 ? allVocab.sublist(offset, offset + spellN) : <List<String>>[];
 
   final sections = <_EngSection>[];
   List<List<String>>? matchVocab;
@@ -229,10 +234,20 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
     'en2cn': '英译中（写出单词的中文意思）',
     'spell': '单词拼写（补全单词中缺少的字母）',
   };
-  final allowedQ = allowedEngTypes(ver, grade, qTypes);
-  for (final t in allowedQ) {
+  
+  // 为每个题型使用不同的词汇
+  final vocabMap = {
+    'cn2en': cn2enVocab,
+    'en2cn': en2cnVocab,
+    'spell': spellVocab,
+  };
+  
+  for (final t in ['cn2en', 'en2cn', 'spell']) {
+    if (!enabled(t)) continue;
+    final vocab = vocabMap[t] ?? [];
+    if (vocab.isEmpty) continue;
     final cards = <EngGridCardData>[];
-    for (final pair in questionVocab) {
+    for (final pair in vocab) {
       cards.add(EngGridCardData('word', wordQuestionBlock(pair[0], pair[1], t, answerList)));
     }
     if (cards.isEmpty) continue;
