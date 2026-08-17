@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../data/app_data.dart';
 import '../core/english_worksheet.dart';
 import '../core/wav_merge.dart';
@@ -47,11 +49,16 @@ class _EnglishPanelState extends State<EnglishPanel> {
 
   static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu', 'ailistening'];
 
+  /// 获取当前设置的存储key
+  String get _settingsKey => 'eng_settings_${widget.grade}_${widget.version}_${widget.volume}';
+
   @override
   void initState() {
     super.initState();
-    _ensureCounts();
-    _regenerate();
+    _loadSettings().then((_) {
+      _ensureCounts();
+      _regenerate();
+    });
   }
 
   @override
@@ -60,8 +67,52 @@ class _EnglishPanelState extends State<EnglishPanel> {
     if (oldWidget.grade != widget.grade ||
         oldWidget.version != widget.version ||
         oldWidget.volume != widget.volume) {
-      _ensureCounts();
-      _regenerate();
+      _loadSettings().then((_) {
+        _ensureCounts();
+        _regenerate();
+      });
+    }
+  }
+
+  /// 加载保存的设置
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_settingsKey);
+      if (raw != null) {
+        final settings = json.decode(raw) as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _showTitle = settings['showTitle'] ?? true;
+            _showAnswer = settings['showAnswer'] ?? true;
+            _listeningNarrationOnly = settings['listeningNarrationOnly'] ?? true;
+            if (settings['counts'] != null) {
+              final counts = settings['counts'] as Map<String, dynamic>;
+              counts.forEach((key, value) {
+                if (value is int) _counts[key] = value;
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // 加载失败使用默认设置
+    }
+  }
+
+  /// 保存当前设置
+  Future<void> _saveSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settings = {
+        'showTitle': _showTitle,
+        'showAnswer': _showAnswer,
+        'listeningNarrationOnly': _listeningNarrationOnly,
+        'counts': Map<String, int>.from(_counts),
+      };
+      await prefs.setString(_settingsKey, json.encode(settings));
+    } catch (e) {
+      // 保存失败忽略
     }
   }
 
@@ -396,12 +447,14 @@ class _EnglishPanelState extends State<EnglishPanel> {
                       if (v && (_counts[t] ?? 0) <= 0) _counts[t] = 8;
                       else if (!v) _counts[t] = 0;
                       _regenerate();
+                      _saveSettings();
                     });
                   },
                   onCount: (n) {
                     setState(() {
                       _counts[t] = n;
                       _regenerate();
+                      _saveSettings();
                     });
                   },
                 ),
@@ -421,6 +474,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
                   setState(() {
                     _showTitle = v;
                     _regenerate();
+                    _saveSettings();
                   });
                 },
               ),
@@ -431,6 +485,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
                   setState(() {
                     _showAnswer = v;
                     _regenerate();
+                    _saveSettings();
                   });
                 },
               ),
@@ -446,6 +501,7 @@ class _EnglishPanelState extends State<EnglishPanel> {
               onChanged: (v) {
                 setState(() {
                   _listeningNarrationOnly = v;
+                  _saveSettings();
                 });
               },
             ),
