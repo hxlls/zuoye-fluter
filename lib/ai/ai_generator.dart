@@ -505,7 +505,7 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
 
   final prompt = '你是中国小学英语听力出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语听力材料：\n'
       '1. 每篇给出一段适合该年级的原创英文听力材料（$lengthDesc），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
-      '2. 听力材料类型：小故事、简单通知、描述性短文等（用第三人称叙述，不要用对话形式），贴近学生生活；\n'
+      '2. 听力材料类型：小故事、简单通知、描述性短文等，贴近学生生活；\n'
       '3. 每篇配$questionDesc（选择题给出A/B/C选项，判断题给出T/F），问题用中文提问；\n'
       '4. 听力材料与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
@@ -514,7 +514,8 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts) async {
       '- options字段只放纯选项内容（如"博物馆"），不要加"A."/"B."等字母前缀；\n'
       '- a字段为正确答案内容（如"A"或选项内容）；\n'
       '- 判断题不需要options字段，a字段为"T"或"F"；\n'
-      '- 听力材料用第三人称叙述（如"Tom goes to..."），不要对话形式（避免"A says: ..."）。';
+      '- 【重要】听力材料必须用第三人称叙述（如"Tom goes to school. He likes math."），绝对不要出现对话（禁止使用 says/asks/replies/answers 等对话动词，禁止冒号引号等对话格式）；\n'
+      '- 【重要】不要出现任何人物之间的直接对话或间接对话，全程用叙述描述事件和场景。';
   final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
       jsonMode: true);
   final data2 = aiExtractJson(content);
