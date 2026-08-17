@@ -472,8 +472,8 @@ class _CnCard extends StatelessWidget {
                     : data.segs![i],
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 17,
-                    height: 1.7,
+                    fontSize: 22,
+                    height: 1.6,
                     fontFamily: _kaiTi,
                     color: i == data.blank
                         ? const Color(0xff666666)
@@ -481,10 +481,10 @@ class _CnCard extends StatelessWidget {
               ),
             if (data.source != null)
               Padding(
-                padding: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.only(top: 4),
                 child: Text('出处：${data.source}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: Color(0xff666666))),
+                    style: const TextStyle(fontSize: 13, color: Color(0xff666666))),
               ),
           ],
         );
