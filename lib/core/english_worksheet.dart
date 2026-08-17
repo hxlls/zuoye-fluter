@@ -373,6 +373,7 @@ List<WsPage> renderENListeningPages(List<ReadingBlockData> items, EnglishOptions
       title: it.title,
       text: it.text,
       en: true,
+      isListening: true,
       questions: it.questions,
     );
     final h = 200 + (it.questions.length * 52).toDouble();
