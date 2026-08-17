@@ -785,12 +785,12 @@ class _FourLine extends StatelessWidget {
   Widget build(BuildContext context) {
     const top = [12.0, 25.0, 38.0, 51.0];
     const colors = [
-      Color(0xff6a6a6a),
-      Color(0xff5f5f5f),
-      Color(0xff6a6a6a),
-      Color(0xff6a6a6a),
+      Color(0xff9d9a93),
+      Color(0xff8e8e8e),
+      Color(0xff9d9a93),
+      Color(0xff9d9a93),
     ];
-    const widths = [1.0, 1.5, 1.0, 1.0];
+    const widths = [0.8, 1.2, 0.8, 0.8];
     return SizedBox(
       height: 56,
       child: Stack(
@@ -800,15 +800,10 @@ class _FourLine extends StatelessWidget {
               left: 0,
               right: 0,
               top: top[i],
-              child: Container(
-                height: 0,
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: colors[i],
-                      width: widths[i],
-                    ),
-                  ),
+              child: CustomPaint(
+                painter: _DashedLinePainter(
+                  color: colors[i],
+                  strokeWidth: widths[i],
                 ),
               ),
             ),
@@ -828,6 +823,42 @@ class _FourLine extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 虚线绘制器
+class _DashedLinePainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double dashWidth;
+  final double dashSpace;
+
+  _DashedLinePainter({
+    required this.color,
+    this.strokeWidth = 1.0,
+    this.dashWidth = 6.0,
+    this.dashSpace = 4.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    var startX = 0.0;
+    while (startX < size.width) {
+      canvas.drawLine(
+        Offset(startX, 0),
+        Offset(startX + dashWidth, 0),
+        paint,
+      );
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// 连线列表
