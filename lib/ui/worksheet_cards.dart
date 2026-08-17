@@ -825,18 +825,20 @@ class _FourLine extends StatelessWidget {
   }
 }
 
-/// 虚线绘制器
+/// 虚线绘制器（一横一点样式）
 class _DashedLinePainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
   final double dashWidth;
-  final double dashSpace;
+  final double dotSize;
+  final double gap;
 
   _DashedLinePainter({
     required this.color,
     this.strokeWidth = 1.0,
-    this.dashWidth = 6.0,
-    this.dashSpace = 4.0,
+    this.dashWidth = 8.0,
+    this.dotSize = 2.0,
+    this.gap = 4.0,
   });
 
   @override
@@ -844,16 +846,29 @@ class _DashedLinePainter extends CustomPainter {
     final paint = Paint()
       ..color = color
       ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke;
+      ..strokeCap = StrokeCap.round;
 
-    var startX = 0.0;
-    while (startX < size.width) {
-      canvas.drawLine(
-        Offset(startX, 0),
-        Offset(startX + dashWidth, 0),
-        paint,
-      );
-      startX += dashWidth + dashSpace;
+    var x = 0.0;
+    while (x < size.width) {
+      // 画横线
+      final dashEnd = x + dashWidth;
+      if (dashEnd <= size.width) {
+        canvas.drawLine(
+          Offset(x, 0),
+          Offset(dashEnd, 0),
+          paint,
+        );
+      }
+      // 画点
+      final dotX = dashEnd + gap;
+      if (dotX <= size.width) {
+        canvas.drawCircle(
+          Offset(dotX + dotSize / 2, 0),
+          dotSize / 2,
+          paint,
+        );
+      }
+      x = dotX + dotSize + gap;
     }
   }
 
