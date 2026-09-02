@@ -601,9 +601,12 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   });
                 },
               ),
-              if (const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version))
+              if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}
+                  .contains(widget.version))
                 CheckLabel(
-                  label: '✨ 基于课文（本版本）出阅读理解题',
+                  label: widget.version.startsWith('waiyan')
+                      ? '✨ 基于外研课文（本版本）出英文阅读理解题'
+                      : '✨ 基于课文（本版本）出阅读理解题',
                   value: _useTextbook,
                   onChanged: (v) {
                     setState(() {
@@ -617,14 +620,17 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     });
                   },
                 ),
-              if (const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version))
+              if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}
+                  .contains(widget.version))
                 Padding(
                   padding: const EdgeInsets.only(top: 2, left: 4),
                   child: Text(
                     _useTextbook
                         ? (widget.version == 'tongbiao'
                             ? '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）'
-                            : '已开启：将依据本版本课文篇目，由 AI 原创适龄短文出题（A档目录模式，正文请用「拍照导入」补充）')
+                            : (widget.version.startsWith('waiyan')
+                                ? '已开启：将依据外研课文 Module/Unit 篇目，由 AI 原创适龄英文短文出题（A档目录模式，正文可用「拍照导入」补充）'
+                                : '已开启：将依据本版本课文篇目，由 AI 原创适龄短文出题（A档目录模式，正文可用「拍照导入」补充）'))
                         : '未开启：阅读理解为 AI 原创短文模式',
                     style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                   ),

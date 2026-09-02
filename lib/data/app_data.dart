@@ -295,12 +295,14 @@ class AppData {
       }
     }
 
-    // 各版本课文目录：统编版(YUWEN_TEXTS,含正文) / 冀教(HEBEI_TEXTS) / 旧人教版(RENJIAO_OLD_TEXTS, A档目录)
+    // 各版本课文目录：统编版(YUWEN_TEXTS,含正文) / 冀教(HEBEI_TEXTS) / 旧人教版(RENJIAO_OLD_TEXTS) / 外研(英语, A档目录)
     _textsByVersion = {};
     final versionMap = {
       'tongbiao': 'YUWEN_TEXTS',
       'hebei': 'HEBEI_TEXTS',
       'renjiao': 'RENJIAO_OLD_TEXTS',
+      'waiyanYQ': 'WAIYAN_YQ_TEXTS',
+      'waiyanSQ': 'WAIYAN_SQ_TEXTS',
     };
     for (final e in versionMap.entries) {
       final raw = j[e.value];
