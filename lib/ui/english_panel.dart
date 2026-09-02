@@ -5,7 +5,6 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../data/app_data.dart';
 import '../core/english_worksheet.dart';
 import '../core/wav_merge.dart';
 import '../core/worksheet_model.dart';
@@ -444,8 +443,9 @@ class _EnglishPanelState extends State<EnglishPanel> {
                   count: _counts[t] ?? 0,
                   onChecked: (v) {
                     setState(() {
-                      if (v && (_counts[t] ?? 0) <= 0) _counts[t] = 8;
-                      else if (!v) _counts[t] = 0;
+                      if (v && (_counts[t] ?? 0) <= 0) {
+                        _counts[t] = 8;
+                      } else if (!v) { _counts[t] = 0; }
                       _regenerate();
                       _saveSettings();
                     });

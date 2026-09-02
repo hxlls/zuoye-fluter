@@ -97,8 +97,8 @@ class _AiPanelState extends State<AiPanel> {
         insetPadding: const EdgeInsets.all(16),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
+          child: const Padding(
+            padding: EdgeInsets.all(12),
             child: SingleChildScrollView(
               child: AiConfigCard(),
             ),
@@ -175,7 +175,7 @@ class _AiPanelState extends State<AiPanel> {
         FormGroup(
           label: '科目',
           child: SegButtons(
-            options: [
+            options: const [
               ('math', '数学'),
               ('english', '英语'),
               ('chinese', '语文'),
@@ -200,8 +200,9 @@ class _AiPanelState extends State<AiPanel> {
                   count: _styles[o.id] ?? 0,
                   onChecked: (v) {
                     setState(() {
-                      if (v && (_styles[o.id] ?? 0) <= 0) _styles[o.id] = 1;
-                      else if (!v) _styles[o.id] = 0;
+                      if (v && (_styles[o.id] ?? 0) <= 0) {
+                        _styles[o.id] = 1;
+                      } else if (!v) { _styles[o.id] = 0; }
                     });
                   },
                   onCount: (n) {
@@ -216,7 +217,7 @@ class _AiPanelState extends State<AiPanel> {
         FormGroup(
           label: '难度',
           child: SegButtons(
-            options: [('easy', '简单'), ('mid', '中等'), ('hard', '较难')],
+            options: const [('easy', '简单'), ('mid', '中等'), ('hard', '较难')],
             value: _diff,
             onChanged: (v) => setState(() => _diff = v),
           ),
@@ -225,7 +226,7 @@ class _AiPanelState extends State<AiPanel> {
           FormGroup(
             label: '主题语境（2022 课标）',
             child: SegButtons(
-              options: [
+              options: const [
                 ('', '不限'),
                 ('人与自我', '人与自我'),
                 ('人与社会', '人与社会'),
@@ -238,7 +239,7 @@ class _AiPanelState extends State<AiPanel> {
           FormGroup(
             label: '语篇类型',
             child: SegButtons(
-              options: [
+              options: const [
                 ('', '不限'),
                 ('歌谣', '歌谣'),
                 ('配图故事', '配图故事'),

@@ -7,10 +7,8 @@ class RandGen {
   final int grade;
   final Random _r;
 
-  RandGen({String diff = "easy", int grade = 1, int? seed})
-      : diff = diff,
-        scale = diff == "easy" ? 1 : (diff == "mid" ? 2 : 3),
-        grade = grade,
+  RandGen({this.diff = "easy", this.grade = 1, int? seed})
+      : scale = diff == "easy" ? 1 : (diff == "mid" ? 2 : 3),
         _r = seed != null ? Random(seed) : Random();
 
   int rand(int min, int max) {

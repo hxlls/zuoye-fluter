@@ -185,7 +185,7 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
 
   if (enabled('match') && matchVocabList.isNotEmpty) {
     matchVocab = matchVocabList;
-    final built = buildMatchingRows(matchVocab!);
+    final built = buildMatchingRows(matchVocab);
     matchRightCn = built.rightCn;
     sections.add(_EngSection(
       heading: '中英连线（把英文单词与正确的中文意思连起来）',
@@ -491,7 +491,7 @@ class MatchBuildResult {
 
 MatchBuildResult buildMatchingRows(List<List<String>> vocab) {
   final rightCn = shuffleCopy(vocab);
-  final letters = 'abcdefghijklmnopqrstuvwxyz';
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
   final rows = <EngGridCardData>[];
   for (var i = 0; i < vocab.length; i++) {
     rows.add(EngGridCardData(
@@ -510,7 +510,7 @@ MatchBuildResult buildMatchingRows(List<List<String>> vocab) {
 
 /// 连线题答案：基于与题目相同的 rightCn 顺序生成
 List<String> buildMatchAnswer(List<List<String>> vocab, List<List<String>> rightCn) {
-  final letters = 'abcdefghijklmnopqrstuvwxyz';
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
   final lines = <String>[];
   for (var i = 0; i < vocab.length; i++) {
     // 左列第 i 行英文 vocab[i]，其释义 vocab[i][1] 在右列中的位置 → 标号

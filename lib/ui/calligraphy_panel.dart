@@ -22,7 +22,7 @@ class CalligraphyPanel extends StatefulWidget {
 class _CalligraphyPanelState extends State<CalligraphyPanel> {
   final _opts = CalligraphyOptions();
   List<CalligraphyPageData> _pages = [];
-  bool _loading = false;
+  final bool _loading = false;
 
   @override
   void initState() {
@@ -92,7 +92,7 @@ class _CalligraphyPanelState extends State<CalligraphyPanel> {
         FormGroup(
           label: '内容来源',
           child: SegButtons(
-            options: [('grade', '年级生字'), ('custom', '自定义文字')],
+            options: const [('grade', '年级生字'), ('custom', '自定义文字')],
             value: _opts.source,
             onChanged: (v) => _regenerateWith(() => _opts.source = v),
           ),

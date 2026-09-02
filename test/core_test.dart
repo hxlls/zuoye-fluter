@@ -391,7 +391,7 @@ void main() {
   });
 
   group('wav', () {
-    Uint8List _makeWav(int rate, int sampleCount) {
+    Uint8List makeWav(int rate, int sampleCount) {
       // 生成 1 秒 16bit mono 正弦波 WAV
       final bytes = 44 + sampleCount * 2;
       final out = ByteData(bytes);
@@ -421,14 +421,14 @@ void main() {
     }
 
     test('WAV 拼接含静音间隔', () {
-      final a = _makeWav(8000, 8000); // 1 秒
-      final b = _makeWav(8000, 8000); // 1 秒
+      final a = makeWav(8000, 8000); // 1 秒
+      final b = makeWav(8000, 8000); // 1 秒
       final merged = WavMerge.merge([a, b], silenceMs: 2000);
       // 2 段各 1 秒 + 1 段 2 秒静音 = 4 秒 @8000Hz = 32000 采样
       final totalSamples = merged.length - 44;
       expect(totalSamples, (8000 * 4) * 2);
       // 中间 2 秒应为静音（近似 0）
-      final mid = 44 + 8000 * 2 + 4000; // 第 2.5 秒处
+      const mid = 44 + 8000 * 2 + 4000; // 第 2.5 秒处
       final b0 = ByteData.sublistView(merged);
       expect(b0.getInt16(mid, Endian.little).abs() < 5, true,
           reason: '间隔应为静音');

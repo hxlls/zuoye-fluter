@@ -227,7 +227,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
   }
 
   final pages = <WsPage>[];
-  final usableH = 950.0;
+  const usableH = 950.0;
   var curContent = <WsNode>[];
   var curH = 0.0;
 
@@ -256,7 +256,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
   }
 
   for (final (type, items) in sections) {
-    final instrH = 38.0;
+    const instrH = 38.0;
     if (curContent.isNotEmpty && curH + instrH > usableH) flush();
     curContent.add(WsSection(CHINESE_INSTRUCTION[type] ?? '按要求做题。'));
     curH += instrH;
@@ -298,7 +298,9 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
       }
     }
     if (row.isNotEmpty) {
-      while (row.length < perRow) row.add(CnCardData.pad(type));
+      while (row.length < perRow) {
+        row.add(CnCardData.pad(type));
+      }
       curContent.add(WsGrid(
         [for (final c in row) WsCard('cn', c)],
         cols: perRow,
@@ -402,8 +404,9 @@ List<WsPage> renderReadingPages(List<ReadingBlockData> items, ChineseOptions opt
     String? s;
     for (final it in lst) {
       if (it.source.isEmpty) continue;
-      if (s == null) s = it.source;
-      else if (s != it.source) return '';
+      if (s == null) {
+        s = it.source;
+      } else if (s != it.source) { return ''; }
     }
     return s ?? '';
   }

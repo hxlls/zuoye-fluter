@@ -81,7 +81,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
 
   final sections = <MathSection>[];
   final answerGroups = <(String, String, List<dynamic>)>[]; // title, unit, answers
-  final _fallback =
+  final fallback =
       (opts.count / types.length).ceil().clamp(1, 30); // 与 JS fallbackPerType 一致
 
   for (final tid in types) {
@@ -91,7 +91,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
     final unit = meta?.unit ?? "";
     final perType = opts.counts.containsKey(tid)
         ? (opts.counts[tid] ?? 0).clamp(0, 30)
-        : _fallback;
+        : fallback;
     if (perType <= 0) continue;
 
     final items = <MathItemData>[];
@@ -123,7 +123,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
   }
 
   final pages = <WsPage>[];
-  final usableH = 860.0;
+  const usableH = 860.0;
   final pageNo = <int>[1];
 
   WsPageTitle mathTitle(int pageNo) {
@@ -160,7 +160,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
   }
 
   for (final sec in sections) {
-    final secH = 60.0;
+    const secH = 60.0;
     if (curH + secH > usableH && curNodes.isNotEmpty) {
       flushPage();
       curTitle = opts.showTitle ? mathTitle(pageNo[0]) : null;

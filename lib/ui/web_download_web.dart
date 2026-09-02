@@ -1,4 +1,6 @@
 /// Web 平台：用浏览器触发文件下载（dart:html）
+// ignore_for_file: avoid_web_libraries_in_flutter
+library;
 import 'dart:typed_data';
 import 'dart:html' as html;
 

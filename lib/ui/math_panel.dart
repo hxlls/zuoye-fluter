@@ -27,7 +27,7 @@ class _MathPanelState extends State<MathPanel> {
   bool _showAnswer = true;
   bool _showTitle = true;
   List<WsPage> _pages = [];
-  bool _loading = false;
+  final bool _loading = false;
 
   List<MathType> get _cfg =>
       AppData().vol(widget.version, widget.grade, widget.volume, 'math')?.math ??
@@ -144,7 +144,7 @@ class _MathPanelState extends State<MathPanel> {
         FormGroup(
           label: '难度',
           child: SegButtons(
-            options: [('easy', '简单'), ('mid', '中等'), ('hard', '较难')],
+            options: const [('easy', '简单'), ('mid', '中等'), ('hard', '较难')],
             value: _diff,
             onChanged: (v) {
               setState(() {

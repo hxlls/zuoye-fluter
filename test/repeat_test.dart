@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zuoye_fluter/core/math_worksheet.dart';
-import 'package:zuoye_fluter/core/math_gen.dart';
 import 'package:zuoye_fluter/core/worksheet_model.dart';
 import 'package:zuoye_fluter/data/app_data.dart';
 

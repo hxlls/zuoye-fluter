@@ -140,7 +140,7 @@ class AiStore {
     await prefs.remove(_prefsKey);
     try {
       await _storage.delete(key: _secKey);
-    } catch (e) {}
+    } catch (e) { /* 忽略：清除密钥失败不影响登出 */ }
   }
 }
 

@@ -205,8 +205,8 @@ class _MathText extends StatelessWidget {
   final String text;
   final double size;
   final bool blank;
-  final bool alignRight;
-  const _MathText(this.text, {this.size = 19, this.blank = false, this.alignRight = false});
+  final bool alignRight = false;
+  const _MathText(this.text, {this.size = 19, this.blank = false});
 
   @override
   Widget build(BuildContext context) {
@@ -317,8 +317,8 @@ class _LongDiv extends StatelessWidget {
         children: [
           Text('${fmt(b)} ',
               style: _mathStyle(18).copyWith(letterSpacing: 0)),
-          Text('⟌',
-              style: const TextStyle(fontSize: 34, height: 0.8, color: Color(0xff242424))),
+          const Text('⟌',
+              style: TextStyle(fontSize: 34, height: 0.8, color: Color(0xff242424))),
           Container(
             width: dw,
             alignment: Alignment.bottomCenter,
@@ -327,7 +327,7 @@ class _LongDiv extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Container(height: 26),
-                Text('${fmt(a)}',
+                Text(fmt(a),
                     style: _mathStyle(20).copyWith(letterSpacing: 0)),
               ],
             ),
@@ -493,16 +493,6 @@ class _CnCard extends StatelessWidget {
     }
   }
 
-  Widget _ansLine() {
-    return Container(
-      width: 140,
-      height: 26,
-      margin: const EdgeInsets.only(top: 4),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xff242424), width: 1.5)),
-      ),
-    );
-  }
 
   /// 括号式答题空位（全角括号内留空）
   Widget _bracketLine({int width = 4}) {
@@ -593,7 +583,7 @@ class _AiCard extends StatelessWidget {
                   Expanded(
                     child: Container(
                       height: 20,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         border: Border(
                             bottom:
                                 BorderSide(color: Color(0xff242424), width: 1.5)),
@@ -673,7 +663,7 @@ class _WordQuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data.type == 'listening') {
-      final letters = 'ABCD';
+      const letters = 'ABCD';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -724,7 +714,7 @@ class _WordQuestionCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: Color(0xff242424))),
           const SizedBox(height: 6),
-          _FourLine(),
+          const _FourLine(),
         ],
       );
     }
@@ -843,16 +833,13 @@ class _FourLine extends StatelessWidget {
 class _DashedLinePainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
-  final double dashWidth;
-  final double dotSize;
-  final double gap;
+  final double dashWidth = 8.0;
+  final double dotSize = 2.0;
+  final double gap = 4.0;
 
   _DashedLinePainter({
     required this.color,
     this.strokeWidth = 1.0,
-    this.dashWidth = 8.0,
-    this.dotSize = 2.0,
-    this.gap = 4.0,
   });
 
   @override
