@@ -462,11 +462,13 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       .map((c) => c[0])
       .join('、');
 
+  // 取该年级/册的统编版课文（课文模式用其正文补全，原创模式忽略）
+  final texts = data.yuwenTextsFor(opts.grade, opts.volume);
+  final sel = texts.take(count).toList();
+
   String prompt;
   if (opts.useTextbook) {
     // 基于统编版课文模式：从 YUWEN_TEXTS 取真实课文出题
-    final texts = data.yuwenTextsFor(opts.grade, opts.volume);
-    final sel = texts.take(count).toList();
     final passages = sel
         .map((t) => '【课文】${t.title}（${t.unit}）\n${t.text}')
         .join('\n\n');
@@ -490,20 +492,29 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       jsonMode: true);
   final data2 = aiExtractJson(content);
   final items = data2['items'] is List ? data2['items'] as List : [];
-  return [
-    for (final it in items)
-      if (it is Map && '${it['text'] ?? ''}'.trim().isNotEmpty)
-        ReadingBlockData(
-          title: '${it['title'] ?? '短文'}',
-          author: '${it['author'] ?? ''}',
-          text: '${it['text'] ?? ''}',
-          questions: [
-            for (final q in (it['questions'] as List? ?? []))
-              if (q is Map)
-                ReadingQuestion('${q['q'] ?? ''}', '${q['a'] ?? ''}')
-          ],
-        )
-  ];
+  // 课文模式下，若 AI 未回显正文（text 为空），用本地课文正文按标题补全，
+  // 避免题块因 text 为空被整块丢弃（保持原 ReadingBlockData 形状与下游不变）。
+  final srcByTitle = <String, String>{for (final t in sel) t.title: t.text};
+  final out = <ReadingBlockData>[];
+  for (final it in items) {
+    if (it is! Map) continue;
+    final aiText = '${it['text'] ?? ''}'.trim();
+    final src = srcByTitle['${it['title'] ?? ''}'];
+    final text = aiText.isNotEmpty
+        ? aiText
+        : (src?.trim().isNotEmpty == true ? src! : '');
+    if (text.isEmpty) continue; // 既无 AI 正文也无本地课文，跳过（与原行为一致）
+    out.add(ReadingBlockData(
+      title: '${it['title'] ?? '短文'}',
+      author: '${it['author'] ?? ''}',
+      text: text,
+      questions: [
+        for (final q in (it['questions'] as List? ?? []))
+          if (q is Map) ReadingQuestion('${q['q'] ?? ''}', '${q['a'] ?? ''}')
+      ],
+    ));
+  }
+  return out;
 }
 
 /// AI 阅读生成（英语）

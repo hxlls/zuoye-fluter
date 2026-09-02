@@ -45,6 +45,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
   @override
   void initState() {
     super.initState();
+    // 选「统编版」时，阅读理解默认基于统编版课文出题（课文阅读）
+    _useTextbook = widget.version == 'tongbiao';
     _ensureCounts();
     _loadCorpusStatus();
     _regenerate();
@@ -56,6 +58,10 @@ class _ChinesePanelState extends State<ChinesePanel> {
     if (oldWidget.grade != widget.grade ||
         oldWidget.version != widget.version ||
         oldWidget.volume != widget.volume) {
+      // 切换到「统编版」则默认开启课文模式；切走则关闭（用户手动开关在同版本内仍有效）
+      if (oldWidget.version != widget.version) {
+        _useTextbook = widget.version == 'tongbiao';
+      }
       _ensureCounts();
       _regenerate();
     }
