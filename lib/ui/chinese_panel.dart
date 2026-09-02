@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/app_data.dart';
 import '../core/chinese_worksheet.dart';
@@ -188,6 +189,75 @@ class _ChinesePanelState extends State<ChinesePanel> {
       if (mounted) setState(() {});
     } catch (e) {
       _showSnack('导入失败：$e');
+    }
+  }
+
+  /// 拍照/相册导入：识别课本页面照片 → 视觉模型结构化 → 合并归档进语料库
+  Future<void> _importCorpusFromImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 82,
+    );
+    if (file == null) return;
+    if (mounted) setState(() => _loading = true);
+    try {
+      final bytes = await file.readAsBytes();
+      final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      final cfg = await AiStore.load();
+      if (cfg.base.isEmpty || cfg.model.isEmpty) {
+        _showSnack('请先在顶部「AI 智能出题设置」中填写 API 地址和模型'
+            '（需支持看图，如 qwen-vl / glm-4v / gpt-4o）。');
+        return;
+      }
+      final prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
+          '请识别页面中的课文/对话，并严格按以下 JSON 输出：\n'
+          '{"name":"识别到的课本名（如 冀教版语文三年级上册）",'
+          '"items":[{"grade":3,"volume":"上","unit":"第一单元","title":"课文标题",'
+          '"author":"作者/出处","text":"课文正文（尽量完整抄录，多课分别列出）","questions":[]}]}\n'
+          '要求：1) grade 用数字（一年级=1…六年级=6），volume 用"上"或"下"，依据页眉/封面判断；'
+          '2) 一页含多篇课文时分别列出，unit 填所属单元名；'
+          '3) text 尽量完整抄录原文（含标点），不要改写；只显示部分则抄录可见部分；'
+          '4) questions 固定为空数组；5) 只输出一个 JSON 对象，不要其他文字。';
+      final content = await AiClient.chat(
+        cfg,
+        [AiChatMessage('user', prompt)],
+        imageBase64: b64,
+        jsonMode: true,
+      );
+      final data = aiExtractJson(content);
+      final items = data['items'];
+      if (items is! List || items.isEmpty) {
+        _showSnack('未识别到课文，请换一张更清晰或正文更完整的页面试试。');
+        return;
+      }
+      // 合并进现有语料库（多次拍照可累积）
+      await _loadCorpus();
+      final existing = _cachedCorpus ??
+          <String, dynamic>{'name': '我的课文库', 'items': <dynamic>[]};
+      final existingItems = (existing['items'] is List)
+          ? List<dynamic>.from(existing['items'] as List)
+          : <dynamic>[];
+      existingItems.addAll(items);
+      final merged = <String, dynamic>{
+        'name': (existing['name'] as String?)?.isNotEmpty == true
+            ? existing['name']
+            : (data['name'] is String ? data['name'] : '我的课文库'),
+        'items': existingItems,
+      };
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_corpusKey, json.encode(merged));
+      _cachedCorpus = merged;
+      await _loadCorpusStatus();
+      _regenerate();
+      if (mounted) setState(() {});
+      _showSnack('已识别并归档 ${items.length} 篇课文（累计 ${existingItems.length} 篇）');
+    } catch (e) {
+      _showSnack('拍照导入失败：${aiFriendlyError(e)}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -529,10 +599,27 @@ class _ChinesePanelState extends State<ChinesePanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: const Text(
+                  '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档；也可导入 .json 语料文件。',
+                  style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
+                ),
+              ),
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _importCorpusFromImage(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt, size: 16),
+                    label: const Text('📷 拍照导入'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _importCorpusFromImage(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library, size: 16),
+                    label: const Text('🖼️ 相册导入'),
+                  ),
                   OutlinedButton.icon(
                     onPressed: _importCorpus,
                     icon: const Icon(Icons.upload_file, size: 16),
