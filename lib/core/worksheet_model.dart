@@ -85,6 +85,12 @@ class ReadingBlockData {
   final bool isListening; // 听力短文（不显示原文）
   final int? grade;
   final String? volume;
+  final String? version; // 所属教材版本（如 tongbiao/hebei/waiyanYQ）；用于阅读渲染时按版本软过滤
+  // 语料来源分类（导入文件顶层 source 字段）：
+  //   'original' = AI/人工原创生成，非版权内容；
+  //   'licensed' = 用户声明拥有合法使用权的课本/材料（真实版权内容）；
+  //   '' / 其他   = 未声明，按「版权自负」处理。
+  final String source;
   final List<ReadingQuestion> questions;
   ReadingBlockData({
     required this.title,
@@ -94,6 +100,8 @@ class ReadingBlockData {
     this.isListening = false,
     this.grade,
     this.volume,
+    this.version,
+    this.source = "",
     List<ReadingQuestion>? questions,
   }) : questions = questions ?? [];
 }

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../data/app_data.dart';
+import '../data/corpus_store.dart';
 import '../core/chinese_worksheet.dart';
 import '../core/worksheet_model.dart';
 import '../ai/ai_generator.dart';
@@ -43,7 +43,13 @@ class _ChinesePanelState extends State<ChinesePanel> {
   /// 是否「基于统编版课文」生成阅读理解（true 时从 YUWEN_TEXTS 取真实课文出题）
   bool _useTextbook = false;
 
-  static const _corpusKey = 'customCorpus';
+  /// 多语料：具名语料集合
+  List<Corpus> _corpora = [];
+  /// 当前活跃语料（驱动生成）
+  String? _activeId;
+  /// 常驻采集目标（sticky：导入/拍照归档到此，跨会话保持）
+  String? _captureId;
+  // 内置课文现以「内置语料」形式直接出现在语料下拉中，无需回退开关
 
   @override
   void initState() {
@@ -51,8 +57,140 @@ class _ChinesePanelState extends State<ChinesePanel> {
     // 选「统编版」时，阅读理解默认基于统编版课文出题（课文阅读）
     _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
     _ensureCounts();
+    _initCorpora();
+  }
+
+  /// 加载语料集合 + 活跃/采集目标，并做校验与默认初始化
+  Future<void> _initCorpora() async {
+    await AppData().load();
+    final stored = await CorpusStore.loadCorpora();
+    // 用户语料（持久化在 SharedPreferences）；内置课文为 bundled，运行时由 AppData 合成，不持久化
+    final userCorpora = stored.where((c) => c.origin != 'bundled').toList();
+    final bundled = _buildBundledCorpora();
+
+    if (userCorpora.isEmpty) {
+      // 首次使用：自动建一个与当前面板对应的空语料，作为默认采集/生成目标
+      final c = Corpus(
+        name: _defaultCorpusName(),
+        version: widget.version,
+        grade: widget.grade,
+        volume: widget.volume,
+        origin: 'imported-json',
+      );
+      userCorpora.add(c);
+      _activeId = c.id;
+      _captureId = c.id;
+    } else {
+      // 活跃/采集目标仅在用户语料范围内解析（内置课文需用户显式选择，不与导入语料混淆）
+      if (_activeId == null || !userCorpora.any((c) => c.id == _activeId)) {
+        _activeId = _resolveActiveId();
+      }
+      if (_captureId == null || !userCorpora.any((c) => c.id == _captureId)) {
+        _captureId = _activeId;
+      }
+    }
+    _corpora = [...bundled, ...userCorpora]; // 先赋值，供 _resolveActiveId 使用
+    await CorpusStore.saveCorpora(userCorpora);
+    await CorpusStore.saveActiveId(_activeId);
+    await CorpusStore.saveCaptureId(_captureId);
     _loadCorpusStatus();
     _regenerate();
+    if (mounted) setState(() {});
+  }
+
+  String _defaultCorpusName() {
+    final tb = AppData().textbooks[widget.version];
+    final gname = AppData().gradeNames[widget.grade] ?? '第${widget.grade}年级';
+    final volName = widget.volume == '下' ? '下册' : '上册';
+    return '${tb?.name ?? '教材'}$gname$volName';
+  }
+
+  Corpus? _activeCorpus() {
+    if (_activeId == null) return null;
+    for (final c in _corpora) {
+      if (c.id == _activeId) return c;
+    }
+    return null;
+  }
+
+  Corpus? _captureCorpus() {
+    if (_captureId == null) return null;
+    for (final c in _corpora) {
+      if (c.id == _captureId) return c;
+    }
+    return null;
+  }
+
+  /// 内置课文语料：从 AppData 按当前版本/年级/册取出真实课文，合成与导入语料同结构的 Corpus。
+  /// 不持久化（每次按当前面板范围合成，始终与内置数据一致）；出现在「生成用语料」下拉中即可直接选。
+  List<Corpus> _buildBundledCorpora() {
+    final data = AppData();
+    const versions = ['tongbiao', 'hebei', 'renjiao']; // 含正文的语文内置课文
+    final gname = data.gradeNames[widget.grade] ?? '第${widget.grade}年级';
+    final volName = widget.volume == '下' ? '下册' : '上册';
+    final out = <Corpus>[];
+    for (final v in versions) {
+      final texts = data.yuwenTextsFor(v, widget.grade, widget.volume);
+      if (texts.isEmpty) continue;
+      final items = <Map<String, dynamic>>[];
+      for (final t in texts) {
+        if (t.text.trim().isEmpty) continue;
+        items.add({
+          'grade': t.grade,
+          'volume': t.volume,
+          'unit': t.unit,
+          'title': t.title,
+          'text': t.text,
+          'source': 'builtin',
+        });
+      }
+      if (items.isEmpty) continue;
+      final tb = data.textbooks[v];
+      out.add(Corpus(
+        id: 'builtin:$v',
+        name: '${tb?.name ?? '教材'}内置课文（$gname$volName）',
+        version: v,
+        grade: widget.grade,
+        volume: widget.volume,
+        source: 'builtin',
+        origin: 'bundled',
+        items: items,
+      ));
+    }
+    return out;
+  }
+
+  /// 根据当前面板 version/grade/volume 解析应使用哪个语料作为活跃语料。
+  /// 优先级（非空优先，避免跳到空语料导致「暂无外置语料」）：
+  ///   精确非空 > 同版本非空 > 当前活跃非空 > 精确(可空) > 同版本(可空) > 首个非空 > 首个。
+  String? _resolveActiveId() {
+    if (_corpora.isEmpty) return null;
+    Corpus? exactNE, verNE, curNE, exactAny, verAny, firstNE;
+    final cur = _activeCorpus();
+    for (final c in _corpora) {
+      if (c.origin == 'bundled') continue;
+      final exact = c.version == widget.version &&
+          c.grade == widget.grade &&
+          c.volume == widget.volume;
+      final sameVer = c.version == widget.version;
+      final ne = c.items.isNotEmpty;
+      if (exact && ne) exactNE ??= c;
+      if (sameVer && ne) verNE ??= c;
+      if (exact) exactAny ??= c;
+      if (sameVer) verAny ??= c;
+      if (ne) {
+        firstNE ??= c;
+        if (cur != null && c.id == cur.id) curNE = c;
+      }
+    }
+    final pick = exactNE ??
+        verNE ??
+        curNE ??
+        exactAny ??
+        verAny ??
+        firstNE ??
+        _corpora.first;
+    return pick.id;
   }
 
   @override
@@ -65,6 +203,22 @@ class _ChinesePanelState extends State<ChinesePanel> {
       if (oldWidget.version != widget.version) {
         _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
       }
+      // 切换版本/年级/册时重新解析活跃语料，否则 _activeId 会停留在旧范围，
+      // 导致「选统编却显示旧语料」或外置语料阅读被 grade/volume 过滤掉。
+      // 重新合成内置课文语料（按新版本/年级/册），保持与当前面板一致
+      final userCorpora = _corpora.where((c) => c.origin != 'bundled').toList();
+      final bundled = _buildBundledCorpora();
+      _corpora = [...bundled, ...userCorpora];
+      CorpusStore.saveCorpora(userCorpora);
+      // 活跃/采集目标仅在用户语料范围内解析（内置需显式选择）
+      if (_activeId == null || !userCorpora.any((c) => c.id == _activeId)) {
+        _activeId = _resolveActiveId();
+      }
+      if (_captureId == null || !userCorpora.any((c) => c.id == _captureId)) {
+        _captureId = _activeId;
+      }
+      CorpusStore.saveActiveId(_activeId);
+      CorpusStore.saveCaptureId(_captureId);
       _ensureCounts();
       _regenerate();
     }
@@ -89,19 +243,29 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   List<ReadingBlockData> get _corpus {
-    final c = _cachedCorpus;
+    final c = _activeCorpus();
     if (c == null) return [];
-    final items = c['items'];
-    if (items is! List) return [];
+    final corpusSrc = c.source;
+    final corpusVer = c.version;
     return [
-      for (final it in items)
+      for (final it in c.items)
         if (it is Map)
           ReadingBlockData(
             title: '${it['title'] ?? ''}',
             author: '${it['author'] ?? ''}',
             text: '${it['text'] ?? ''}',
+            en: it['en'] == true,
+            isListening: it['isListening'] == true,
             grade: it['grade'] is num ? (it['grade'] as num).toInt() : null,
             volume: it['volume'] is String ? it['volume'] as String : null,
+            version: (() {
+              final v = '${it['version'] ?? ''}';
+              return v.isNotEmpty ? v : (corpusVer.isNotEmpty ? corpusVer : null);
+            })(),
+            source: (() {
+              final s = '${it['source'] ?? ''}';
+              return s.isNotEmpty ? s : corpusSrc;
+            })(),
             questions: [
               for (final q in (it['questions'] is List ? it['questions'] as List : []))
                 if (q is Map)
@@ -111,31 +275,115 @@ class _ChinesePanelState extends State<ChinesePanel> {
     ];
   }
 
-  Map<String, dynamic>? _cachedCorpus;
+  // ---- 语料合并 / 去重辅助 ----
+  /// 去重键包含 version，避免不同版本同册同标题撞车
+  String _itemKey(Map<String, dynamic> m) {
+    final ver = '${m['version'] ?? ''}'.trim();
+    final g = m['grade'];
+    final v = '${m['volume'] ?? ''}'.trim();
+    final u = '${m['unit'] ?? ''}'.trim();
+    final t = '${m['title'] ?? ''}'.trim().toLowerCase();
+    return '$ver#$g#$v#$u#$t';
+  }
 
-  Future<void> _loadCorpus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_corpusKey);
-    if (raw != null) {
-      try {
-        _cachedCorpus = json.decode(raw) as Map<String, dynamic>;
-      } catch (e) {
-        _cachedCorpus = null;
-      }
-    } else {
-      _cachedCorpus = null;
+  List<dynamic> _mergeQuestions(dynamic eq, dynamic iq) {
+    final out = <dynamic>[];
+    final seen = <String>{};
+    void addQ(dynamic q) {
+      if (q is! Map) return;
+      final qq = '${q['q'] ?? ''}'.trim();
+      if (qq.isEmpty) return;
+      if (seen.contains(qq)) return;
+      seen.add(qq);
+      out.add(q);
     }
+    if (eq is List) for (final q in eq) addQ(q);
+    if (iq is List) for (final q in iq) addQ(q);
+    return out;
+  }
+
+  /// 合并两组条目：按 (version,grade,volume,unit,title) 去重；命中则合并字段（取更长正文、合并题目）。
+  /// corpus 的 version/grade/volume 作为缺省为缺值项盖章，保证去重键一致且覆盖度可算。
+  /// 返回 (合并后条目, 新增数, 更新数)。
+  (List<Map<String, dynamic>>, int, int) _mergeItems(
+      List<Map<String, dynamic>> existing,
+      List<Map<String, dynamic>> incoming,
+      {String fileSource = '',
+      String corpusVersion = '',
+      int? corpusGrade,
+      String? corpusVolume}) {
+    final map = <String, Map<String, dynamic>>{};
+    for (final e in existing) {
+      final m = <String, dynamic>{};
+      e.forEach((k, v) => m['$k'] = v);
+      map[_itemKey(m)] = m;
+    }
+    var added = 0, updated = 0;
+    for (final inc in incoming) {
+      final m = <String, dynamic>{};
+      inc.forEach((k, v) => m['$k'] = v);
+      if (corpusVersion.isNotEmpty && '${m['version'] ?? ''}'.isEmpty) {
+        m['version'] = corpusVersion;
+      }
+      if (corpusGrade != null && m['grade'] == null) m['grade'] = corpusGrade;
+      if (corpusVolume != null && '${m['volume'] ?? ''}'.isEmpty) {
+        m['volume'] = corpusVolume;
+      }
+      final k = _itemKey(m);
+      if (map.containsKey(k)) {
+        final ex = map[k]!;
+        final et = '${ex['text'] ?? ''}', it = '${m['text'] ?? ''}';
+        if (it.length > et.length) ex['text'] = it;
+        if ('${ex['unit'] ?? ''}'.isEmpty) ex['unit'] = m['unit'];
+        if ('${ex['author'] ?? ''}'.isEmpty) ex['author'] = m['author'];
+        ex['grade'] = ex['grade'] ?? m['grade'];
+        if ('${ex['volume'] ?? ''}'.isEmpty) ex['volume'] = m['volume'];
+        final es = '${ex['source'] ?? ''}', ins = '${m['source'] ?? ''}';
+        ex['source'] = es.isNotEmpty ? es : ins;
+        ex['questions'] = _mergeQuestions(ex['questions'], m['questions']);
+        updated++;
+      } else {
+        if ('${m['source'] ?? ''}'.isEmpty) m['source'] = fileSource;
+        map[k] = m;
+        added++;
+      }
+    }
+    return (map.values.toList(), added, updated);
+  }
+
+  String _sourceTag(String s) {
+    if (s == 'original') return '原创·非版权';
+    if (s == 'licensed') return '版权自负·已确认授权';
+    if (s == 'builtin') return '内置课文';
+    return '版权自负';
+  }
+
+  /// 基于内置教材目录计算覆盖度（已录入/总课数）；缺版本或年级/册时无意义则返回 ''
+  String _coverageHint(Corpus c) {
+    if (c.version.isEmpty || c.grade == null || c.volume == null) return '';
+    final idx = AppData().yuwenTextsFor(c.version, c.grade!, c.volume!);
+    if (idx.isEmpty) return '';
+    final have = <String>{};
+    for (final it in c.items) {
+      final t = '${it['title'] ?? ''}'.trim().toLowerCase();
+      if (t.isNotEmpty) have.add(t);
+    }
+    final covered =
+        idx.where((t) => have.contains(t.title.trim().toLowerCase())).length;
+    return ' ｜ 覆盖 $covered/${idx.length} 课';
   }
 
   Future<void> _loadCorpusStatus() async {
-    await _loadCorpus();
-    final c = _cachedCorpus;
-    final n = c != null && c['items'] is List ? (c['items'] as List).length : 0;
+    final c = _activeCorpus();
     if (mounted) {
       setState(() {
-        _corpusStatus = c != null
-            ? '已导入：${c['name'] ?? '未命名'}（$n 篇，版权自负）'
-            : '未导入（导入后可生成"课文·阅读"理解题）';
+        if (c == null) {
+          _corpusStatus = '未创建语料库';
+          return;
+        }
+        final n = c.items.length;
+        _corpusStatus = '当前语料：${c.name}（$n 篇，${_sourceTag(c.source)}）'
+            '${_coverageHint(c)}';
       });
     }
   }
@@ -152,7 +400,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         showTitle: _showTitle,
         aiReadingItems: _aiItems.isEmpty ? null : _aiItems,
       ),
-      customCorpus: _cachedCorpus == null ? null : _corpus,
+      customCorpus: _corpus,
     );
   }
 
@@ -178,15 +426,91 @@ class _ChinesePanelState extends State<ChinesePanel> {
     final f = result.files.first;
     if (f.bytes == null) return;
     try {
-      final obj = json.decode(utf8.decode(f.bytes!));
-      if (obj is! Map<String, dynamic> || obj['items'] is! List) {
+      final decoded = json.decode(utf8.decode(f.bytes!));
+      if (decoded is! Map<String, dynamic> || decoded['items'] is! List) {
         _showSnack('格式不正确：需包含 items 数组');
         return;
       }
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_corpusKey, json.encode(obj));
-      _cachedCorpus = obj;
-      await _loadCorpusStatus();
+      String fileSource = '${decoded['source'] ?? ''}';
+      if (fileSource != 'original' && fileSource != 'licensed') {
+        final name = '${decoded['name'] ?? ''}';
+        if (name.contains('原创') ||
+            name.contains('非版权') ||
+            name.contains('原创生成')) {
+          fileSource = 'original';
+        } else {
+          fileSource = '';
+        }
+      }
+      final incoming = <Map<String, dynamic>>[];
+      for (final e in decoded['items'] as List) {
+        if (e is Map) {
+          final m = <String, dynamic>{};
+          (e as Map).forEach((k, v) => m['$k'] = v);
+          incoming.add(m);
+        }
+      }
+      // 合并进「常驻采集目标」（sticky），分多次导入始终落到同一本
+      final target = _captureCorpus();
+      if (target == null) {
+        _showSnack('无采集目标，请先新建语料库');
+        return;
+      }
+      if (target.items.isNotEmpty) {
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('导入到「${target.name}」'),
+            content: const Text('该语料已有内容。要合并到现有语料，还是替换为该文件？'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'merge'),
+                  child: const Text('合并')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'replace'),
+                  child: const Text('替换')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'cancel'),
+                  child: const Text('取消')),
+            ],
+          ),
+        );
+        if (choice == null || choice == 'cancel') {
+          _showSnack('已取消导入');
+          return;
+        }
+        if (choice == 'merge') {
+          final res = _mergeItems(target.items, incoming,
+              fileSource: fileSource,
+              corpusVersion: target.version,
+              corpusGrade: target.grade,
+              corpusVolume: target.volume);
+          target.items = res.$1;
+          _showSnack('已合并：新增 ${res.$2} 篇 / 更新 ${res.$3} 篇');
+        } else {
+          target.items = incoming;
+          for (final m in target.items) {
+            if ('${m['source'] ?? ''}'.isEmpty) m['source'] = fileSource;
+          }
+          _showSnack('已替换：${target.items.length} 篇');
+        }
+      } else {
+        final res = _mergeItems([], incoming,
+            fileSource: fileSource,
+            corpusVersion: target.version,
+            corpusGrade: target.grade,
+            corpusVolume: target.volume);
+        target.items = res.$1;
+        _showSnack('已导入：${target.items.length} 篇');
+      }
+      // 导入成功后让该语料成为「活跃语料」，保证「导入即出阅读」（阅读读取活跃语料，避免采集目标与活跃不一致时读不到）
+      _activeId = target.id;
+      // 采集目标保持为该语料（sticky）
+      _captureId = target.id;
+      await CorpusStore.saveActiveId(_activeId);
+      await CorpusStore.saveCaptureId(_captureId);
+      await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
+      _loadCorpusStatus();
       _regenerate();
       if (mounted) setState(() {});
     } catch (e) {
@@ -235,27 +559,40 @@ class _ChinesePanelState extends State<ChinesePanel> {
         _showSnack('未识别到课文，请换一张更清晰或正文更完整的页面试试。');
         return;
       }
-      // 合并进现有语料库（多次拍照可累积）
-      await _loadCorpus();
-      final existing = _cachedCorpus ??
-          <String, dynamic>{'name': '我的课文库', 'items': <dynamic>[]};
-      final existingItems = (existing['items'] is List)
-          ? List<dynamic>.from(existing['items'] as List)
-          : <dynamic>[];
-      existingItems.addAll(items);
-      final merged = <String, dynamic>{
-        'name': (existing['name'] as String?)?.isNotEmpty == true
-            ? existing['name']
-            : (data['name'] is String ? data['name'] : '我的课文库'),
-        'items': existingItems,
-      };
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_corpusKey, json.encode(merged));
-      _cachedCorpus = merged;
+      // 合并进「常驻采集目标」（分页/重拍可累积，按课文身份去重；sticky 保证多次拍摄落到同一本）
+      final target = _captureCorpus();
+      if (target == null) {
+        _showSnack('无采集目标，请先新建语料库');
+        return;
+      }
+      final incoming = <Map<String, dynamic>>[];
+      for (final e in (items is List ? items as List : [])) {
+        if (e is Map) {
+          final m = <String, dynamic>{};
+          (e as Map).forEach((k, v) => m['$k'] = v);
+          incoming.add(m);
+        }
+      }
+      final res = _mergeItems(target.items, incoming,
+          fileSource: 'licensed',
+          corpusVersion: target.version,
+          corpusGrade: target.grade,
+          corpusVolume: target.volume);
+      target.items = res.$1;
+      if (target.source.isEmpty) target.source = 'licensed';
+      target.origin = 'photo';
+      // 导入成功后让该语料成为「活跃语料」，保证「导入即出阅读」
+      _activeId = target.id;
+      // 采集目标保持为该语料（sticky）
+      _captureId = target.id;
+      await CorpusStore.saveActiveId(_activeId);
+      await CorpusStore.saveCaptureId(_captureId);
+      await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
       await _loadCorpusStatus();
       _regenerate();
       if (mounted) setState(() {});
-      _showSnack('已识别并归档 ${items.length} 篇课文（累计 ${existingItems.length} 篇）');
+      _showSnack('已识别并归档：新增 ${res.$2} 篇 / 更新 ${res.$3} 篇'
+          '（累计 ${target.items.length} 篇）');
     } catch (e) {
       _showSnack('拍照导入失败：${aiFriendlyError(e)}');
     } finally {
@@ -264,11 +601,20 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   Future<void> _clearCorpus() async {
+    final c = _activeCorpus();
+    if (c == null) {
+      _showSnack('无语料可清除');
+      return;
+    }
+    if (c.origin == 'bundled') {
+      _showSnack('内置课文语料为应用预置，不可清除');
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('确认清除'),
-        content: const Text('确定要清除已导入的语料库吗？此操作不可撤销。'),
+        content: Text('确定要清除「${c.name}」的所有课文吗？此操作不可撤销。'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
@@ -276,27 +622,27 @@ class _ChinesePanelState extends State<ChinesePanel> {
       ),
     );
     if (confirmed != true) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_corpusKey);
-    _cachedCorpus = null;
+    c.items = [];
+    await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
     await _loadCorpusStatus();
     _regenerate();
     if (mounted) setState(() {});
   }
 
-  /// 导出当前课文库（拍照导入/导入的语料）为 .json，方便多端导入导出
+  /// 导出当前活跃课文库为 .json，方便多端导入导出
   Future<void> _exportCorpus() async {
-    await _loadCorpus();
-    final c = _cachedCorpus;
-    final items = (c != null && c['items'] is List) ? c['items'] as List : null;
-    if (items == null || items.isEmpty) {
-      _showSnack('暂无可导出的课文库：请先「拍照导入」或「导入语料(.json)」再导出。');
+    final c = _activeCorpus();
+    final items = c?.items ?? [];
+    if (items.isEmpty) {
+      _showSnack('当前语料为空：请先「拍照导入」或「导入语料(.json)」再导出。');
       return;
     }
     final obj = <String, dynamic>{
-      'name': (c != null && c['name'] is String && (c['name'] as String).isNotEmpty)
-          ? c['name']
-          : '我的课文库',
+      'name': c!.name,
+      'version': c.version,
+      'grade': c.grade,
+      'volume': c.volume,
+      'source': c.source,
       'items': items,
     };
     final content = json.encode(obj);
@@ -307,6 +653,192 @@ class _ChinesePanelState extends State<ChinesePanel> {
     } catch (e) {
       _showSnack('导出失败：${e.toString()}');
     }
+  }
+
+  /// 切换当前活跃语料（驱动生成）
+  Future<void> _switchActive(Corpus c) async {
+    _activeId = c.id;
+    await CorpusStore.saveActiveId(_activeId);
+    _loadCorpusStatus();
+    _regenerate();
+    if (mounted) setState(() {});
+  }
+
+  /// 新建语料库（默认按当前面板版本/年级/册），并切换为活跃+采集目标
+  Future<void> _newCorpus() async {
+    final ctrl = TextEditingController(text: _defaultCorpusName());
+    final created = await showDialog<Corpus>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建语料库'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('名称', style: TextStyle(fontSize: 13, color: Color(0xff888888))),
+            const SizedBox(height: 6),
+            TextField(
+              controller: ctrl,
+              decoration: const InputDecoration(
+                hintText: '如 统编版语文三年级上册',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '将按当前版本/年级/册创建：${AppData().textbooks[widget.version]?.name ?? widget.version} · '
+              '${AppData().gradeNames[widget.grade] ?? '第${widget.grade}年级'} · ${widget.volume == '下' ? '下册' : '上册'}',
+              style: const TextStyle(fontSize: 12, color: Color(0xff999999)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () {
+              final name = ctrl.text.trim();
+              final c = Corpus(
+                name: name.isNotEmpty ? name : _defaultCorpusName(),
+                version: widget.version,
+                grade: widget.grade,
+                volume: widget.volume,
+                origin: 'imported-json',
+              );
+              Navigator.pop(ctx, c);
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    if (created == null) return;
+    _corpora = [..._corpora, created];
+    _activeId = created.id;
+    _captureId = created.id;
+    await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
+    await CorpusStore.saveActiveId(_activeId);
+    await CorpusStore.saveCaptureId(_captureId);
+    _loadCorpusStatus();
+    _regenerate();
+    if (mounted) setState(() {});
+    _showSnack('已新建语料库：${created.name}');
+  }
+
+  /// 选择「常驻采集目标」（拍照/导入归档到此），可一键更改
+  Future<void> _pickCaptureTarget() async {
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('选择归档目标'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final c in _corpora.where((x) => x.origin != 'bundled'))
+                RadioListTile<String>(
+                  title: Text(c.name),
+                  subtitle: Text('${c.items.length} 篇 · ${_sourceTag(c.source)}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xff888888))),
+                  value: c.id,
+                  groupValue: _captureId,
+                  onChanged: (id) => Navigator.pop(ctx, id),
+                ),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('新建语料库'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _newCorpus();
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    _captureId = picked;
+    await CorpusStore.saveCaptureId(_captureId);
+    if (mounted) setState(() {});
+    final c = _captureCorpus();
+    _showSnack('归档目标：${c?.name ?? ''}');
+  }
+
+  /// 覆盖度视图：比对内置教材目录，展示已录入/缺课文
+  void _showCoverage() {
+    final c = _activeCorpus();
+    if (c == null) {
+      _showSnack('无语料');
+      return;
+    }
+    if (c.version.isEmpty || c.grade == null || c.volume == null) {
+      _showSnack('该语料未标注版本/年级/册，无法比对内置目录');
+      return;
+    }
+    final idx = AppData().yuwenTextsFor(c.version, c.grade!, c.volume!);
+    if (idx.isEmpty) {
+      _showSnack('该版本/年级/册暂无内置课文目录');
+      return;
+    }
+    final have = <String>{};
+    for (final it in c.items) {
+      final t = '${it['title'] ?? ''}'.trim().toLowerCase();
+      if (t.isNotEmpty) have.add(t);
+    }
+    final missing =
+        idx.where((t) => !have.contains(t.title.trim().toLowerCase())).toList();
+    final covered = idx.length - missing.length;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Text('覆盖度 · ${c.name}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('$covered/${idx.length} 课',
+                        style: const TextStyle(fontSize: 13, color: Color(0xff2f6fd0))),
+                    IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: missing.isEmpty
+                    ? const Center(
+                        child: Text('🎉 已录入全部课文', style: TextStyle(fontSize: 14)))
+                    : ListView.builder(
+                        itemCount: missing.length,
+                        itemBuilder: (ctx, i) => ListTile(
+                          leading: const Icon(Icons.circle_outlined,
+                              size: 18, color: Color(0xffbbbbbb)),
+                          title: Text(missing[i].title,
+                              style: const TextStyle(fontSize: 14)),
+                          subtitle: missing[i].unit.isNotEmpty
+                              ? Text(missing[i].unit,
+                                  style: const TextStyle(fontSize: 12, color: Color(0xff888888)))
+                              : null,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _previewCorpus() {
@@ -390,7 +922,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
   void _downloadSample() {
     final sample = {
       "name": "示例语料库",
-      "note": "这是示例格式，请参照此格式准备您自己的语料",
+      "note": "这是示例格式，请参照此格式准备您自己的语料。顶层可加 \"source\" 字段声明来源：'original'(AI/人工原创·非版权) / 'licensed'(您声明拥有合法使用权的课本) / 不填(未声明，按版权自负处理)。",
+      "source": "licensed",
       "items": [
         {
           "grade": 3,
@@ -639,14 +1172,84 @@ class _ChinesePanelState extends State<ChinesePanel> {
           ),
         ),
         FormGroup(
-          label: '外置语料库（课文·阅读）',
+          label: '生成用语料（课文·阅读）',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '阅读题将使用此语料生成。选哪个语料就用哪个——内置课文已作为语料出现在下拉中（标注「内置课文」），直接选它即可出题，无需导入。',
+                  style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
+                ),
+              ),
+              // 生成用语料切换 + 新建 + 覆盖度
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButton<Corpus>(
+                      isExpanded: true,
+                      value: _activeCorpus(),
+                      hint: const Text('选择生成用语料'),
+                      items: [
+                        for (final c in _corpora)
+                          DropdownMenuItem(
+                            value: c,
+                            child: Text(c.name, overflow: TextOverflow.ellipsis),
+                          )
+                      ],
+                      onChanged: (c) {
+                        if (c != null) _switchActive(c);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _newCorpus,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('新建'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _showCoverage,
+                    icon: const Icon(Icons.pie_chart, size: 16),
+                    label: const Text('覆盖度'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // 常驻采集目标（sticky）：拍照/导入始终归档到此
+              InkWell(
+                onTap: _pickCaptureTarget,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xffcccccc)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.login, size: 16, color: Color(0xff2f6fd0)),
+                      const SizedBox(width: 6),
+                      const Text('归档到：', style: TextStyle(fontSize: 13)),
+                      Expanded(
+                        child: Text(_captureCorpus()?.name ?? '未选择',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      const Icon(Icons.arrow_drop_down,
+                          size: 18, color: Color(0xff888888)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: const Text(
-                  '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档；也可导入 .json 语料文件。',
+                  '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档到上方目标；也可导入 .json 语料文件。分多次拍同一本会自动合并去重。',
                   style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                 ),
               ),
@@ -682,7 +1285,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   OutlinedButton.icon(
                     onPressed: _clearCorpus,
                     icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('清除'),
+                    label: const Text('清除当前'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _exportCorpus,

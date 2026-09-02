@@ -313,19 +313,22 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
   // 外置语料阅读
   if (wantReading) {
     final corpus = customCorpus ?? [];
-    final readingItems = corpus
-        .where((it) =>
-            (it.grade == null || it.grade == grade) &&
-            (it.volume == null || it.volume == vol))
-        .toList();
+    List<ReadingBlockData> readingItems;
+    if (corpus.isNotEmpty) {
+      // 直接展示当前活跃语料的全部条目：内置课文现已作为语料出现在下拉中，
+      // 选它即出课文阅读，不再需要回退旁路。
+      readingItems = corpus;
+    } else {
+      readingItems = const <ReadingBlockData>[];
+    }
     if (readingItems.isNotEmpty) {
       pages.addAll(renderReadingPages(readingItems, opts));
     } else {
       pages.add(WsPage(
         title: opts.showTitle ? cnTitle(main: '语文作业') : null,
         nodes: [
-          WsPlaceholder('📂', '该年级暂无外置语料',
-              '请先在「语文作业设置」中导入您拥有合法使用权的课文/阅读材料（格式见"查看示例格式"），并自行向版权方支付相应费用。'),
+          WsPlaceholder('📂', '该年级暂无课文阅读素材',
+              '内置课文已作为语料出现在「生成用语料」下拉中，选它即可直接出题（无需导入）；英语外研请拍照或导入您拥有合法使用权的课本页作为外置语料。'),
         ],
       ));
     }
@@ -363,11 +366,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     }
     if (wantReading) {
       final corpus = customCorpus ?? [];
-      final ri = corpus
-          .where((it) =>
-              (it.grade == null || it.grade == grade) &&
-              (it.volume == null || it.volume == vol))
-          .toList();
+      final ri = corpus;
       for (final it in ri) {
         for (final q in it.questions) {
           nodes.add(WsAnswerLine(
@@ -397,31 +396,68 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
 List<WsPage> renderReadingPages(List<ReadingBlockData> items, ChineseOptions opts) {
   final pages = <WsPage>[];
   var cur = <WsNode>[];
+  var curItems = <ReadingBlockData>[];
   var curH = 0.0;
+  String pageSource(List<ReadingBlockData> lst) {
+    String? s;
+    for (final it in lst) {
+      if (it.source.isEmpty) continue;
+      if (s == null) s = it.source;
+      else if (s != it.source) return '';
+    }
+    return s ?? '';
+  }
 
   for (final it in items) {
     final h = 210 + (it.questions.length * 52).toDouble();
     if (cur.isNotEmpty && curH + h > 880) {
-      pages.add(_readingPage(opts, cur));
+      pages.add(_readingPage(opts, cur, source: pageSource(curItems)));
       cur = [];
+      curItems = [];
       curH = 0;
     }
     cur.add(WsBlock(it));
+    curItems.add(it);
     curH += h;
   }
-  if (cur.isNotEmpty) pages.add(_readingPage(opts, cur));
+  if (cur.isNotEmpty) {
+    pages.add(_readingPage(opts, cur, source: pageSource(curItems)));
+  }
   return pages;
 }
 
-WsPage _readingPage(ChineseOptions opts, List<WsNode> nodes) {
+/// 依据语料来源返回试卷页顶部声明横幅；未声明(unknown)返回 null 不渲染。
+WsSection? _sourceBanner(String source) {
+  switch (source) {
+    case 'original':
+      return WsSection('【原创声明】以下短文及题目为 AI 依据篇目主题原创生成，非任何出版社'
+          '教材原文，不侵犯版权，仅供自测练习，请勿与手中课本混淆。');
+    case 'licensed':
+      return WsSection('【版权说明】以下为导入的课本材料。使用者须确认已获得合法使用权'
+          '（如持有正版图书）；版权归原作者及出版社所有，请勿用于商业传播。');
+    case 'builtin':
+      return WsSection('【内置课文】以下为应用内置教材篇目原文，仅供学习自测；'
+          '版权归原作者及出版社所有，请勿用于商业传播。');
+    default:
+      return null;
+  }
+}
+
+/// 内置课文阅读素材已并入「内置语料」通道（见 chinese_panel._buildBundledCorpora），
+/// 由同一套语料读取逻辑渲染，无需独立回退函数。
+
+WsPage _readingPage(ChineseOptions opts, List<WsNode> nodes,
+    {String source = ''}) {
   final data = AppData();
   final grade = opts.grade;
   final vol = opts.volume;
   final tb = data.textbooks[opts.version] ?? data.textbooks['renjiao']!;
   final gname = data.gradeNames[grade] ?? '第$grade年级';
   final volName = vol == '下' ? '下册' : '上册';
+  final banner = _sourceBanner(source);
   final head = <WsNode>[
     WsSection('阅读下面的短文，回答问题。'),
+    if (banner != null) banner,
     ...nodes,
   ];
   return WsPage(
