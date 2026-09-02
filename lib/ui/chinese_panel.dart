@@ -47,7 +47,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
   void initState() {
     super.initState();
     // 选「统编版」时，阅读理解默认基于统编版课文出题（课文阅读）
-    _useTextbook = widget.version == 'tongbiao';
+    _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
     _ensureCounts();
     _loadCorpusStatus();
     _regenerate();
@@ -61,7 +61,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         oldWidget.volume != widget.volume) {
       // 切换到「统编版」则默认开启课文模式；切走则关闭（用户手动开关在同版本内仍有效）
       if (oldWidget.version != widget.version) {
-        _useTextbook = widget.version == 'tongbiao';
+        _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
       }
       _ensureCounts();
       _regenerate();
@@ -418,10 +418,10 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   Future<void> _generateAIReading() async {
-    // 基于课文模式：若该年级/册暂无统编版课文库，则回退为原创短文并提示（当前 1–6 年级上下册均已覆盖）
+    // 基于课文模式：若该年级/册暂无本版本课文库，则回退为原创短文并提示
     final wantTextbook = _useTextbook;
-    if (wantTextbook && AppData().yuwenTextsFor(widget.grade, widget.volume).isEmpty) {
-      _showSnack('该年级/册暂无统编版课文库，已改用原创短文模式');
+    if (wantTextbook && !AppData().hasTextbook(widget.version, widget.grade, widget.volume)) {
+      _showSnack('该年级/册暂无本版本课文库，已改用原创短文模式');
     }
     setState(() => _loading = true);
     try {
@@ -432,7 +432,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         diff: 'easy',
         showAnswer: true,
         readingCount: (_counts['aiyuedu'] ?? 2).clamp(1, 4),
-        useTextbook: wantTextbook && AppData().yuwenTextsFor(widget.grade, widget.volume).isNotEmpty,
+        useTextbook: wantTextbook && AppData().hasTextbook(widget.version, widget.grade, widget.volume),
       ));
       _aiItems = items;
       _regenerate();
@@ -572,25 +572,29 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   });
                 },
               ),
-              CheckLabel(
-                label: '✨ 基于统编版课文（出阅读理解题）',
-                value: _useTextbook,
-                onChanged: (v) {
-                  setState(() {
-                    _useTextbook = v;
-                    _regenerate();
-                  });
-                },
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 2, left: 4),
-                child: Text(
-                  _useTextbook
-                      ? '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）'
-                      : '未开启：阅读理解为 AI 原创短文模式',
-                  style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
+              if (const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version))
+                CheckLabel(
+                  label: '✨ 基于课文（本版本）出阅读理解题',
+                  value: _useTextbook,
+                  onChanged: (v) {
+                    setState(() {
+                      _useTextbook = v;
+                      _regenerate();
+                    });
+                  },
                 ),
-              ),
+              if (const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version))
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, left: 4),
+                  child: Text(
+                    _useTextbook
+                        ? (widget.version == 'tongbiao'
+                            ? '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）'
+                            : '已开启：将依据本版本课文篇目，由 AI 原创适龄短文出题（A档目录模式，正文请用「拍照导入」补充）')
+                        : '未开启：阅读理解为 AI 原创短文模式',
+                    style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
+                  ),
+                ),
             ],
           ),
         ),

@@ -462,24 +462,40 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       .map((c) => c[0])
       .join('、');
 
-  // 取该年级/册的统编版课文（课文模式用其正文补全，原创模式忽略）
-  final texts = data.yuwenTextsFor(opts.grade, opts.volume);
+  // 取该版本·年级/册的课文目录（课文模式用其正文补全，原创模式忽略）
+  final texts = data.yuwenTextsFor(opts.version, opts.grade, opts.volume);
   final sel = texts.take(count).toList();
 
   String prompt;
   if (opts.useTextbook) {
-    // 基于统编版课文模式：从 YUWEN_TEXTS 取真实课文出题
-    final passages = sel
-        .map((t) => '【课文】${t.title}（${t.unit}）\n${t.text}')
-        .join('\n\n');
-    prompt = '你是中国小学语文出题专家。下面是从"统编版语文${gname}${volName}"课本中选取的${sel.length}篇真实课文：\n\n'
-        '$passages\n\n'
-        '请基于上面提供的课文，为${gname}学生生成阅读理解练习（每篇课文出 3-5 道理解题）：\n'
-        '1. 题目必须紧扣所给课文内容，考查：按原文提取信息、概括主要内容、理解关键词句的意思与作用、体会文章表达的思想感情或道理；\n'
-        '2. 适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
-        '3. 每题给出准确答案；难度贴合${gname}。\n'
-        '只输出一个 JSON 对象，不要输出任何其他文字：\n'
-        '{"items":[{"title":"课文标题","author":"作者/出处","text":"课文正文（可原样或略写）","questions":[{"q":"问题","a":"答案"}]}]}';
+    final hasText = sel.any((t) => t.text.trim().isNotEmpty);
+    if (hasText) {
+      // 统编版：本地有完整正文，直接基于真实课文出题
+      final passages = sel
+          .map((t) => '【课文】${t.title}（${t.unit}）\n${t.text}')
+          .join('\n\n');
+      prompt = '你是中国小学语文出题专家。下面是从"${tb.name}${gname}${volName}"课本中选取的${sel.length}篇真实课文：\n\n'
+          '$passages\n\n'
+          '请基于上面提供的课文，为${gname}学生生成阅读理解练习（每篇课文出 3-5 道理解题）：\n'
+          '1. 题目必须紧扣所给课文内容，考查：按原文提取信息、概括主要内容、理解关键词句的意思与作用、体会文章表达的思想感情或道理；\n'
+          '2. 适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
+          '3. 每题给出准确答案；难度贴合${gname}。\n'
+          '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+          '{"items":[{"title":"课文标题","author":"作者/出处","text":"课文正文（可原样或略写）","questions":[{"q":"问题","a":"答案"}]}]}';
+    } else {
+      // A档目录（冀教/旧人教版等）：仅有篇目、无正文——要求 AI 据标题原创适龄短文（不内嵌版权文本）
+      final titles = sel
+          .map((t) => '【篇目】${t.title}（${t.unit}）')
+          .join('\n');
+      prompt = '你是中国小学语文出题专家。下面列出的是"${tb.name}${gname}${volName}"课本中的课文篇目（仅标题，不含原文）：\n\n'
+          '$titles\n\n'
+          '请为${gname}学生生成阅读理解练习（每篇课文出 3-5 道理解题），要求：\n'
+          '1. 必须原创、贴合该年级：请以每篇【篇目】标题/所属单元为主题，自主创作一篇 100-300 字、适龄、积极健康的原创短文作为阅读素材；严禁照搬、复述或引用任何教材原文、网络现有课文或受版权保护的具体文本；\n'
+          '2. 题目紧扣你创作的短文内容，考查：按原文提取信息、概括主要内容、理解关键词句的意思与作用、体会文章表达的思想感情或道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
+          '3. 每题给出准确答案；难度贴合${gname}。\n'
+          '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+          '{"items":[{"title":"课文标题","author":"作者/出处（如不知可留空）","text":"你创作的原创短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
+    }
   } else {
     prompt = '你是中国小学语文出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇原创阅读理解练习：\n'
         '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等），短文用字尽量控制在下面该年级生字范围（生字可作参考，允许少量延伸）：\n生字：${chars.isEmpty ? '（无）' : chars}\n'

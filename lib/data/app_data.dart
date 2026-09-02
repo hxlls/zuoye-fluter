@@ -96,12 +96,22 @@ class AppData {
   /// YUWEN_PRACTICAL：2022 课标「实用性阅读与交流」应用文格式与例文原生库
   late List<PracticalItem> practical;
 
-  /// YUWEN_TEXTS：统编版语文课文库（篇目·单元·正文），供「基于课文」阅读理解生成使用
-  late List<YuwenText> yuwenTexts;
+  /// 各版本课文目录（按版本分库）：统编版(tongbiao,含正文) / 冀教(hebei) / 旧人教版(renjiao, A档目录 text 多数为空)
+  late Map<String, List<YuwenText>> _textsByVersion;
 
-  /// 取某年级/册下、且有正文的统编版课文（供阅读理解基于课文生成）
-  List<YuwenText> yuwenTextsFor(int grade, String volume) =>
-      yuwenTexts.where((t) => t.grade == grade && t.volume == volume && t.text.trim().isNotEmpty).toList();
+  /// 取某版本·年级·册的课文目录（A档 text 可能为空，由生成端依据标题原创短文；统编版含正文）
+  List<YuwenText> yuwenTextsFor(String version, int grade, String volume) {
+    final list = _textsByVersion[version] ?? [];
+    return list.where((t) => t.grade == grade && t.volume == volume).toList();
+  }
+
+  /// 该版本·年级·册是否有可出题的课文目录（统编版要求有正文；A档目录只要篇目非空即可）
+  bool hasTextbook(String version, int grade, String volume) {
+    final list = yuwenTextsFor(version, grade, volume);
+    if (list.isEmpty) return false;
+    if (version == 'tongbiao') return list.any((t) => t.text.trim().isNotEmpty);
+    return true;
+  }
 
   static final AppData _instance = AppData._();
 
@@ -285,33 +295,42 @@ class AppData {
       }
     }
 
-    // YUWEN_TEXTS：统编版语文课文库（篇目·单元·正文）
-    yuwenTexts = [];
-    final yt = j['YUWEN_TEXTS'];
-    if (yt is Map) {
-      for (final gEntry in (yt as Map).entries) {
-        final grade = int.tryParse('${gEntry.key}') ?? 0;
-        final vols = gEntry.value;
-        if (vols is Map) {
-          for (final vEntry in vols.entries) {
-            final volume = '${vEntry.key}';
-            final arr = vEntry.value;
-            if (arr is List) {
-              for (final it in arr) {
-                if (it is Map) {
-                  yuwenTexts.add(YuwenText(
-                    grade: grade,
-                    volume: volume,
-                    unit: '${it['unit'] ?? ''}',
-                    title: '${it['title'] ?? ''}',
-                    text: '${it['text'] ?? ''}',
-                  ));
+    // 各版本课文目录：统编版(YUWEN_TEXTS,含正文) / 冀教(HEBEI_TEXTS) / 旧人教版(RENJIAO_OLD_TEXTS, A档目录)
+    _textsByVersion = {};
+    final versionMap = {
+      'tongbiao': 'YUWEN_TEXTS',
+      'hebei': 'HEBEI_TEXTS',
+      'renjiao': 'RENJIAO_OLD_TEXTS',
+    };
+    for (final e in versionMap.entries) {
+      final raw = j[e.value];
+      final list = <YuwenText>[];
+      if (raw is Map) {
+        for (final gEntry in raw.entries) {
+          final grade = int.tryParse('${gEntry.key}') ?? 0;
+          final vols = gEntry.value;
+          if (vols is Map) {
+            for (final vEntry in vols.entries) {
+              final volume = '${vEntry.key}';
+              final arr = vEntry.value;
+              if (arr is List) {
+                for (final it in arr) {
+                  if (it is Map) {
+                    list.add(YuwenText(
+                      grade: grade,
+                      volume: volume,
+                      unit: '${it['unit'] ?? ''}',
+                      title: '${it['title'] ?? ''}',
+                      text: '${it['text'] ?? ''}',
+                    ));
+                  }
                 }
               }
             }
           }
         }
       }
+      _textsByVersion[e.key] = list;
     }
 
     // GUSHI_RECITATION：2022 课标背诵优秀诗文推荐篇目（按学段 low/mid/high 分段）
