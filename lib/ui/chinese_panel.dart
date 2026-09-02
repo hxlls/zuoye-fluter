@@ -13,6 +13,7 @@ import 'preview_panel.dart';
 import 'recitation_panel.dart';
 import 'book_list_panel.dart';
 import 'practical_panel.dart';
+import 'export_file.dart';
 
 /// 语文作业面板
 class ChinesePanel extends StatefulWidget {
@@ -208,8 +209,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
       final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
       final cfg = await AiStore.load();
       if (cfg.base.isEmpty || cfg.model.isEmpty) {
-        _showSnack('请先在顶部「AI 智能出题设置」中填写 API 地址和模型'
-            '（需支持看图，如 qwen-vl / glm-4v / gpt-4o）。');
+        _showSnack('请先在顶部「AI 智能出题设置」中填写 API 地址，并选用支持看图的多模态大模型'
+            '（如 qwen-vl-max / glm-4v / gpt-4o）；纯文本模型无法识别图片。');
         return;
       }
       final prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
@@ -280,6 +281,31 @@ class _ChinesePanelState extends State<ChinesePanel> {
     await _loadCorpusStatus();
     _regenerate();
     if (mounted) setState(() {});
+  }
+
+  /// 导出当前课文库（拍照导入/导入的语料）为 .json，方便多端导入导出
+  Future<void> _exportCorpus() async {
+    await _loadCorpus();
+    final c = _cachedCorpus;
+    final items = (c != null && c['items'] is List) ? c['items'] as List : null;
+    if (items == null || items.isEmpty) {
+      _showSnack('暂无可导出的课文库：请先「拍照导入」或「导入语料(.json)」再导出。');
+      return;
+    }
+    final obj = <String, dynamic>{
+      'name': (c != null && c['name'] is String && (c['name'] as String).isNotEmpty)
+          ? c['name']
+          : '我的课文库',
+      'items': items,
+    };
+    final content = json.encode(obj);
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    try {
+      await saveJsonFile('课文库_$ts.json', content, 'application/json');
+      _showSnack('已导出课文库（${items.length} 篇）。该文件可在任意设备的「导入语料(.json)」中重新导入。');
+    } catch (e) {
+      _showSnack('导出失败：${e.toString()}');
+    }
   }
 
   void _previewCorpus() {
@@ -598,6 +624,35 @@ class _ChinesePanelState extends State<ChinesePanel> {
             ],
           ),
         ),
+        if (const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version))
+          FormGroup(
+            label: '课文阅读（基于课本目录一键生成）',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () async {
+                            setState(() => _useTextbook = true);
+                            await _generateAIReading();
+                          },
+                    icon: const Icon(Icons.auto_stories, size: 18),
+                    label: const Text('📖 根据课本生成阅读理解'),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.version == 'tongbiao'
+                      ? '一键生成：从统编版课文库（1–6 年级上下册）选取真实课文，直接出阅读理解题。'
+                      : '一键生成：依据本版本课文篇目（A档目录）由 AI 原创适年级短文并出题；若已「拍照导入」正文（B档），将优先用导入的正文。',
+                  style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
+                ),
+              ],
+            ),
+          ),
         FormGroup(
           label: '外置语料库（课文·阅读）',
           child: Column(
@@ -643,6 +698,11 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     onPressed: _clearCorpus,
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('清除'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _exportCorpus,
+                    icon: const Icon(Icons.file_download, size: 16),
+                    label: const Text('导出课文库'),
                   ),
                 ],
               ),
