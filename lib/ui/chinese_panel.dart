@@ -14,6 +14,7 @@ import 'recitation_panel.dart';
 import 'book_list_panel.dart';
 import 'practical_panel.dart';
 import 'export_file.dart';
+import 'ai_config_card.dart';
 
 /// 语文作业面板
 class ChinesePanel extends StatefulWidget {
@@ -546,6 +547,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
           ),
         ),
         const SizedBox(height: 14),
+        const AiConfigCard(),
+        const SizedBox(height: 14),
         FormGroup(
           label: '题型（可多选，每种题型可单独设置题量）',
           child: Column(
@@ -605,6 +608,11 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   onChanged: (v) {
                     setState(() {
                       _useTextbook = v;
+                      // 统一题型风格：勾选时若未选「阅读理解 (AI)」则自动启用默认题量，
+                      // 取消勾选不影响题型勾选；保持与「题型」列表一致的一键体验
+                      if (v && (_counts['aiyuedu'] ?? 0) <= 0) {
+                        _counts['aiyuedu'] = 3;
+                      }
                       _regenerate();
                     });
                   },
@@ -624,35 +632,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
             ],
           ),
         ),
-        if (const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version))
-          FormGroup(
-            label: '课文阅读（基于课本目录一键生成）',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _loading
-                        ? null
-                        : () async {
-                            setState(() => _useTextbook = true);
-                            await _generateAIReading();
-                          },
-                    icon: const Icon(Icons.auto_stories, size: 18),
-                    label: const Text('📖 根据课本生成阅读理解'),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  widget.version == 'tongbiao'
-                      ? '一键生成：从统编版课文库（1–6 年级上下册）选取真实课文，直接出阅读理解题。'
-                      : '一键生成：依据本版本课文篇目（A档目录）由 AI 原创适年级短文并出题；若已「拍照导入」正文（B档），将优先用导入的正文。',
-                  style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
-                ),
-              ],
-            ),
-          ),
         FormGroup(
           label: '外置语料库（课文·阅读）',
           child: Column(
