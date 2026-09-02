@@ -420,6 +420,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
     final c = _activeCorpus();
     if (c == null) return false;
     return c.items.any((it) {
+      if (it['_qaSkip'] == true) return false; // 已重试仍失败，避免每次生成都重复调用
       final qs = it['questions'];
       return qs is! List || qs.isEmpty;
     });
@@ -451,24 +452,41 @@ class _ChinesePanelState extends State<ChinesePanel> {
         _regenerate();
         return;
       }
+      var skipped = 0;
       for (final i in targets) {
         final it = items[i];
         final text = '${it['text'] ?? ''}'.trim();
         if (text.isEmpty) continue;
         final title = '${it['title'] ?? ''}';
-        final gen = await aiGenerateQuestionsForPassage(
+        var gen = await aiGenerateQuestionsForPassage(
           title: title,
           text: text,
           grade: widget.grade,
           count: 3,
         );
-        if (gen.isEmpty) continue;
+        if (gen.isEmpty) {
+          // 弱模型偶发空返回，重试一次以提高成功率（直接命中用户「答案不生成」的痛点）
+          gen = await aiGenerateQuestionsForPassage(
+            title: title,
+            text: text,
+            grade: widget.grade,
+            count: 3,
+          );
+        }
+        if (gen.isEmpty) {
+          skipped++;
+          items[i] = <String, dynamic>{...it, '_qaSkip': true};
+          continue;
+        }
         items[i] = <String, dynamic>{
           ...it,
           'questions': [
             for (final q in gen) {'q': q.q, 'a': q.a}
           ],
         };
+      }
+      if (skipped > 0) {
+        _showSnack('有 $skipped 篇未生成题目（模型返回为空），可稍后重试');
       }
       _regenerate();
     } catch (e) {
