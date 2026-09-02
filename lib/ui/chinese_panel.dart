@@ -342,10 +342,10 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   Future<void> _generateAIReading() async {
-    // 基于课文模式：若该年级/册暂无统编版课文库，则回退为原创短文并提示
+    // 基于课文模式：若该年级/册暂无统编版课文库，则回退为原创短文并提示（当前 1–6 年级上下册均已覆盖）
     final wantTextbook = _useTextbook;
     if (wantTextbook && AppData().yuwenTextsFor(widget.grade, widget.volume).isEmpty) {
-      _showSnack('该年级/册暂无统编版课文库（当前仅有 1上/1下/2上/4上），已改用原创短文模式');
+      _showSnack('该年级/册暂无统编版课文库，已改用原创短文模式');
     }
     setState(() => _loading = true);
     try {
@@ -510,7 +510,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                 padding: const EdgeInsets.only(top: 2, left: 4),
                 child: Text(
                   _useTextbook
-                      ? '已开启：阅读理解将围绕统编版真实课文出题（当前课文库：1上/1下/2上/4上）'
+                      ? '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）'
                       : '未开启：阅读理解为 AI 原创短文模式',
                   style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                 ),
