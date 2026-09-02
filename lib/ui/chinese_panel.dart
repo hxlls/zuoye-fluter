@@ -249,29 +249,28 @@ class _ChinesePanelState extends State<ChinesePanel> {
     final corpusVer = c.version;
     return [
       for (final it in c.items)
-        if (it is Map)
-          ReadingBlockData(
-            title: '${it['title'] ?? ''}',
-            author: '${it['author'] ?? ''}',
-            text: '${it['text'] ?? ''}',
-            en: it['en'] == true,
-            isListening: it['isListening'] == true,
-            grade: it['grade'] is num ? (it['grade'] as num).toInt() : null,
-            volume: it['volume'] is String ? it['volume'] as String : null,
-            version: (() {
-              final v = '${it['version'] ?? ''}';
-              return v.isNotEmpty ? v : (corpusVer.isNotEmpty ? corpusVer : null);
-            })(),
-            source: (() {
-              final s = '${it['source'] ?? ''}';
-              return s.isNotEmpty ? s : corpusSrc;
-            })(),
-            questions: [
-              for (final q in (it['questions'] is List ? it['questions'] as List : []))
-                if (q is Map)
-                  ReadingQuestion('${q['q'] ?? ''}', '${q['a'] ?? ''}')
-            ],
-          )
+        ReadingBlockData(
+          title: '${it['title'] ?? ''}',
+          author: '${it['author'] ?? ''}',
+          text: '${it['text'] ?? ''}',
+          en: it['en'] == true,
+          isListening: it['isListening'] == true,
+          grade: it['grade'] is num ? (it['grade'] as num).toInt() : null,
+          volume: it['volume'] is String ? it['volume'] as String : null,
+          version: (() {
+            final v = '${it['version'] ?? ''}';
+            return v.isNotEmpty ? v : (corpusVer.isNotEmpty ? corpusVer : null);
+          })(),
+          source: (() {
+            final s = '${it['source'] ?? ''}';
+            return s.isNotEmpty ? s : corpusSrc;
+          })(),
+          questions: [
+            for (final q in (it['questions'] is List ? it['questions'] as List : []))
+              if (q is Map)
+                ReadingQuestion('${q['q'] ?? ''}', '${q['a'] ?? ''}')
+          ],
+        )
     ];
   }
 
@@ -297,8 +296,16 @@ class _ChinesePanelState extends State<ChinesePanel> {
       seen.add(qq);
       out.add(q);
     }
-    if (eq is List) for (final q in eq) addQ(q);
-    if (iq is List) for (final q in iq) addQ(q);
+    if (eq is List) {
+      for (final q in eq) {
+        addQ(q);
+      }
+    }
+    if (iq is List) {
+      for (final q in iq) {
+        addQ(q);
+      }
+    }
     return out;
   }
 
@@ -315,13 +322,13 @@ class _ChinesePanelState extends State<ChinesePanel> {
     final map = <String, Map<String, dynamic>>{};
     for (final e in existing) {
       final m = <String, dynamic>{};
-      e.forEach((k, v) => m['$k'] = v);
+      e.forEach((k, v) => m[k] = v);
       map[_itemKey(m)] = m;
     }
     var added = 0, updated = 0;
     for (final inc in incoming) {
       final m = <String, dynamic>{};
-      inc.forEach((k, v) => m['$k'] = v);
+      inc.forEach((k, v) => m[k] = v);
       if (corpusVersion.isNotEmpty && '${m['version'] ?? ''}'.isEmpty) {
         m['version'] = corpusVersion;
       }
@@ -408,9 +415,80 @@ class _ChinesePanelState extends State<ChinesePanel> {
     setState(_regenerate);
   }
 
-  void _generate() {
-    if ((_counts['aiyuedu'] ?? 0) > 0) {
-      _generateAIReading();
+  /// 当前活跃语料是否存在「没有预置题目」的条目（内置课文语料即属于此类）。
+  bool get _corpusNeedsQuestions {
+    final c = _activeCorpus();
+    if (c == null) return false;
+    return c.items.any((it) {
+      final qs = it['questions'];
+      return qs is! List || qs.isEmpty;
+    });
+  }
+
+  /// 为活跃语料中「无题目」的条目用 AI 基于本地正文逐篇补题。
+  /// 题目直接写回语料条目（内存态），随后 _regenerate 即渲染带题目的阅读页。
+  Future<void> _enrichCorpusQuestions() async {
+    final c = _activeCorpus();
+    if (c == null) {
+      _refresh();
+      return;
+    }
+    final cfg = await AiStore.load();
+    if (cfg.base.isEmpty || cfg.model.isEmpty) {
+      _showSnack('该语料尚无题目：请先在顶部「AI 智能出题设置」中配置 API 与模型，'
+          '再点「生成预览」即可自动为课文生成阅读理解题与答案。');
+      return;
+    }
+    if (mounted) setState(() => _loading = true);
+    try {
+      final items = c.items;
+      final targets = <int>[];
+      for (var i = 0; i < items.length; i++) {
+        final qs = items[i]['questions'];
+        if (qs is! List || qs.isEmpty) targets.add(i);
+      }
+      if (targets.isEmpty) {
+        _regenerate();
+        return;
+      }
+      for (final i in targets) {
+        final it = items[i];
+        final text = '${it['text'] ?? ''}'.trim();
+        if (text.isEmpty) continue;
+        final title = '${it['title'] ?? ''}';
+        final gen = await aiGenerateQuestionsForPassage(
+          title: title,
+          text: text,
+          grade: widget.grade,
+          count: 3,
+        );
+        if (gen.isEmpty) continue;
+        items[i] = <String, dynamic>{
+          ...it,
+          'questions': [
+            for (final q in gen) {'q': q.q, 'a': q.a}
+          ],
+        };
+      }
+      _regenerate();
+    } catch (e) {
+      _showSnack('语料出题失败：${aiFriendlyError(e)}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _generate() async {
+    final wantAI = (_counts['aiyuedu'] ?? 0) > 0;
+    final wantCorpus = (_counts['duanwen'] ?? 0) > 0;
+    // 语料（课文阅读）条目若无题目，先用 AI 基于本地正文补题，再渲染
+    if (wantCorpus && _corpusNeedsQuestions) {
+      await _enrichCorpusQuestions(); // 内部已 _regenerate
+      if (wantAI) await _generateAIReading();
+      return;
+    }
+    if (wantAI) {
+      await _generateAIReading();
     } else {
       _refresh();
     }
@@ -446,7 +524,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
       for (final e in decoded['items'] as List) {
         if (e is Map) {
           final m = <String, dynamic>{};
-          (e as Map).forEach((k, v) => m['$k'] = v);
+          (e).forEach((k, v) => m['$k'] = v);
           incoming.add(m);
         }
       }
@@ -538,7 +616,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
             '（如 qwen-vl-max / glm-4v / gpt-4o）；纯文本模型无法识别图片。');
         return;
       }
-      final prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
+      const prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
           '请识别页面中的课文/对话，并严格按以下 JSON 输出：\n'
           '{"name":"识别到的课本名（如 冀教版语文三年级上册）",'
           '"items":[{"grade":3,"volume":"上","unit":"第一单元","title":"课文标题",'
@@ -566,10 +644,10 @@ class _ChinesePanelState extends State<ChinesePanel> {
         return;
       }
       final incoming = <Map<String, dynamic>>[];
-      for (final e in (items is List ? items as List : [])) {
+      for (final e in items) {
         if (e is Map) {
           final m = <String, dynamic>{};
-          (e as Map).forEach((k, v) => m['$k'] = v);
+          (e).forEach((k, v) => m['$k'] = v);
           incoming.add(m);
         }
       }
@@ -879,10 +957,10 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   itemBuilder: (ctx, i) {
                     final item = corpus[i];
                     return ExpansionTile(
-                      title: Text('${item.title}',
+                      title: Text(item.title,
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                       subtitle: Text(
-                        '${item.grade ?? '?'}年级${item.volume ?? '?'} · ${item.author ?? ''}',
+                        '${item.grade ?? '?'}年级${item.volume ?? '?'} · ${item.author}',
                         style: const TextStyle(fontSize: 12, color: Color(0xff888888)),
                       ),
                       children: [
@@ -1014,7 +1092,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
     return PanelLayout(
       config: _config(),
       mobileAction: FilledButton.icon(
-        onPressed: _loading ? null : _generate,
+        onPressed: _loading ? null : () => _generate(),
         icon: const Icon(Icons.refresh, size: 18),
         label: Text(_loading ? '⏳ 生成中…' : '生成预览'),
       ),
@@ -1093,8 +1171,9 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   count: _counts[t] ?? 0,
                   onChecked: (v) {
                     setState(() {
-                      if (v && (_counts[t] ?? 0) <= 0) _counts[t] = 6;
-                      else if (!v) _counts[t] = 0;
+                      if (v && (_counts[t] ?? 0) <= 0) {
+                        _counts[t] = 6;
+                      } else if (!v) { _counts[t] = 0; }
                       _regenerate();
                     });
                   },
@@ -1246,9 +1325,9 @@ class _ChinesePanelState extends State<ChinesePanel> {
                 ),
               ),
               const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: const Text(
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Text(
                   '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档到上方目标；也可导入 .json 语料文件。分多次拍同一本会自动合并去重。',
                   style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                 ),

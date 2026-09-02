@@ -586,6 +586,45 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
   return out;
 }
 
+/// 基于单篇语料正文生成阅读理解题（语料/课文阅读路径用）。
+/// 关键约束：严格基于所给【原文】出题，不得改写、缩写、扩写或替换原文；
+/// 答案必须能从给定原文中找到明确依据。用于为没有预置题目的语料条目（含内置课文摘要）补题。
+Future<List<ReadingQuestion>> aiGenerateQuestionsForPassage({
+  required String title,
+  required String text,
+  required int grade,
+  int count = 3,
+}) async {
+  final cfg = await AiStore.load();
+  if (cfg.base.isEmpty || cfg.model.isEmpty) {
+    throw Exception('请先在顶部「AI 智能出题设置」中填写 API 地址和模型并保存。');
+  }
+  final data = AppData();
+  final gname = data.gradeNames[grade] ?? '小学';
+  final n = count.clamp(2, 5);
+  final prompt = '你是中国小学语文出题专家。下面是一篇课文/短文原文（已完整给出，'
+      '请勿改写、缩写、扩写或用你自己的话替换它）：\n\n'
+      '【篇名】$title\n【原文】\n$text\n\n'
+      '请严格基于上面的【原文】为$gname学生出$n道阅读理解题，要求：\n'
+      '1. 题目必须能从给定原文中找到明确、唯一的答案；严禁凭空编造原文中没有的信息或事实；\n'
+      '2. 考查角度覆盖：按原文提取信息、理解关键词句的意思与作用、概括主要内容或体会文章表达的意思/道理；\n'
+      '3. 每题给出准确、简短的答案（词语、短语或一两句短句即可）。\n'
+      '$_kReadingQaRules\n'
+      '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+      '{"questions":[{"q":"问题","a":"答案"}]}';
+  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
+      jsonMode: true);
+  final j = aiExtractJson(content);
+  final qs = j['questions'] is List ? j['questions'] as List : [];
+  final out = <ReadingQuestion>[];
+  for (final q in qs) {
+    if (q is! Map) continue;
+    final rq = _parseReadingQuestion(q);
+    if (rq.q.isNotEmpty && rq.a.isNotEmpty) out.add(rq);
+  }
+  return out;
+}
+
 /// AI 阅读生成（英语）
 Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
   final cfg = await AiStore.load();
