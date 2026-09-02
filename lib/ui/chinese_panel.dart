@@ -9,6 +9,9 @@ import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
 import 'preview_panel.dart';
+import 'recitation_panel.dart';
+import 'book_list_panel.dart';
+import 'practical_panel.dart';
 
 /// 语文作业面板
 class ChinesePanel extends StatefulWidget {
@@ -394,6 +397,44 @@ class _ChinesePanelState extends State<ChinesePanel> {
         const SizedBox(height: 8),
         const Text('📚 生字参考人教版语文各年级生字表',
             style: TextStyle(fontSize: 12, color: Color(0xff888888))),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => RecitationPage(grade: widget.grade)),
+          ),
+          icon: const Icon(Icons.menu_book, size: 18),
+          label: const Text('📜 2022 背诵篇目清单'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xff2f6fd0),
+            side: const BorderSide(color: Color(0xff2f6fd0)),
+          ),
+        ),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => BookListPage(grade: widget.grade)),
+          ),
+          icon: const Icon(Icons.auto_stories, size: 18),
+          label: const Text('📚 2022 整本书阅读书目'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xff2f6fd0),
+            side: const BorderSide(color: Color(0xff2f6fd0)),
+          ),
+        ),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PracticalPage()),
+          ),
+          icon: const Icon(Icons.edit_note, size: 18),
+          label: const Text('✉️ 应用文格式与例文'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xff2f6fd0),
+            side: const BorderSide(color: Color(0xff2f6fd0)),
+          ),
+        ),
         const SizedBox(height: 14),
         FormGroup(
           label: '题型（可多选，每种题型可单独设置题量）',

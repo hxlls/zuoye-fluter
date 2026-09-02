@@ -534,6 +534,19 @@ MathProblem genMathProblem(String tid, RandGen g) {
       }
     case 'unitconv':
       return genUnitConv(tid, g);
+    // ---------- 2022 课标原生新题型：量感 / 统计与概率 ----------
+    case 'estMeasure':
+      return genEstMeasure(tid, g);
+    case 'chooseUnit':
+      return genChooseUnit(tid, g);
+    case 'probability':
+      return genProbability(tid, g);
+    case 'bargraph':
+      return genBargraph(tid, g);
+    case 'project':
+      return genProject(tid, g);
+    case 'culture':
+      return genMathCulture(tid, g);
     default:
       return MathProblem(tid: tid, a: 0, b: 0, op: '', ans: '');
   }
@@ -719,6 +732,142 @@ MathProblem genUnitConv(String tid, RandGen g) {
       keepExpr: true,
       expr: '$val ${u.from} ＝ （　　　　　　）${u.to}',
       ans: val * u.mul);
+}
+
+/// 选择题渲染：题目 + A/B/C 选项（选项乱序），答案返回正确字母
+MathProblem _mc(String tid, String q, String correct, List<String> wrong, RandGen g) {
+  final letters = ['A', 'B', 'C'];
+  final opts = _shuffle([correct, ...wrong], g);
+  final idx = opts.indexOf(correct);
+  final sb = StringBuffer();
+  sb.write(q);
+  sb.write('\n');
+  for (var i = 0; i < opts.length; i++) {
+    sb.write('${letters[i]}. ${opts[i]}    ');
+  }
+  return MathProblem(
+      tid: tid, word: true, expr: sb.toString().trimRight(), ans: letters[idx]);
+}
+
+/// Fisher-Yates 乱序（基于 RandGen，保证可复现）
+List<T> _shuffle<T>(List<T> l, RandGen g) {
+  final a = List<T>.from(l);
+  for (var i = a.length - 1; i > 0; i--) {
+    final j = g.rand(0, i);
+    final t = a[i];
+    a[i] = a[j];
+    a[j] = t;
+  }
+  return a;
+}
+
+/// 估测与量感（2022 量感）：选择合适的估算值
+MathProblem genEstMeasure(String tid, RandGen g) {
+  final items = <Map<String, dynamic>>[
+    {'q': '估一估，一支铅笔大约长（　　）。', 'a': '15 厘米', 'w': ['15 米', '15 毫米'], 'min': 1},
+    {'q': '估一估，一个小朋友大约高（　　）。', 'a': '130 厘米', 'w': ['130 米', '13 厘米'], 'min': 1},
+    {'q': '估一估，教室的门大约高（　　）。', 'a': '2 米', 'w': ['2 厘米', '20 米'], 'min': 1},
+    {'q': '估一估，一袋食盐大约重（　　）。', 'a': '500 克', 'w': ['5 千克', '5 克'], 'min': 1},
+    {'q': '估一估，一个苹果大约重（　　）。', 'a': '200 克', 'w': ['2 千克', '2 克'], 'min': 1},
+    {'q': '估一估，从 1 数到 100 大约需要（　　）。', 'a': '1 分钟', 'w': ['1 秒', '1 小时'], 'min': 1},
+    {'q': '估一估，一个西瓜大约重（　　）。', 'a': '5 千克', 'w': ['5 克', '50 千克'], 'min': 3},
+    {'q': '估一估，步行 1 千米大约需要（　　）。', 'a': '15 分钟', 'w': ['15 秒', '15 小时'], 'min': 3},
+    {'q': '估一估，一张课桌面的面积大约（　　）。', 'a': '40 平方分米', 'w': ['40 平方厘米', '40 平方米'], 'min': 3},
+    {'q': '估一估，一瓶矿泉水大约有（　　）。', 'a': '500 毫升', 'w': ['5 升', '5 毫升'], 'min': 5},
+    {'q': '估一估，标准操场跑道一圈约（　　）。', 'a': '400 米', 'w': ['40 米', '4 千米'], 'min': 3},
+  ];
+  final pool = items.where((it) => g.grade >= (it['min'] as int)).toList();
+  final it = pool[g.rand(0, pool.length - 1)];
+  return _mc(tid, it['q'] as String, it['a'] as String,
+      List<String>.from(it['w']), g);
+}
+
+/// 选择合适的单位（2022 量感）
+MathProblem genChooseUnit(String tid, RandGen g) {
+  final items = <Map<String, dynamic>>[
+    {'q': '一个鸡蛋重约 50（　　）。', 'a': '克', 'w': ['千克', '吨'], 'min': 1},
+    {'q': '一棵大树高约 8（　　）。', 'a': '米', 'w': ['厘米', '毫米'], 'min': 1},
+    {'q': '数学书厚约 7（　　）。', 'a': '毫米', 'w': ['厘米', '分米'], 'min': 1},
+    {'q': '小明每天睡眠约 9（　　）。', 'a': '小时', 'w': ['分钟', '秒'], 'min': 1},
+    {'q': '火车每小时行驶约 120（　　）。', 'a': '千米', 'w': ['米', '分米'], 'min': 3},
+    {'q': '一间教室的面积约 50（　　）。', 'a': '平方米', 'w': ['平方厘米', '公顷'], 'min': 3},
+    {'q': '一瓶眼药水的容量约 10（　　）。', 'a': '毫升', 'w': ['升', '立方米'], 'min': 5},
+    {'q': '一个足球场的面积约 7000（　　）。', 'a': '平方米', 'w': ['平方千米', '平方厘米'], 'min': 5},
+    {'q': '一瓶可乐的容量约 2（　　）。', 'a': '升', 'w': ['毫升', '立方米'], 'min': 3},
+  ];
+  final pool = items.where((it) => g.grade >= (it['min'] as int)).toList();
+  final it = pool[g.rand(0, pool.length - 1)];
+  return _mc(tid, it['q'] as String, it['a'] as String,
+      List<String>.from(it['w']), g);
+}
+
+/// 可能性（2022 统计与概率）
+MathProblem genProbability(String tid, RandGen g) {
+  final items = <Map<String, String>>[
+    {'q': '太阳从东方升起是（　　）发生的。', 'a': '一定', 'w1': '可能', 'w2': '不可能'},
+    {'q': '从只装有红球的盒子里摸出一个球，摸到白球是（　　）的。', 'a': '不可能', 'w1': '一定', 'w2': '可能'},
+    {'q': '明天会下雨是（　　）的。', 'a': '可能', 'w1': '一定', 'w2': '不可能'},
+    {'q': '抛一枚硬币，正面朝上是（　　）的。', 'a': '可能', 'w1': '一定', 'w2': '不可能'},
+    {'q': '在没有水的空杯子里倒出水流是（　　）的。', 'a': '不可能', 'w1': '一定', 'w2': '可能'},
+    {'q': '人的心脏一直在跳动是（　　）的。', 'a': '一定', 'w1': '可能', 'w2': '不可能'},
+    {'q': '鱼在天上飞是（　　）的。', 'a': '不可能', 'w1': '一定', 'w2': '可能'},
+  ];
+  final it = items[g.rand(0, items.length - 1)];
+  return _mc(tid, it['q']!, it['a']!, [it['w1']!, it['w2']!], g);
+}
+
+/// 读统计图（2022 统计与概率）：生成分类数据 + 条形图 + 读图问题
+MathProblem genBargraph(String tid, RandGen g) {
+  final cands = <List<String>>[
+    ['水果', '苹果', '香蕉', '橘子', '西瓜'],
+    ['运动', '篮球', '足球', '乒乓球', '羽毛球'],
+    ['颜色', '红色', '黄色', '蓝色', '绿色'],
+    ['小动物', '猫', '狗', '兔', '鱼'],
+    ['季节', '春', '夏', '秋', '冬'],
+  ];
+  final c = cands[g.rand(0, cands.length - 1)];
+  final label = c[0];
+  final names = c.sublist(1);
+  final vals = <int>[for (var i = 0; i < 4; i++) g.rand(3, 12)];
+  final total = vals.fold(0, (s, v) => s + v);
+  final maxIdx = vals.indexOf(vals.reduce((a, b) => a > b ? a : b));
+  final k = g.rand(0, 3); // 指定问某个类别的人数
+
+  final sb = StringBuffer();
+  sb.write('下面是某班同学最喜欢的$label情况统计图（单位：人）：\n');
+  for (var i = 0; i < 4; i++) {
+    sb.write('${names[i]}  ${'█' * vals[i]} ${vals[i]}\n');
+  }
+  sb.write('1. 最喜欢（　　）的人数最多。\n');
+  sb.write('2. 最喜欢「${names[k]}」的有（　　）人。\n');
+  sb.write('3. 一共调查了（　　）人。');
+
+  final ans =
+      '最多：${names[maxIdx]}；${names[k]}：${vals[k]}人；共：$total人';
+  return MathProblem(tid: tid, word: true, expr: sb.toString(), ans: ans);
+}
+
+/// 综合与实践·项目式学习（2022 综合与实践）：从原生项目库取对应学段的项目
+MathProblem genProject(String tid, RandGen g) {
+  final data = AppData();
+  final seg = g.grade <= 2 ? 'low' : g.grade <= 4 ? 'mid' : 'high';
+  final pool = data.mathProjectsBySeg(seg);
+  final list = pool.isNotEmpty ? pool : data.mathProjects;
+  final p = list[g.rand(0, list.length - 1)];
+  final expr = '【综合与实践】${p.t}\n${p.d}';
+  const ans = '（开放题，按实际情况完成，可用图画、表格或简短文字记录）';
+  return MathProblem(tid: tid, word: true, expr: expr, ans: ans);
+}
+
+/// 数学文化（2022 数学文化）：从原生题库取对应学段的数学文化条目
+MathProblem genMathCulture(String tid, RandGen g) {
+  final data = AppData();
+  final seg = g.grade <= 2 ? 'low' : g.grade <= 4 ? 'mid' : 'high';
+  final pool = data.mathCultureBySeg(seg);
+  final list = pool.isNotEmpty ? pool : data.mathCulture;
+  final p = list[g.rand(0, list.length - 1)];
+  final expr = '【数学文化】${p.t}\n${p.c}\n思考题：${p.q}';
+  return MathProblem(tid: tid, word: true, expr: expr, ans: p.a);
 }
 
 /// 题目去重 key（移植 problemKey）

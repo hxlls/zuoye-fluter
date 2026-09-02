@@ -184,19 +184,6 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
                 style: TextStyle(fontSize: 12, color: Color(0xff888888))),
             const SizedBox(height: 14),
             FormGroup(
-              label: '科目',
-              child: SegButtons(
-                options: [
-                  ('math', '数学'),
-                  ('english', '英语'),
-                  ('chinese', '语文'),
-                  ('other', '其他'),
-                ],
-                value: _subject,
-                onChanged: (v) => setState(() => _subject = v),
-              ),
-            ),
-            FormGroup(
               label: '讲解对象年级',
               child: Text(
                 '使用顶部选择的 ${data.textbooks[widget.version]?.name ?? '人教版'} ${data.gradeNames[widget.grade] ?? ''} ${widget.volume == '下' ? '下册' : '上册'}',
@@ -226,6 +213,8 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
             ),
             child: Column(
               children: [
+                _buildSubjectBar(),
+                const SizedBox(height: 8),
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -305,6 +294,65 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
               ],
             ),
           );
+  }
+
+  /// 科目选择条（常驻对话区顶部，安卓窄屏无需打开抽屉即可切换）
+  Widget _buildSubjectBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xfffaf8f2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Text('科目',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xff555555))),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final o in const [
+                  ('math', '数学'),
+                  ('english', '英语'),
+                  ('chinese', '语文'),
+                  ('other', '其他'),
+                ])
+                  InkWell(
+                    onTap: () => setState(() => _subject = o.$1),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: o.$1 == _subject
+                            ? const Color(0xff2f6fd0)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: o.$1 == _subject
+                                ? const Color(0xff2f6fd0)
+                                : const Color(0xffcccccc)),
+                      ),
+                      child: Text(o.$2,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: o.$1 == _subject
+                                  ? Colors.white
+                                  : const Color(0xff444444))),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _chatBubble(String role, String content) {

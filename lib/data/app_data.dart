@@ -75,8 +75,26 @@ class AppData {
   late Map<int, List<ChengyuItem>> corpusChengyu;
   late Map<int, List<MingjuItem>> corpusMingju;
 
+  /// YUWEN_BOOKS: 整本书阅读推荐书目（按学段 low/mid/high）
+  late Map<String, List<BookItem>> corpusBooks;
+
+  /// ENG_505: 2022 课标小学英语词汇表（二级·约505词），按单词列表存储
+  late List<String> eng505;
+
+  /// GUSHI_RECITATION: 2022 课标「背诵优秀诗文」推荐篇目（1-6年级·75篇）
+  late List<RecItem> recitation;
+
   /// MATH_INSTRUCTION
   late Map<String, String> mathInstruction;
+
+  /// MATH_PROJECTS：2022 课标「综合与实践」项目式学习原生题库（按学段 low/mid/high）
+  late List<ProjItem> mathProjects;
+
+  /// MATH_CULTURE：2022 课标「数学文化」原生题库（故事·历史·思想，按学段 low/mid/high）
+  late List<CultureItem> mathCulture;
+
+  /// YUWEN_PRACTICAL：2022 课标「实用性阅读与交流」应用文格式与例文原生库
+  late List<PracticalItem> practical;
 
   static final AppData _instance = AppData._();
 
@@ -177,6 +195,20 @@ class AppData {
       ];
     }
 
+    corpusBooks = {};
+    final books = j['YUWEN_BOOKS'] as Map<String, dynamic>?;
+    if (books != null) {
+      for (final seg in books.entries) {
+        corpusBooks[seg.key] = [
+          for (final it in (seg.value as List<dynamic>))
+            BookItem(
+              t: (it as Map<String, dynamic>)['t'] as String,
+              a: (it as Map<String, dynamic>)['a'] as String? ?? '',
+            )
+        ];
+      }
+    }
+
     mathInstruction = {};
     final mi = j['MATH_INSTRUCTION'];
     if (mi != null) {
@@ -184,8 +216,111 @@ class AppData {
           .map((k, v) => MapEntry(k, v as String));
     }
 
+    // ENG_505：2022 课标小学英语词汇表（二级）
+    eng505 = [];
+    final e505 = j['ENG_505'];
+    if (e505 is List) {
+      for (final it in e505) {
+        if (it is Map && it['w'] is String) {
+          eng505.add(it['w'] as String);
+        } else if (it is String) {
+          eng505.add(it);
+        }
+      }
+    }
+
+    // MATH_PROJECTS：2022 课标综合与实践项目式学习题库
+    mathProjects = [];
+    final mp = j['MATH_PROJECTS'];
+    if (mp is List) {
+      for (final it in mp) {
+        if (it is Map) {
+          mathProjects.add(ProjItem(
+            t: '${it['t'] ?? ''}',
+            d: '${it['d'] ?? ''}',
+            seg: '${it['seg'] ?? 'low'}',
+          ));
+        }
+      }
+    }
+
+    // MATH_CULTURE：2022 课标数学文化题库
+    mathCulture = [];
+    final mc = j['MATH_CULTURE'];
+    if (mc is List) {
+      for (final it in mc) {
+        if (it is Map) {
+          mathCulture.add(CultureItem(
+            t: '${it['t'] ?? ''}',
+            c: '${it['c'] ?? ''}',
+            q: '${it['q'] ?? ''}',
+            a: '${it['a'] ?? ''}',
+            seg: '${it['seg'] ?? 'low'}',
+          ));
+        }
+      }
+    }
+
+    // YUWEN_PRACTICAL：2022 课标实用性阅读与交流·应用文格式与例文
+    practical = [];
+    final yp = j['YUWEN_PRACTICAL'];
+    if (yp is List) {
+      for (final it in yp) {
+        if (it is Map) {
+          practical.add(PracticalItem(
+            type: '${it['type'] ?? ''}',
+            title: '${it['title'] ?? ''}',
+            format: '${it['format'] ?? ''}',
+            example: '${it['example'] ?? ''}',
+            tip: '${it['tip'] ?? ''}',
+          ));
+        }
+      }
+    }
+
+    // GUSHI_RECITATION：2022 课标背诵优秀诗文推荐篇目（按学段 low/mid/high 分段）
+    recitation = [];
+    final gr = j['GUSHI_RECITATION'];
+    if (gr is List) {
+      for (final it in gr) {
+        if (it is Map) {
+          recitation.add(RecItem(
+            t: '${it['t'] ?? ''}',
+            a: '${it['a'] ?? ''}',
+            seg: '${it['seg'] ?? 'low'}',
+          ));
+        }
+      }
+    }
+
     _loaded = true;
   }
+
+  /// 该年级英语词汇（2022 课标对齐）：三年级起使用 ENG_505 二级词汇表，
+  /// 一、二年级沿用各册配套词汇。返回单词列表。
+  List<String> eng505Words(int grade) {
+    if (grade >= 3) return eng505;
+    final list = vol('renjiao', grade, '上', 'eng')?.eng ??
+        vol('renjiao', grade, '下', 'eng')?.eng ??
+        [];
+    return list.map((w) => w[0]).toList();
+  }
+
+  /// 2022 背诵篇目标题集合（用于古诗填空优先选用官方篇目）
+  Set<String> recitationTitleSet() =>
+      recitation.map((r) => r.t).toSet();
+
+  /// 按学段取背诵篇目（low=1-2年级 / mid=3-4年级 / high=5-6年级）
+  List<RecItem> recitationBySeg(String seg) =>
+      recitation.where((r) => r.seg == seg).toList();
+
+  /// 按学段取综合与实践项目（low=1-2 / mid=3-4 / high=5-6）
+  List<ProjItem> mathProjectsBySeg(String seg) =>
+      mathProjects.where((p) => p.seg == seg).toList();
+
+  /// 按学段取数学文化条目（low=1-2年级 / mid=3-4年级 / high=5-6年级）
+  List<CultureItem> mathCultureBySeg(String seg) =>
+      mathCulture.where((p) => p.seg == seg).toList();
 
   Map<String, List<int>> _parseIntListMap(dynamic j) {
     final out = <String, List<int>>{};
@@ -244,6 +379,56 @@ class AppData {
   VolumeData? vol(String ver, int grade, String vol, String subject) {
     return content[ver]?[grade]?[subject]?[vol];
   }
+
+  /// 整本书阅读推荐书目（按年级归入学段：低段1-2 / 中段3-4 / 高段5-6）
+  List<BookItem> bookList(int grade) {
+    final seg = grade <= 2 ? 'low' : grade <= 4 ? 'mid' : 'high';
+    return corpusBooks[seg] ?? [];
+  }
+}
+
+class BookItem {
+  final String t;
+  final String a;
+  BookItem({required this.t, this.a = ''});
+}
+
+class RecItem {
+  final String t;
+  final String a;
+  final String seg;
+  RecItem({required this.t, required this.a, this.seg = 'low'});
+}
+
+class ProjItem {
+  final String t;
+  final String d;
+  final String seg;
+  ProjItem({required this.t, required this.d, this.seg = 'low'});
+}
+
+class CultureItem {
+  final String t;
+  final String c;
+  final String q;
+  final String a;
+  final String seg;
+  CultureItem(
+      {required this.t, required this.c, required this.q, required this.a, this.seg = 'low'});
+}
+
+class PracticalItem {
+  final String type;
+  final String title;
+  final String format;
+  final String example;
+  final String tip;
+  PracticalItem(
+      {required this.type,
+      required this.title,
+      required this.format,
+      required this.example,
+      required this.tip});
 }
 
 class MathDetail {

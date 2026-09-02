@@ -26,6 +26,8 @@ class _AiPanelState extends State<AiPanel> {
   String _subject = 'math';
   String _diff = 'easy';
   bool _showAnswer = true;
+  String _theme = '';
+  String _textType = '';
   final Map<String, int> _styles = {};
   List<WsPage> _pages = [];
   bool _loading = false;
@@ -65,6 +67,8 @@ class _AiPanelState extends State<AiPanel> {
         grade: widget.grade,
         diff: _diff,
         showAnswer: _showAnswer,
+        theme: _subject == 'english' ? _theme : '',
+        textType: _subject == 'english' ? _textType : '',
       ));
       _pages = aiRenderPages(sections, AiRenderOpts(
         subject: _subject,
@@ -217,6 +221,35 @@ class _AiPanelState extends State<AiPanel> {
             onChanged: (v) => setState(() => _diff = v),
           ),
         ),
+        if (_subject == 'english') ...[
+          FormGroup(
+            label: '主题语境（2022 课标）',
+            child: SegButtons(
+              options: [
+                ('', '不限'),
+                ('人与自我', '人与自我'),
+                ('人与社会', '人与社会'),
+                ('人与自然', '人与自然'),
+              ],
+              value: _theme,
+              onChanged: (v) => setState(() => _theme = v),
+            ),
+          ),
+          FormGroup(
+            label: '语篇类型',
+            child: SegButtons(
+              options: [
+                ('', '不限'),
+                ('歌谣', '歌谣'),
+                ('配图故事', '配图故事'),
+                ('说明文', '说明文'),
+                ('应用文', '应用文'),
+              ],
+              value: _textType,
+              onChanged: (v) => setState(() => _textType = v),
+            ),
+          ),
+        ],
         CheckLabel(
           label: '同时生成答案（附参考答案页；关闭则只出题不给答案）',
           value: _showAnswer,

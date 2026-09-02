@@ -123,7 +123,11 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
   final rng = RandGen(grade: grade);
   final charPool =
       rng.shuffle(data.vol(ver, grade, vol, 'cally')?.cally ?? []);
-  final gushiPool = rng.shuffle(data.corpusGushi[grade] ?? []);
+  // 古诗填空优先选用 2022 课标「背诵优秀诗文」推荐篇目（标题在官方列表中的排前面）
+  final recSet = data.recitationTitleSet();
+  var gushiPool = rng.shuffle(data.corpusGushi[grade] ?? []);
+  gushiPool.sort((a, b) =>
+      (recSet.contains(a.t) ? 0 : 1).compareTo(recSet.contains(b.t) ? 0 : 1));
   final chengyuPool = rng.shuffle(data.corpusChengyu[grade] ?? []);
   final mingjuPool = rng.shuffle(data.corpusMingju[grade] ?? []);
 

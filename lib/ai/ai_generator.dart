@@ -16,12 +16,16 @@ final AI_STYLE_OPTIONS = {
     AiStyleOption('calc', '计算题', [1, 6]),
     AiStyleOption('word', '应用题', [1, 6]),
     AiStyleOption('mix', '混合（含易错、推理）', [3, 6]),
+    AiStyleOption('practice', '综合与实践（量感·统计·项目式）', [1, 6]),
   ],
   'english': [
     AiStyleOption('vocab', '词汇练习', [1, 6]),
     AiStyleOption('sent', '句子填空', [2, 6]),
     AiStyleOption('trans', '中英互译', [4, 6]),
     AiStyleOption('yuedu', '阅读理解', [3, 6]),
+    AiStyleOption('culture', '文化意识（节日·习俗·文化对比）', [3, 6]),
+    AiStyleOption('think', '思维品质（推理·比较·判断·表达观点）', [3, 6]),
+    AiStyleOption('learn', '学习能力（策略·计划·自主学习）', [3, 6]),
   ],
   'chinese': [
     AiStyleOption('zuci', '生字组词', [1, 6]),
@@ -29,6 +33,9 @@ final AI_STYLE_OPTIONS = {
     AiStyleOption('ktian', '词语填空', [1, 6]),
     AiStyleOption('jinyi', '近义词·反义词', [2, 6]),
     AiStyleOption('yuedu', '阅读理解', [3, 6]),
+    AiStyleOption('zhengshu', '整本书阅读单', [1, 6]),
+    AiStyleOption('kuaxueke', '跨学科学习', [3, 6]),
+    AiStyleOption('practical', '实用性阅读与交流（应用文·情境）', [1, 6]),
   ],
 };
 
@@ -36,28 +43,42 @@ final AI_STYLE_DESC = {
   'calc': '计算题（含口算、竖式、简便运算等，难度与年级匹配）',
   'word': '应用题（结合生活情境，注重理解与举一反三，避免照搬教材例题）',
   'mix': '混合题型（计算+应用+易错/拓展推理，多样化）',
+  'practice': '综合与实践（围绕量感、数据意识、项目式/主题式学习设计真实情境题，如估测、选择单位、读统计图、简单调查）',
   'vocab': '词汇练习（单词拼写、英汉互译、选词填空等）',
   'sent': '句子填空（根据上下文填入合适的词或短语）',
   'trans': '中英互译（英译中、中译英各占一部分）',
+  'culture': '文化意识（围绕中外节日、习俗、文明礼仪、文化对比设计题目，培养跨文化理解与文化自信，如春节/中秋/生日习俗、问候礼仪、中西饮食习惯差异等）',
+  'think': '思维品质（围绕短文或主题设计推理、比较、判断、表达观点类题目，培养逻辑与批判性思维，如根据线索推断、比较异同、判断正误并说出理由、就话题简单发表自己的看法）',
+  'learn': '学习能力（围绕学习策略、学习计划、自主探究、资源利用、自我反思设计题目，培养良好的英语学习习惯与自主学习能力，如制定每周单词背诵计划、用词典/图片辅助理解、做完题后自我检查与订正、分享自己的学习方法）',
   'zuci': '生字组词（给出生字，组两三个词语并选一个造句）',
   'zaoju': '词语造句（给出生词，用其写通顺的句子）',
   'ktian': '词语填空（选词填空、补充词语、按课文内容填空）',
   'jinyi': '近义词与反义词（给出生词，写出近义词和反义词）',
   'yuedu': '阅读理解（给出一篇适合该年级的短文，再围绕短文出几道理解题）',
+  'zhengshu': '整本书阅读单（围绕一本推荐书目设计阅读探究任务，含内容梳理、语句赏析、主题感悟等）',
+  'kuaxueke': '跨学科学习（以语文为核心，融合科学、历史、艺术、生活等设计综合任务）',
+  'practical': '实用性阅读与交流（围绕真实生活情境设计应用文与实用交流任务，如写通知、留言条、请假条、书信、倡议书，或读图表/说明书提取信息并作答，培养在生活中学语文、用语文）',
 };
 
 final AI_STYLE_INSTRUCTION = {
   'calc': '计算下面各题。',
   'word': '列式解答下面的应用题。',
   'mix': '计算并解答下面各题。',
+  'practice': '完成下面的综合与实践题（注意联系生活、写明单位与思路）。',
   'vocab': '完成下面的词汇练习。',
   'sent': '根据句意填入合适的词或短语。',
   'trans': '把下面的句子翻译成中文或英文。',
+  'culture': '完成下面的文化意识题（围绕节日、习俗或文化对比，语言简单地道）。',
+  'think': '完成下面的思维品质训练题（推理、比较、判断或表达观点，注意写出你的理由）。',
+  'learn': '完成下面的学习能力训练题（围绕学习策略与自主计划，写出你的做法）。',
   'zuci': '照样子组词，并用一个词语造句。',
   'zaoju': '用下面的词语造句。',
   'ktian': '选词填空或补充句子。',
   'jinyi': '写出下面词语的近义词和反义词。',
   'yuedu': '阅读短文，回答问题。',
+  'zhengshu': '完成下面的整本书阅读单。',
+  'kuaxueke': '完成下面的跨学科学习任务。',
+  'practical': '完成下面的实用性阅读与交流题（注意格式规范与情境得体）。',
 };
 
 class AiStyleSpec {
@@ -106,11 +127,21 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
       .map((t) => '- ${AI_STYLE_DESC[t.id] ?? '题目'}：${t.count}题')
       .join('\n');
 
+  final styleIds = typeSpecs.map((t) => t.id).toSet();
   final special = subject == 'chinese'
       ? '题目中的生字/词语要适合该年级，最好从下面该年级生字范围中选取（括号内为该册生字，供参考）：\n生字：${_gradeChineseChars(data, opts)}'
-      : subject == 'english'
-          ? '英文题目词汇要属于该年级常用范围，可参考下面该年级词汇表（供参考）：\n词汇：${_gradeEnglishVocab(data, opts)}'
-          : '应用题要贴近生活，答案给出单位。参考该年级数学知识范围：${_gradeMathTopics(data, opts)}';
+          '${styleIds.contains('zhengshu') ? '\n整本书阅读单：每题围绕下面推荐书目之一设计一份阅读探究单（含内容梳理、精彩语句赏析、主题/人物感悟等3-4个任务），题目(q)写书名与任务，答案(a)写简要指导。可参考书目：' + _gradeBooks(data, opts) : ''}'
+          '${styleIds.contains('kuaxueke') ? '\n跨学科学习：以语文为核心，融合科学、历史、艺术或生活实际设计综合任务，体现"在真实情境中运用语文"。' : ''}'
+          '${styleIds.contains('practical') ? '\n实用性阅读与交流：设计贴近生活的应用文与实用交流任务，如写一则通知/留言条/请假条/书信/倡议书（注意格式：称呼、正文、署名、日期规范），或给一段说明书/图表/留言让学生提取关键信息并作答；培养"在生活中学语文、用语文"的能力，语言简明得体。' : ''}'
+          : subject == 'english'
+              ? '英文题目词汇要属于该年级常用范围，可参考下面该年级词汇表（供参考）：\n词汇：${_gradeEnglishVocab(data, opts)}'
+                  '${opts.theme.isNotEmpty ? '\n本题严格围绕 2022 课标主题语境「${opts.theme}」展开（人与自我：生活与学习、做人与做事；人与社会：社会服务与人际沟通、文学与文化；人与自然：自然生态、环境保护）。' : ''}'
+                  '${opts.textType.isNotEmpty ? '\n语篇类型优先使用「${opts.textType}」（如歌谣、配图故事、说明文、应用文等），贴近该语篇的真实体裁。' : ''}'
+                  '${styleIds.contains('culture') ? '\n文化意识：设计围绕中外节日、习俗、文明礼仪或文化对比的题目（如春节/中秋/生日习俗、问候礼仪、中西饮食习惯与餐具差异等），培养跨文化理解与文化自信，语言尽量简单地道。' : ''}'
+                  '${styleIds.contains('think') ? '\n思维品质：设计培养逻辑思维与批判性思维的题，如根据线索推理、比较事物异同、判断正误并说明理由、就某个生活话题简单发表自己的看法；题目(q)给出情境与问题，答案(a)给出合理推理与你的理由。' : ''}'
+                  '${styleIds.contains('learn') ? '\n学习能力：设计培养自主学习能力与学习策略的题，如制定单词背诵/朗读计划、用图片或词典辅助理解生词、读后自我检查与订正、记录并分享自己的学习方法；题目(q)给出学习情境与任务，答案(a)给出可操作的学习策略或计划示例。' : ''}'
+          : '应用题要贴近生活，答案给出单位。参考该年级数学知识范围：${_gradeMathTopics(data, opts)}'
+              '\n注重培养学生的"量感"（对数量、度量、单位的直观感知与合理估算）与"模型意识"（用数学语言描述现实、建立简单模型）；综合与实践题要结合真实情境。';
 
   return '你是中国${subjectCN}教学出题专家。请为"${tb.name}${gname}${volName}"的学生出一套${diffText}难度的作业，共$total题，题型分配如下：\n'
       '$styleLines\n\n'
@@ -130,11 +161,19 @@ String _gradeChineseChars(AppData data, AiPromptOpts opts) {
   return chars.isEmpty ? '（无）' : chars;
 }
 
+/// 英语词汇范围文本（2022 课标对齐：三年级起使用 ENG_505 二级词表）
+String _engVocabText(AppData data, AiPromptOpts opts) {
+  if (opts.grade >= 3 && data.eng505.isNotEmpty) {
+    return data.eng505.join('、');
+  }
+  final list = data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [];
+  return list.take(50).map((w) => w[0]).join('、');
+}
+
 /// 该年级英语词汇表（用于约束 AI 词汇范围）
 String _gradeEnglishVocab(AppData data, AiPromptOpts opts) {
-  final list = data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [];
-  final words = list.take(50).map((w) => w[0]).join('、');
-  return words.isEmpty ? '（无）' : words;
+  final w = _engVocabText(data, opts);
+  return w.isEmpty ? '（无）' : w;
 }
 
 /// 该年级数学题型/知识范围
@@ -144,6 +183,13 @@ String _gradeMathTopics(AppData data, AiPromptOpts opts) {
   return topics.isEmpty ? '（无）' : topics;
 }
 
+/// 该年级整本书阅读推荐书目（用于约束 AI 整本书阅读单选题）
+String _gradeBooks(AppData data, AiPromptOpts opts) {
+  final books = data.bookList(opts.grade);
+  final names = books.map((b) => '《${b.t}》').join('、');
+  return names.isEmpty ? '（无）' : names;
+}
+
 class AiPromptOpts {
   final String version;
   final String volume;
@@ -151,6 +197,10 @@ class AiPromptOpts {
   final String diff;
   final bool showAnswer;
   final int readingCount;
+  /// 英语：2022 课标三大主题语境（人与自我/人与社会/人与自然），留空表示不限定
+  final String theme;
+  /// 英语：语篇类型（歌谣/配图故事/说明文/应用文 等），留空表示不限定
+  final String textType;
   AiPromptOpts({
     required this.version,
     required this.volume,
@@ -158,6 +208,8 @@ class AiPromptOpts {
     required this.diff,
     required this.showAnswer,
     this.readingCount = 2,
+    this.theme = '',
+    this.textType = '',
   });
 }
 
@@ -408,7 +460,7 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       .join('、');
   final prompt = '你是中国小学语文出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇原创阅读理解练习：\n'
       '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等），短文用字尽量控制在下面该年级生字范围（生字可作参考，允许少量延伸）：\n生字：${chars.isEmpty ? '（无）' : chars}\n'
-      '2. 每篇配3-5道理解题（按原文找信息、概括内容、体会句子意思、明白道理等），难度贴合${gname}；\n'
+      '2. 每篇配3-5道理解题，题型兼顾：按原文找信息、概括主要内容、体会关键语句的意思与作用、明白文章道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活谈看法），难度贴合${gname}；\n'
       '3. 题目必须原创、新颖，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
@@ -443,12 +495,16 @@ Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
   final gname = data.gradeNames[opts.grade] ?? '小学';
   final volName = opts.volume == '下' ? '下册' : '上册';
   final count = opts.readingCount;
-  final words = (data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [])
-      .take(50)
-      .map((w) => w[0])
-      .join('、');
+  final words = _engVocabText(data, opts);
+  final enThemeTip = opts.theme.isNotEmpty
+      ? '【主题语境】短文与题目严格围绕 2022 课标主题语境「${opts.theme}」展开（人与自我：生活与学习、做人与做事；人与社会：社会服务与人际沟通、文学与文化；人与自然：自然生态、环境保护）。\n'
+      : '';
+  final enTextTypeTip = opts.textType.isNotEmpty
+      ? '【语篇类型】优先使用「${opts.textType}」（如歌谣、配图故事、说明文、应用文等），贴近该语篇的真实体裁。\n'
+      : '';
   final prompt = '你是中国小学英语出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语阅读理解：\n'
       '1. 每篇给一篇适合该年级的原创英文短文（40-120词），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
+      '$enThemeTip$enTextTypeTip'
       '2. 每篇配3-5道理解题（用英文提问，如根据原文回答问题、判断正误等，可附中文提示），难度贴合${gname}；\n'
       '3. 短文与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
@@ -485,10 +541,7 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts, {bool na
   final gname = data.gradeNames[opts.grade] ?? '小学';
   final volName = opts.volume == '下' ? '下册' : '上册';
   final count = opts.readingCount;
-  final words = (data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [])
-      .take(50)
-      .map((w) => w[0])
-      .join('、');
+  final words = _engVocabText(data, opts);
 
   // 根据年级确定听力材料难度
   String lengthDesc;
@@ -511,11 +564,18 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts, {bool na
       : '- 听力材料可以用对话形式（如 "Hello!" "How are you?"）或叙述形式，贴近真实生活场景；\n'
         '- 如果使用对话，注意节奏感，让朗读时有自然停顿。';
 
+  final enThemeTip = opts.theme.isNotEmpty
+      ? '【主题语境】听力材料严格围绕 2022 课标主题语境「${opts.theme}」展开（人与自我/人与社会/人与自然）。\n'
+      : '';
+  final enTextTypeTip = opts.textType.isNotEmpty
+      ? '【语篇类型】优先使用「${opts.textType}」（如歌谣、配图故事、说明文、应用文等）。\n'
+      : '';
   final prompt = '你是中国小学英语听力出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语听力材料：\n'
       '1. 每篇给出一段适合该年级的原创英文听力材料（$lengthDesc），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
       '2. 听力材料类型：小故事、简单通知、描述性短文等，贴近学生生活；\n'
       '3. 每篇配$questionDesc（选择题给出A/B/C选项，判断题给出T/F），问题用中文提问；\n'
       '4. 听力材料与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
+      '$enThemeTip$enTextTypeTip'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","text":"英文听力材料正文","questions":[{"q":"问题","options":["选项内容","选项内容","选项内容"],"a":"正确答案"}]}]}\n'
       '注意：\n'

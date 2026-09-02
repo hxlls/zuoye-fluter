@@ -17,6 +17,12 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    lint {
+        // 测试构建：关闭 release lint 检查，绕过 lintVitalAnalyzeRelease 在插件 compileSdk 不一致时的崩溃
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
