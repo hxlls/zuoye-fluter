@@ -128,9 +128,12 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
       .join('\n');
 
   final styleIds = typeSpecs.map((t) => t.id).toSet();
+  final readingNote = styleIds.contains('yuedu')
+      ? '\n阅读理解题专项：每题必须同时给出问题(q)与答案(a)，答案(a)严禁留空且必须能从短文找到依据、直接回答该问题；问题须是通顺完整的疑问句，符合中文表达习惯，不可无厘头或牵强。'
+      : '';
   final special = subject == 'chinese'
       ? '题目中的生字/词语要适合该年级，最好从下面该年级生字范围中选取（括号内为该册生字，供参考）：\n生字：${_gradeChineseChars(data, opts)}'
-          '${styleIds.contains('zhengshu') ? '\n整本书阅读单：每题围绕下面推荐书目之一设计一份阅读探究单（含内容梳理、精彩语句赏析、主题/人物感悟等3-4个任务），题目(q)写书名与任务，答案(a)写简要指导。可参考书目：' + _gradeBooks(data, opts) : ''}'
+          '${styleIds.contains('zhengshu') ? '\n整本书阅读单：每题围绕下面推荐书目之一设计一份阅读探究单（含内容梳理、精彩语句赏析、主题/人物感悟等3-4个任务），题目(q)写书名与任务，答案(a)写简要指导。可参考书目：${_gradeBooks(data, opts)}' : ''}'
           '${styleIds.contains('kuaxueke') ? '\n跨学科学习：以语文为核心，融合科学、历史、艺术或生活实际设计综合任务，体现"在真实情境中运用语文"。' : ''}'
           '${styleIds.contains('practical') ? '\n实用性阅读与交流：设计贴近生活的应用文与实用交流任务，如写一则通知/留言条/请假条/书信/倡议书（注意格式：称呼、正文、署名、日期规范），或给一段说明书/图表/留言让学生提取关键信息并作答；培养"在生活中学语文、用语文"的能力，语言简明得体。' : ''}'
           : subject == 'english'
@@ -143,13 +146,13 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
           : '应用题要贴近生活，答案给出单位。参考该年级数学知识范围：${_gradeMathTopics(data, opts)}'
               '\n注重培养学生的"量感"（对数量、度量、单位的直观感知与合理估算）与"模型意识"（用数学语言描述现实、建立简单模型）；综合与实践题要结合真实情境。';
 
-  return '你是中国${subjectCN}教学出题专家。请为"${tb.name}${gname}${volName}"的学生出一套${diffText}难度的作业，共$total题，题型分配如下：\n'
+  return '你是中国$subjectCN教学出题专家。请为"${tb.name}$gname$volName"的学生出一套$diffText难度的作业，共$total题，题型分配如下：\n'
       '$styleLines\n\n'
       '要求：\n'
       '1. 题目必须新颖、灵活，注重"举一反三"，不得照搬教材例题、课本原题或常见题库里的固定题目；\n'
-      '2. 难度要与${gname}学生的水平匹配，严格贴合${gname}的知识范围（生字/词汇/知识点不得超纲）；\n'
+      '2. 难度要与$gname学生的水平匹配，严格贴合$gname的知识范围（生字/词汇/知识点不得超纲）；\n'
       '3. ${withAnswer ? "每题必须给出正确答案，计算与拼写必须准确。" : "只要题目，不要给出答案。"}\n'
-      '4. $special\n\n'
+      '4. $special$readingNote\n\n'
       '只输出一个 JSON 对象，格式严格如下，不要输出任何其他文字、不要用代码块包裹：\n'
       '${withAnswer ? '{"sections":[{"type":"题型名称","items":[{"q":"题目","a":"答案"}]}]}' : '{"sections":[{"type":"题型名称","items":[{"q":"题目"}]}]}'}';
 }
@@ -305,7 +308,7 @@ List<WsPage> aiRenderPages(List<AiSection> sections, AiRenderOpts opts) {
   final volName = opts.volume == '下' ? '下册' : '上册';
 
   final pages = <WsPage>[];
-  final usableH = 860.0;
+  const usableH = 860.0;
   var cur = <WsCard>[];
   var curH = 0.0;
   var curInstr = '';
@@ -314,7 +317,7 @@ List<WsPage> aiRenderPages(List<AiSection> sections, AiRenderOpts opts) {
   var itemNo = 1;
 
   WsPageTitle pageTitle() => WsPageTitle(
-        main: '${subjectCN}作业 · AI 出题',
+        main: '$subjectCN作业 · AI 出题',
         sub: '${tb.name}$gname$volName · 大模型随机生成（答案建议核对）',
         meta1: '姓名：____________',
         meta2: '班级：____________',
@@ -425,7 +428,7 @@ AiChatMessage aiHelpSystemPrompt(String subject, AiHelpOpts opts) {
       : '';
   return AiChatMessage(
       'system',
-      '你是${subCN}辅导老师。请用${gname}学生能听懂的语言，分步骤讲解学生给出的题目（参考${tb.name}${gname}${vol}的知识水平）：\n'
+      '你是$subCN辅导老师。请用$gname学生能听懂的语言，分步骤讲解学生给出的题目（参考${tb.name}$gname$vol的知识水平）：\n'
       '1. 先简要说明思路；\n'
       '2. 再逐步列式计算或分析（步骤清晰、每步简短）；\n'
       '3. 最后一行用"答案："给出最终结果。\n'
@@ -444,6 +447,34 @@ class AiHelpOpts {
     required this.grade,
     this.withImage = false,
   });
+}
+
+/// 阅读题「问题/答案」硬性约束，拼接到各阅读 prompt 末尾，
+/// 确保答案非空、且问题与答案严格对应、符合中文母语者表达习惯。
+const String _kReadingQaRules = '''
+【题目与答案的硬性要求（必须逐条遵守）】
+1. 每道题必须同时给出「问题(q)」和「答案(a)」，二者缺一不可；答案(a)严禁为空。
+2. 问题(q)必须是完整、通顺、符合中文母语者表达习惯的疑问句（以"？"结尾），考查点明确，不得无厘头、牵强或生造。
+3. 答案(a)必须能从所给短文/课文中找到明确依据，是"直接回答该问题"的简短准确内容（词语、短语或一两句短句）；不要把问题原样抄进答案，不要在答案里复述整道题。
+4. 问题与答案严格分离：问题里不要再写出答案；答案里只写答案本身。
+5. 输出前逐项自检：①每道题的问题都能在短文中找到明确答案吗？②答案是直接、准确、符合中文表达习惯的吗？③有没有把答案混进问题里？''';
+
+/// 解析单道阅读题：模型偶尔会把答案写进问题（"……？答案：xxx"），
+/// 这里在 a 为空时尝试把答案从问题文本中拆出，避免答案整页缺失。
+ReadingQuestion _parseReadingQuestion(Map q) {
+  final rawQ = '${q['q'] ?? ''}'.trim();
+  var answer = '${q['a'] ?? ''}'.trim();
+  var question = rawQ;
+  if (answer.isEmpty) {
+    final m = RegExp(r'[？?]\s*(?:答案|答)\s*[：:]\s*(.+)$', dotAll: true)
+        .firstMatch(rawQ);
+    if (m != null) {
+      answer = m.group(1)!.trim();
+      final qMark = rawQ.lastIndexOf(RegExp(r'[？?]'));
+      question = qMark >= 0 ? rawQ.substring(0, qMark + 1).trim() : rawQ;
+    }
+  }
+  return ReadingQuestion(question, answer);
 }
 
 /// AI 阅读生成（语文）
@@ -476,12 +507,13 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
         final passages = sel
             .map((t) => '【课文】${t.title}（${t.unit}）\n${t.text}')
             .join('\n\n');
-        prompt = '你是中国小学语文出题专家。下面是从"${tb.name}${gname}${volName}"课本中选取的${sel.length}篇真实课文：\n\n'
+        prompt = '你是中国小学语文出题专家。下面是从"${tb.name}$gname$volName"课本中选取的${sel.length}篇真实课文：\n\n'
             '$passages\n\n'
-            '请基于上面提供的课文，为${gname}学生生成阅读理解练习（每篇课文出 3-5 道理解题）：\n'
+            '请基于上面提供的课文，为$gname学生生成阅读理解练习（每篇课文出 3-5 道理解题）：\n'
             '1. 题目必须紧扣所给课文内容，考查：按原文提取信息、概括主要内容、理解关键词句的意思与作用、体会文章表达的思想感情或道理；\n'
             '2. 适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
-            '3. 每题给出准确答案；难度贴合${gname}。\n'
+            '3. 每题给出准确答案；难度贴合$gname。\n'
+            '$_kReadingQaRules\n'
             '只输出一个 JSON 对象，不要输出任何其他文字：\n'
             '{"items":[{"title":"课文标题","author":"作者/出处","text":"课文正文（可原样或略写）","questions":[{"q":"问题","a":"答案"}]}]}';
       } else {
@@ -489,12 +521,13 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
         final titles = sel
             .map((t) => '【篇目】${t.title}（${t.unit}）')
             .join('\n');
-        prompt = '你是中国小学语文出题专家。下面列出的是"${tb.name}${gname}${volName}"课本中的课文篇目（仅标题，不含原文）：\n\n'
+        prompt = '你是中国小学语文出题专家。下面列出的是"${tb.name}$gname$volName"课本中的课文篇目（仅标题，不含原文）：\n\n'
             '$titles\n\n'
-            '请为${gname}学生生成阅读理解练习（每篇课文出 3-5 道理解题），要求：\n'
+            '请为$gname学生生成阅读理解练习（每篇课文出 3-5 道理解题），要求：\n'
             '1. 必须原创、贴合该年级：请以每篇【篇目】标题/所属单元为主题，自主创作一篇 100-300 字、适龄、积极健康的原创短文作为阅读素材；严禁照搬、复述或引用任何教材原文、网络现有课文或受版权保护的具体文本；\n'
             '2. 题目紧扣你创作的短文内容，考查：按原文提取信息、概括主要内容、理解关键词句的意思与作用、体会文章表达的思想感情或道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
-            '3. 每题给出准确答案；难度贴合${gname}。\n'
+            '3. 每题给出准确答案；难度贴合$gname。\n'
+            '$_kReadingQaRules\n'
             '只输出一个 JSON 对象，不要输出任何其他文字：\n'
             '{"items":[{"title":"课文标题","author":"作者/出处（如不知可留空）","text":"你创作的原创短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
       }
@@ -504,21 +537,23 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
           ? sel.map((t) => '【Lesson】${t.title}（${t.unit}）\n${t.text}').join('\n\n')
           : sel.map((t) => '【Lesson】${t.title}（${t.unit}）').join('\n');
       prompt = 'You are an English reading-comprehension expert for Chinese primary school students using the "$tb.name" textbook series. '
-          'Below are lesson topics from "$tb.name ${gname}${volName}" (${sel.length} lessons)${hasText ? ", with their text" : " (titles only, no original text)"}:\n\n'
+          'Below are lesson topics from "$tb.name $gname$volName" (${sel.length} lessons)${hasText ? ", with their text" : " (titles only, no original text)"}:\n\n'
           '$topics\n\n'
           'Generate English reading-comprehension exercises (3-5 questions per lesson):\n'
           '1. For each lesson, write an ORIGINAL, age-appropriate English passage (60-150 words) themed on that lesson title/unit. '
           '${hasText ? "You may adapt the provided text." : "Create original content."} Do NOT reproduce any copyrighted textbook text verbatim.\n'
           '2. Questions must test: literal comprehension, main idea, vocabulary/key expressions, and inference; include some thinking-skills questions (e.g. why / infer / give an opinion).\n'
-          '3. Provide accurate answers; difficulty suited to ${gname}.\n'
+          '3. Provide accurate answers; difficulty suited to $gname.\n'
+          '[Strict q/a rules: every item MUST include both "q" and "a"; "a" must never be empty and must directly, accurately answer "q" using the passage; do NOT embed the answer inside "q"; use natural, age-appropriate English.]\n'
           'Output ONLY one JSON object, no other text:\n'
           '{"items":[{"title":"lesson title","author":"","text":"your original English passage","questions":[{"q":"question","a":"answer"}]}]}';
     }
   } else {
-    prompt = '你是中国小学语文出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇原创阅读理解练习：\n'
+    prompt = '你是中国小学语文出题专家。请为"${tb.name}$gname$volName"的学生生成$count篇原创阅读理解练习：\n'
         '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等），短文用字尽量控制在下面该年级生字范围（生字可作参考，允许少量延伸）：\n生字：${chars.isEmpty ? '（无）' : chars}\n'
-        '2. 每篇配3-5道理解题，题型兼顾：按原文找信息、概括主要内容、体会关键语句的意思与作用、明白文章道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活谈看法），难度贴合${gname}；\n'
+        '2. 每篇配3-5道理解题，题型兼顾：按原文找信息、概括主要内容、体会关键语句的意思与作用、明白文章道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活谈看法），难度贴合$gname；\n'
         '3. 题目必须原创、新颖，不得照搬教材课文或常见题库原题；答案要准确。\n'
+        '$_kReadingQaRules\n'
         '只输出一个 JSON 对象，不要输出任何其他文字：\n'
         '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
   }
@@ -544,7 +579,7 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       text: text,
       questions: [
         for (final q in (it['questions'] as List? ?? []))
-          if (q is Map) ReadingQuestion('${q['q'] ?? ''}', '${q['a'] ?? ''}')
+          if (q is Map) _parseReadingQuestion(q)
       ],
     ));
   }
@@ -569,10 +604,10 @@ Future<List<ReadingBlockData>> aiGenerateReadingEN(AiPromptOpts opts) async {
   final enTextTypeTip = opts.textType.isNotEmpty
       ? '【语篇类型】优先使用「${opts.textType}」（如歌谣、配图故事、说明文、应用文等），贴近该语篇的真实体裁。\n'
       : '';
-  final prompt = '你是中国小学英语出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语阅读理解：\n'
+  final prompt = '你是中国小学英语出题专家。请为"${tb.name}$gname$volName"的学生生成$count篇英语阅读理解：\n'
       '1. 每篇给一篇适合该年级的原创英文短文（40-120词），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
       '$enThemeTip$enTextTypeTip'
-      '2. 每篇配3-5道理解题（用英文提问，如根据原文回答问题、判断正误等，可附中文提示），难度贴合${gname}；\n'
+      '2. 每篇配3-5道理解题（用英文提问，如根据原文回答问题、判断正误等，可附中文提示），难度贴合$gname；\n'
       '3. 短文与题目必须原创，不得照搬教材课文或常见题库原题；答案要准确。\n'
       '只输出一个 JSON 对象，不要输出任何其他文字：\n'
       '{"items":[{"title":"标题","text":"英文短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
@@ -637,7 +672,7 @@ Future<List<ReadingBlockData>> aiGenerateListeningEN(AiPromptOpts opts, {bool na
   final enTextTypeTip = opts.textType.isNotEmpty
       ? '【语篇类型】优先使用「${opts.textType}」（如歌谣、配图故事、说明文、应用文等）。\n'
       : '';
-  final prompt = '你是中国小学英语听力出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇英语听力材料：\n'
+  final prompt = '你是中国小学英语听力出题专家。请为"${tb.name}$gname$volName"的学生生成$count篇英语听力材料：\n'
       '1. 每篇给出一段适合该年级的原创英文听力材料（$lengthDesc），用词尽量控制在下面该年级词汇范围内（词汇可作参考，允许少量延伸）：\n词汇：${words.isEmpty ? '（无）' : words}\n'
       '2. 听力材料类型：小故事、简单通知、描述性短文等，贴近学生生活；\n'
       '3. 每篇配$questionDesc（选择题给出A/B/C选项，判断题给出T/F），问题用中文提问；\n'
