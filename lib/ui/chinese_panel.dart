@@ -433,13 +433,13 @@ class _ChinesePanelState extends State<ChinesePanel> {
       _refresh();
       return;
     }
+    if (mounted) setState(() => _loading = true);
     final cfg = await AiStore.load();
     if (cfg.base.isEmpty || cfg.model.isEmpty) {
       _showSnack('该语料尚无题目：请先在顶部「AI 智能出题设置」中配置 API 与模型，'
           '再点「生成预览」即可自动为课文生成阅读理解题与答案。');
       return;
     }
-    if (mounted) setState(() => _loading = true);
     try {
       final items = c.items;
       final targets = <int>[];
@@ -1387,7 +1387,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: _generate,
+            onPressed: _loading ? null : () => _generate(),
             child: const Text('生成预览'),
           ),
         ),
