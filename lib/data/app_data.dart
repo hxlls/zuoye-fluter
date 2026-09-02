@@ -96,6 +96,13 @@ class AppData {
   /// YUWEN_PRACTICAL：2022 课标「实用性阅读与交流」应用文格式与例文原生库
   late List<PracticalItem> practical;
 
+  /// YUWEN_TEXTS：统编版语文课文库（篇目·单元·正文），供「基于课文」阅读理解生成使用
+  late List<YuwenText> yuwenTexts;
+
+  /// 取某年级/册下、且有正文的统编版课文（供阅读理解基于课文生成）
+  List<YuwenText> yuwenTextsFor(int grade, String volume) =>
+      yuwenTexts.where((t) => t.grade == grade && t.volume == volume && t.text.trim().isNotEmpty).toList();
+
   static final AppData _instance = AppData._();
 
   factory AppData() => _instance;
@@ -278,6 +285,35 @@ class AppData {
       }
     }
 
+    // YUWEN_TEXTS：统编版语文课文库（篇目·单元·正文）
+    yuwenTexts = [];
+    final yt = j['YUWEN_TEXTS'];
+    if (yt is Map) {
+      for (final gEntry in (yt as Map).entries) {
+        final grade = int.tryParse('${gEntry.key}') ?? 0;
+        final vols = gEntry.value;
+        if (vols is Map) {
+          for (final vEntry in vols.entries) {
+            final volume = '${vEntry.key}';
+            final arr = vEntry.value;
+            if (arr is List) {
+              for (final it in arr) {
+                if (it is Map) {
+                  yuwenTexts.add(YuwenText(
+                    grade: grade,
+                    volume: volume,
+                    unit: '${it['unit'] ?? ''}',
+                    title: '${it['title'] ?? ''}',
+                    text: '${it['text'] ?? ''}',
+                  ));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // GUSHI_RECITATION：2022 课标背诵优秀诗文推荐篇目（按学段 low/mid/high 分段）
     recitation = [];
     final gr = j['GUSHI_RECITATION'];
@@ -429,6 +465,20 @@ class PracticalItem {
       required this.format,
       required this.example,
       required this.tip});
+}
+
+class YuwenText {
+  final int grade;
+  final String volume;
+  final String unit;
+  final String title;
+  final String text;
+  YuwenText(
+      {required this.grade,
+      required this.volume,
+      required this.unit,
+      required this.title,
+      required this.text});
 }
 
 class MathDetail {

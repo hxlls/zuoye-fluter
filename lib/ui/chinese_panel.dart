@@ -37,6 +37,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
   bool _loading = false;
   List<ReadingBlockData> _aiItems = [];
   String _corpusStatus = '未导入';
+  /// 是否「基于统编版课文」生成阅读理解（true 时从 YUWEN_TEXTS 取真实课文出题）
+  bool _useTextbook = false;
 
   static const _corpusKey = 'customCorpus';
 
@@ -340,6 +342,11 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   Future<void> _generateAIReading() async {
+    // 基于课文模式：若该年级/册暂无统编版课文库，则回退为原创短文并提示
+    final wantTextbook = _useTextbook;
+    if (wantTextbook && AppData().yuwenTextsFor(widget.grade, widget.volume).isEmpty) {
+      _showSnack('该年级/册暂无统编版课文库（当前仅有 1上/1下/2上/4上），已改用原创短文模式');
+    }
     setState(() => _loading = true);
     try {
       final items = await aiGenerateReading(AiPromptOpts(
@@ -349,6 +356,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         diff: 'easy',
         showAnswer: true,
         readingCount: (_counts['aiyuedu'] ?? 2).clamp(1, 4),
+        useTextbook: wantTextbook && AppData().yuwenTextsFor(widget.grade, widget.volume).isNotEmpty,
       ));
       _aiItems = items;
       _regenerate();
@@ -487,6 +495,25 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     _regenerate();
                   });
                 },
+              ),
+              CheckLabel(
+                label: '✨ 基于统编版课文（出阅读理解题）',
+                value: _useTextbook,
+                onChanged: (v) {
+                  setState(() {
+                    _useTextbook = v;
+                    _regenerate();
+                  });
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2, left: 4),
+                child: Text(
+                  _useTextbook
+                      ? '已开启：阅读理解将围绕统编版真实课文出题（当前课文库：1上/1下/2上/4上）'
+                      : '未开启：阅读理解为 AI 原创短文模式',
+                  style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
+                ),
               ),
             ],
           ),

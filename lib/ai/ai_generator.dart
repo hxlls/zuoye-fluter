@@ -201,6 +201,8 @@ class AiPromptOpts {
   final String theme;
   /// 英语：语篇类型（歌谣/配图故事/说明文/应用文 等），留空表示不限定
   final String textType;
+  /// 语文：是否「基于统编版课文」生成阅读理解（true 时从 YUWEN_TEXTS 取真实课文出题）
+  final bool useTextbook;
   AiPromptOpts({
     required this.version,
     required this.volume,
@@ -210,6 +212,7 @@ class AiPromptOpts {
     this.readingCount = 2,
     this.theme = '',
     this.textType = '',
+    this.useTextbook = false,
   });
 }
 
@@ -458,12 +461,31 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
       .take(80)
       .map((c) => c[0])
       .join('、');
-  final prompt = '你是中国小学语文出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇原创阅读理解练习：\n'
-      '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等），短文用字尽量控制在下面该年级生字范围（生字可作参考，允许少量延伸）：\n生字：${chars.isEmpty ? '（无）' : chars}\n'
-      '2. 每篇配3-5道理解题，题型兼顾：按原文找信息、概括主要内容、体会关键语句的意思与作用、明白文章道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活谈看法），难度贴合${gname}；\n'
-      '3. 题目必须原创、新颖，不得照搬教材课文或常见题库原题；答案要准确。\n'
-      '只输出一个 JSON 对象，不要输出任何其他文字：\n'
-      '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
+
+  String prompt;
+  if (opts.useTextbook) {
+    // 基于统编版课文模式：从 YUWEN_TEXTS 取真实课文出题
+    final texts = data.yuwenTextsFor(opts.grade, opts.volume);
+    final sel = texts.take(count).toList();
+    final passages = sel
+        .map((t) => '【课文】${t.title}（${t.unit}）\n${t.text}')
+        .join('\n\n');
+    prompt = '你是中国小学语文出题专家。下面是从"统编版语文${gname}${volName}"课本中选取的${sel.length}篇真实课文：\n\n'
+        '$passages\n\n'
+        '请基于上面提供的课文，为${gname}学生生成阅读理解练习（每篇课文出 3-5 道理解题）：\n'
+        '1. 题目必须紧扣所给课文内容，考查：按原文提取信息、概括主要内容、理解关键词句的意思与作用、体会文章表达的思想感情或道理；\n'
+        '2. 适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
+        '3. 每题给出准确答案；难度贴合${gname}。\n'
+        '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+        '{"items":[{"title":"课文标题","author":"作者/出处","text":"课文正文（可原样或略写）","questions":[{"q":"问题","a":"答案"}]}]}';
+  } else {
+    prompt = '你是中国小学语文出题专家。请为"${tb.name}${gname}${volName}"的学生生成$count篇原创阅读理解练习：\n'
+        '1. 每篇给一篇适合该年级的原创短文（100-300字，主题贴近儿童生活、科普或传统美德等），短文用字尽量控制在下面该年级生字范围（生字可作参考，允许少量延伸）：\n生字：${chars.isEmpty ? '（无）' : chars}\n'
+        '2. 每篇配3-5道理解题，题型兼顾：按原文找信息、概括主要内容、体会关键语句的意思与作用、明白文章道理；并适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活谈看法），难度贴合${gname}；\n'
+        '3. 题目必须原创、新颖，不得照搬教材课文或常见题库原题；答案要准确。\n'
+        '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+        '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
+  }
   final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
       jsonMode: true);
   final data2 = aiExtractJson(content);

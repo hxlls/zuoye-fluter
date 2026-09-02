@@ -109,6 +109,7 @@ class _HomePageState extends State<HomePage> {
   Widget _versionBarMobile() {
     final versions = [
       ('renjiao', '人教版'),
+      ('tongbiao', '统编版'),
       ('hebei', '冀教版'),
       ('waiyanYQ', '外研·一起点'),
       ('waiyanSQ', '外研·三起点'),
@@ -178,6 +179,7 @@ class _HomePageState extends State<HomePage> {
   Widget _versionBar() {
     final versions = [
       ('renjiao', '人教版'),
+      ('tongbiao', '统编版'),
       ('hebei', '冀教版'),
       ('waiyanYQ', '外研·一起点'),
       ('waiyanSQ', '外研·三起点'),
