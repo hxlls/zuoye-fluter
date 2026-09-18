@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/scope_guard.dart';
 import '../core/worksheet_model.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
@@ -32,6 +33,10 @@ class _AiPanelState extends State<AiPanel> {
   List<WsPage> _pages = [];
   bool _loading = false;
 
+  /// 生成后超纲检查的提示（空串表示未发现问题）。
+  /// AI 出题只能靠提示词约束，这里兜一道并显式告知用户。
+  String _scopeNote = '';
+
   @override
   void initState() {
     super.initState();
@@ -59,7 +64,10 @@ class _AiPanelState extends State<AiPanel> {
       _showSnack('请至少勾选一种题型并设置题量（题量填 0 表示不选）。');
       return;
     }
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _scopeNote = ''; // 上一轮的提示先清掉，避免误读
+    });
     try {
       final sections = await aiGenerateWorksheet(_subject, specs, AiPromptOpts(
         version: widget.version,
@@ -70,6 +78,21 @@ class _AiPanelState extends State<AiPanel> {
         theme: _subject == 'english' ? _theme : '',
         textType: _subject == 'english' ? _textType : '',
       ));
+      // 生成后超纲检查：AI 只能靠提示词约束（软约束），这里兜一道。
+      // 检查项见 lib/core/scope_guard.dart —— 只查能可靠判定的（数学数值越界、
+      // 语文字词题的生字越界），英语词汇不做（词表是 headword 形式，误报率高）。
+      _scopeNote = ScopeGuard.inspect(
+        [
+          for (final s in sections)
+            for (final it in s.items)
+              ScopeItem(styleIdByLabel(_subject, s.type), '${it.q} ${it.a}'),
+        ],
+        subject: _subject,
+        version: widget.version,
+        grade: widget.grade,
+        volume: widget.volume,
+      );
+
       _pages = aiRenderPages(sections, AiRenderOpts(
         subject: _subject,
         version: widget.version,
@@ -77,6 +100,7 @@ class _AiPanelState extends State<AiPanel> {
         grade: widget.grade,
         showAnswer: _showAnswer,
       ));
+      if (_scopeNote.isNotEmpty) _showSnack('⚠️ 可能超纲：$_scopeNote');
     } catch (e) {
       _showSnack('AI 生成失败：${aiFriendlyError(e)}');
     } finally {
@@ -140,6 +164,24 @@ class _AiPanelState extends State<AiPanel> {
         const Text('大模型随机出题，避免照搬课本/题库，达到举一反三',
             style: TextStyle(fontSize: 12, color: Color(0xff888888))),
         const SizedBox(height: 12),
+        // 生成后超纲检查的提示：AI 靠提示词约束，可能不听话，这里显式告知
+        if (_scopeNote.isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xfffff4e5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xffe0a458)),
+            ),
+            child: Text(
+              '⚠️ 可能超纲：$_scopeNote\n'
+              '可调低难度或换一批重出；若反复出现，请检查所选年级与题型。',
+              style: const TextStyle(fontSize: 12, color: Color(0xff8a5300)),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         // API 设置（可折叠）
         Card(
           margin: EdgeInsets.zero,

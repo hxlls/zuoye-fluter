@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../data/app_data.dart';
+import '../core/scope_guard.dart';
 import '../core/worksheet_model.dart';
 import 'ai_client.dart';
 
@@ -207,18 +208,16 @@ String _gradeMathScope(AppData data, AiPromptOpts opts) {
   if (ids.isEmpty) return '';
   bool has(String s) => ids.any((i) => i.contains(s));
 
-  final String ceil;
-  if (ids.any((i) => i.contains('1000') || i.contains('10000'))) {
-    ceil = '万以内';
-  } else if (ids.any((i) => i.contains('100'))) {
-    ceil = '100 以内';
-  } else if (ids.any((i) => i.contains('20'))) {
-    ceil = '20 以内';
-  } else {
-    ceil = '10 以内';
-  }
+  // 上限的推导与「生成后校验」共用 ScopeGuard.integerCeil，
+  // 避免出现「提示词说 20、校验按 100」这种自相矛盾。
+  final ceil = ScopeGuard.integerCeil(
+    version: opts.version,
+    grade: opts.grade,
+    volume: opts.volume,
+  );
+  if (ceil == null) return '';
 
-  final parts = <String>['整数运算限制在$ceil'];
+  final parts = <String>['整数运算限制在${_ceilText(ceil)}'];
   if (!has('mul') && !has('div')) {
     parts.add('不得出现乘法和除法');
   } else if (!has('div')) {
@@ -228,6 +227,9 @@ String _gradeMathScope(AppData data, AiPromptOpts opts) {
   if (!has('frac')) parts.add('不得出现分数');
   return '数值与运算硬性约束（越界即为超纲，必须重出）：${parts.join('；')}。\n';
 }
+
+/// 上限的中文说法：10000 说成「万以内」，其余用数字
+String _ceilText(int ceil) => ceil >= 10000 ? '万以内' : '$ceil 以内';
 
 /// 该年级整本书阅读推荐书目（用于约束 AI 整本书阅读单选题）
 String _gradeBooks(AppData data, AiPromptOpts opts) {
