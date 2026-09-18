@@ -55,8 +55,31 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # 不使用 android-actions/setup-android@v3：它内部执行 `sdkmanager tools`，
+      # 而 Google 已从 SDK 仓库移除 `tools` 包（改用 cmdline-tools），
+      # 该 action 会以 `Failed to find package 'tools'` + exit 1 直接失败，
+      # 后面的安装依赖 / 构建 APK 全部被跳过。
+      # ubuntu runner 本身已预装完整 Android SDK，设置环境变量即可。
       - name: 设置 Android SDK
-        uses: android-actions/setup-android@v3
+        shell: bash
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "SDK 路径: $SDK"
+          echo "--- 已安装组件 ---"
+          ls "$SDK" 2>/dev/null || true
+          echo "--- platforms ---"
+          ls "$SDK/platforms" 2>/dev/null || true
+          echo "--- build-tools ---"
+          ls "$SDK/build-tools" 2>/dev/null || true
+          SDKMGR=$(find "$SDK/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1)
+          echo "sdkmanager: ${SDKMGR:-not-found}"
+          if [ -n "$SDKMGR" ]; then
+            yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+            echo "licenses accepted"
+          fi
+          flutter config --android-sdk "$SDK"
 
       - name: 安装依赖
         run: flutter pub get
