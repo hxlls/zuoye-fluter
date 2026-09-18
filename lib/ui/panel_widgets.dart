@@ -94,11 +94,16 @@ class _PanelLayoutState extends State<PanelLayout> {
       ],
     );
 
-    // 手机端：在预览页按系统返回键应**先回到配置页**，而不是直接退出整个面板。
-    // 实机验证过：不加这个的话，预览页按一次返回会一路退出应用
-    // （前台直接变成桌面 NexusLauncherActivity），用户会以为「点返回把应用关了」。
+    // 手机端：在**预览页**按系统返回键应先回到配置页。
+    //
+    // 注意这里刻意「只在预览页注册 PopScope」：
+    // 若在配置页也注册一个 canPop=true 的 PopScope，它会主动放行返回、
+    // 把外层（HomePage）的拦截顶掉，结果按返回直接退出应用
+    // —— 实机验证时就是这样（前台变成桌面 NexusLauncherActivity）。
+    // 配置页不注册，返回键自然交给外层处理：科目面板 -> 首页。
+    if (!_showPreview) return content;
     return PopScope(
-      canPop: !_showPreview,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         setState(() => _showPreview = false);

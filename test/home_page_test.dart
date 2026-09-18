@@ -156,4 +156,31 @@ void main() {
       );
     }
   });
+
+  testWidgets('系统返回键层级：科目面板 -> 首页 -> 出题', (tester) async {
+    await pumpHome(tester);
+
+    // 1. 进入科目面板
+    await tester.tap(find.text('数学作业'));
+    await tester.pumpAndSettle();
+    expect(find.text('数学作业设置'), findsOneWidget,
+        reason: '应已进入数学面板');
+
+    // 2. 返回 -> 回首页（而不是退出应用）
+    // 科目面板不是独立路由，不拦返回键的话这一下会直接退出应用
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('数学作业设置'), findsNothing,
+        reason: '返回应退出科目面板回到首页');
+
+    // 3. 切到「设置」标签后返回 -> 回到「出题」
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('教材版本'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('教材版本'), findsNothing,
+        reason: '在非首页标签按返回应回到「出题」');
+  });
 }

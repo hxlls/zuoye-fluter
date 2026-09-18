@@ -69,6 +69,70 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
     }
   }
 
+  /// 预扫描所有页：算出每页大题序号的起始值，以及全卷大题的中文序号。
+  ///
+  /// 试卷的大题序号「一、二、三」要**跨页连续**，而页面是独立渲染的，
+  /// 所以在预览层统一算好再传给各页。这样四个科目都不用改生成逻辑。
+  ({List<int> offsets, List<String> columns}) _scanSections() {
+    final offsets = <int>[];
+    var n = 0;
+    for (final p in widget.pages) {
+      offsets.add(n);
+      // 参考答案页不算大题：它不是题目，不该出现在得分栏里。
+      // noSpread 在各科目里都专用于答案页（已核实）。
+      if (p.noSpread) continue;
+      for (final node in p.nodes) {
+        if (WorksheetPageView.isSectionStart(node)) n++;
+      }
+    }
+    return (
+      offsets: offsets,
+      columns: [for (var i = 0; i < n; i++) cnNumber(i)],
+    );
+  }
+
+  Widget _pageView(int i, ({List<int> offsets, List<String> columns}) scan) {
+    return WorksheetPageView(
+      page: widget.pages[i],
+      sectionOffset: scan.offsets[i],
+      // 得分栏只出现在第一页（试卷惯例）
+      scoreColumns: i == 0 ? scan.columns : const <String>[],
+    );
+  }
+
+  /// 手机端点击预览放大查看（桌面端宽度足够，不启用）
+  void _openZoom(int index, ({List<int> offsets, List<String> columns}) scan) {
+    Navigator.of(context).push(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _ZoomPage(
+        title: '${widget.label} · 第 ${index + 1}/${widget.pages.length} 页',
+        page: _pageView(index, scan),
+      ),
+    ));
+  }
+
+  /// 单个预览页插槽。RepaintBoundary 必须保留——PDF 就是截取它。
+  Widget _pageSlot(BuildContext context, int i,
+      ({List<int> offsets, List<String> columns}) scan) {
+    final body = FittedBox(
+      fit: BoxFit.fitWidth,
+      child: RepaintBoundary(
+        key: _keys[i],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 300, maxWidth: 794),
+          child: _pageView(i, scan),
+        ),
+      ),
+    );
+    // 手机端预览被缩得很小，点一下放大看（桌面端不启用，避免误触）
+    if (MediaQuery.of(context).size.width >= 760) return body;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openZoom(i, scan),
+      child: body,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_keys.length != widget.pages.length) {
@@ -77,6 +141,7 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
         _keys.add(GlobalKey());
       }
     }
+    final scan = _scanSections();
     return Container(
       margin: const EdgeInsets.all(10),
       padding: const EdgeInsets.all(10),
@@ -107,17 +172,7 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
                       for (var i = 0; i < widget.pages.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: FittedBox(
-                            fit: BoxFit.fitWidth,
-                            child: RepaintBoundary(
-                              key: _keys[i],
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                    minWidth: 300, maxWidth: 794),
-                                child: WorksheetPageView(page: widget.pages[i]),
-                              ),
-                            ),
-                          ),
+                          child: _pageSlot(context, i, scan),
                         ),
                     ],
                   ),
@@ -206,6 +261,29 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
     }
   }
 
+  /// 单个练字帖预览页插槽（保留 RepaintBoundary 供 PDF 截取）
+  Widget _callySlot(BuildContext context, int i) {
+    final body = FittedBox(
+      fit: BoxFit.fitWidth,
+      child: RepaintBoundary(
+        key: _keys[i],
+        child: _CalligraphyPageView(page: widget.pages[i]),
+      ),
+    );
+    if (MediaQuery.of(context).size.width >= 760) return body;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _ZoomPage(
+          title: '${widget.label} · 第 ${i + 1}/${widget.pages.length} 页',
+          page: _CalligraphyPageView(page: widget.pages[i]),
+        ),
+      )),
+      child: body,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_keys.length != widget.pages.length) {
@@ -244,13 +322,7 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
                       for (var i = 0; i < widget.pages.length; i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: FittedBox(
-                            fit: BoxFit.fitWidth,
-                            child: RepaintBoundary(
-                              key: _keys[i],
-                              child: _CalligraphyPageView(page: widget.pages[i]),
-                            ),
-                          ),
+                          child: _callySlot(context, i),
                         ),
                   ],
                 ),
@@ -406,6 +478,62 @@ class _TianziCell extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// 手机端点击预览后的放大查看页：可双指缩放、拖动。
+///
+/// 初始缩放到「整页宽度适配屏幕」，再让用户放大看细节——
+/// 直接 1:1 展示的话 794px 宽在手机上只能看到左半边。
+class _ZoomPage extends StatefulWidget {
+  final String title;
+  final Widget page;
+  const _ZoomPage({required this.title, required this.page});
+
+  @override
+  State<_ZoomPage> createState() => _ZoomPageState();
+}
+
+class _ZoomPageState extends State<_ZoomPage> {
+  final _ctrl = TransformationController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final w = MediaQuery.of(context).size.width;
+      const pageW = 794.0;
+      final s = ((w - 20) / pageW).clamp(0.3, 1.0);
+      _ctrl.value = Matrix4.identity()..scale(s);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xff2b2b2b),
+      appBar: AppBar(
+        backgroundColor: const Color(0xff2b2b2b),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(widget.title, style: const TextStyle(fontSize: 14)),
+      ),
+      body: InteractiveViewer(
+        transformationController: _ctrl,
+        constrained: false,
+        minScale: 0.3,
+        maxScale: 6,
+        boundaryMargin: const EdgeInsets.all(80),
+        child: widget.page,
       ),
     );
   }

@@ -2,13 +2,114 @@ import 'package:flutter/material.dart';
 import '../core/worksheet_model.dart';
 import 'worksheet_cards.dart';
 
-/// A4 预览页
-class WorksheetPageView extends StatelessWidget {
-  final WsPage page;
-  const WorksheetPageView({super.key, required this.page});
+
+/// 大题序号转中文：0->一、1->二 …（试卷惯例）
+String cnNumber(int i) {
+  const digits = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  final n = i + 1;
+  if (n <= 9) return digits[n - 1];
+  if (n == 10) return '十';
+  if (n < 20) return '十${digits[n - 11]}';
+  return '$n';
+}
+
+/// 试卷顶部的「题号 / 得分」表——试卷的标志性元素，老师在此打分
+class _ScoreTable extends StatelessWidget {
+  final List<String> columns;
+  const _ScoreTable({required this.columns});
 
   @override
   Widget build(BuildContext context) {
+    const line = Color(0xff4a4a4a);
+    Widget cell(String t, {bool head = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Center(
+            child: Text(
+              t,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: head ? const Color(0xff111111) : const Color(0xff333333),
+                fontWeight: head ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: SizedBox(
+          width: 52.0 + columns.length * 46.0,
+          child: Table(
+            border: TableBorder.all(color: line, width: 0.8),
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            children: [
+              TableRow(children: [
+                cell('题号', head: true),
+                for (final c in columns) cell(c),
+              ]),
+              TableRow(children: [
+                cell('得分', head: true),
+                for (final _ in columns) cell(''),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A4 预览页（试卷版式）
+class WorksheetPageView extends StatelessWidget {
+  final WsPage page;
+
+  /// 本页第一个大题在全卷中的序号（从 0 起）。
+  /// 试卷的大题序号「一、二、三」要跨页连续，而页面是独立渲染的，
+  /// 所以由预览层预扫描各页后把起始序号传进来。
+  final int sectionOffset;
+
+  /// 全卷大题的中文序号（如 ['一','二','三']）。
+  /// 非空时在**第一页**顶部渲染「题号 / 得分」表——试卷的标志性元素。
+  final List<String> scoreColumns;
+
+  const WorksheetPageView({
+    super.key,
+    required this.page,
+    this.sectionOffset = 0,
+    this.scoreColumns = const [],
+  });
+
+  /// 判断某个节点是否开启一个新大题。
+  ///
+  /// 各科目用的节点类型不一致：数学/英语用 WsHeading 当大题标题，
+  /// 语文直接拿 WsSection（题型说明）当大题标题。
+  /// 而数学的 WsSection 是「直接写出得数。」这种**小题说明**（mathStyle=true），
+  /// 不算新大题。
+  static bool isSectionStart(WsNode n) =>
+      n is WsHeading || (n is WsSection && !n.mathStyle);
+
+  /// 给本页节点逐一标出所属大题序号（非大题节点为 null）
+  List<int?> _sectionNumbers() {
+    // 参考答案页不做大题编号（它的 WsHeading('参考答案') 不是题目）
+    if (page.noSpread) return List<int?>.filled(page.nodes.length, null);
+    final out = <int?>[];
+    var n = sectionOffset;
+    for (final node in page.nodes) {
+      if (isSectionStart(node)) {
+        out.add(n);
+        n++;
+      } else {
+        out.add(null);
+      }
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nums = _sectionNumbers();
     // 普通页 min-height A4，内容超高时自然增高（对应 CSS min-height:1123 + flex:1），
     // 避免内容溢出纸张；参考答案等 noSpread 页同样允许自然增高
     return Container(
@@ -28,7 +129,9 @@ class WorksheetPageView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (page.title != null) _TitleBar(title: page.title!),
-                for (final n in page.nodes) _buildNode(context, n),
+                if (scoreColumns.isNotEmpty) _ScoreTable(columns: scoreColumns),
+                for (var i = 0; i < page.nodes.length; i++)
+                  _buildNode(context, page.nodes[i], nums[i]),
               ],
             )
           : IntrinsicHeight(
@@ -36,6 +139,7 @@ class WorksheetPageView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (page.title != null) _TitleBar(title: page.title!),
+                  if (scoreColumns.isNotEmpty) _ScoreTable(columns: scoreColumns),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -43,7 +147,8 @@ class WorksheetPageView extends StatelessWidget {
                           ? MainAxisAlignment.start
                           : MainAxisAlignment.spaceEvenly,
                       children: [
-                        for (final n in page.nodes) _buildNode(context, n),
+                        for (var i = 0; i < page.nodes.length; i++)
+                          _buildNode(context, page.nodes[i], nums[i]),
                       ],
                     ),
                   ),
@@ -53,12 +158,21 @@ class WorksheetPageView extends StatelessWidget {
     );
   }
 
-  Widget _buildNode(BuildContext context, WsNode node) {
+  Widget _buildNode(BuildContext context, WsNode node, int? sectionNo) {
     if (node is WsSection) {
-      return _SectionLabel(text: node.text, mathStyle: node.mathStyle);
+      return _SectionLabel(
+        text: node.text,
+        mathStyle: node.mathStyle,
+        number: sectionNo == null ? null : cnNumber(sectionNo),
+      );
     }
     if (node is WsHeading) {
-      return _Heading(title: node.title, unit: node.unit, engStyle: node.engStyle);
+      return _Heading(
+        title: node.title,
+        unit: node.unit,
+        engStyle: node.engStyle,
+        number: sectionNo == null ? null : cnNumber(sectionNo),
+      );
     }
     if (node is WsGrid) {
       return _buildGrid(node);
@@ -181,29 +295,32 @@ class _TitleBar extends StatelessWidget {
 class _SectionLabel extends StatelessWidget {
   final String text;
   final bool mathStyle;
-  const _SectionLabel({required this.text, this.mathStyle = false});
+
+  /// 大题中文序号（如「一」）。null 表示这只是小题说明、不是大题标题。
+  final String? number;
+
+  const _SectionLabel({required this.text, this.mathStyle = false, this.number});
 
   @override
   Widget build(BuildContext context) {
+    // 小题说明（如数学的「直接写出得数。」）：缩进灰字，跟在所属大题标题下
     if (mathStyle) {
       return Padding(
-        padding: const EdgeInsets.only(left: 8, bottom: 8),
+        padding: const EdgeInsets.only(left: 24, bottom: 8),
         child: Text(text,
-            style: const TextStyle(fontSize: 14, color: Color(0xff666666))),
+            style: const TextStyle(fontSize: 13.5, color: Color(0xff666666))),
       );
     }
+    // 试卷大题标题：中文序号 + 黑色加粗，不用原来的蓝色竖条
     return Padding(
-      padding: const EdgeInsets.only(left: 8, bottom: 10, top: 4),
-      child: Container(
-        padding: const EdgeInsets.only(left: 8),
-        decoration: const BoxDecoration(
-          border: Border(left: BorderSide(color: Color(0xff2f6fd0), width: 4)),
-        ),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Color(0xff2f6fd0))),
+      padding: const EdgeInsets.only(bottom: 6, top: 12),
+      child: Text(
+        number == null ? text : '$number、$text',
+        style: const TextStyle(
+            fontSize: 15.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xff111111),
+            height: 1.4),
       ),
     );
   }
@@ -213,33 +330,44 @@ class _Heading extends StatelessWidget {
   final String title;
   final String? unit;
   final bool engStyle;
-  const _Heading({required this.title, this.unit, this.engStyle = false});
+
+  /// 大题中文序号（如「一」）
+  final String? number;
+
+  const _Heading({
+    required this.title,
+    this.unit,
+    this.engStyle = false,
+    this.number,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color = engStyle ? const Color(0xff2f6fd0) : const Color(0xff222222);
+    // 试卷大题标题：中文序号 + 黑色加粗；右侧浅灰注明教材单元（给家长看的参考）
     return Padding(
-      padding: const EdgeInsets.only(left: 8, bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.only(left: 8),
-        decoration: BoxDecoration(
-          border: Border(
-              left: BorderSide(color: engStyle ? const Color(0xff2f6fd0) : const Color(0xff2f6fd0), width: 4)),
-        ),
-        child: Row(
-          children: [
-            Text(title,
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w700, color: color)),
-            if (unit != null && unit!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(unit!,
-                    style:
-                        const TextStyle(fontSize: 12, color: Color(0xff999999))),
-              ),
-          ],
-        ),
+      padding: const EdgeInsets.only(bottom: 6, top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Flexible(
+            child: Text(
+              number == null ? title : '$number、$title',
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff111111),
+                  height: 1.4),
+            ),
+          ),
+          if (unit != null && unit!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(unit!,
+                  style:
+                      const TextStyle(fontSize: 11.5, color: Color(0xffaaaaaa))),
+            ),
+        ],
       ),
     );
   }

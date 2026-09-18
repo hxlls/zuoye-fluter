@@ -109,11 +109,8 @@ class _MathCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xff9d9a93)),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      // 试卷版式：题目不套卡片框，靠留白分隔（原为圆角边框卡片）
+      decoration: const BoxDecoration(color: Colors.white),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -550,10 +547,8 @@ class _AiCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xff9d9a93)),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      // 试卷版式：去卡片框
+      decoration: const BoxDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -890,10 +885,8 @@ class _MatchList extends StatelessWidget {
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xff9d9a93)),
-              borderRadius: BorderRadius.circular(10),
-            ),
+            // 试卷版式：去卡片框
+            decoration: const BoxDecoration(),
             child: Row(
               children: [
                 Expanded(
@@ -943,10 +936,8 @@ class _ReadingBlock extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xff9d9a93)),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      // 试卷版式：去卡片框
+      decoration: const BoxDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

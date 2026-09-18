@@ -55,7 +55,6 @@ class _HomePageState extends State<HomePage> {
   String _volume = '上';
   int _grade = 1;
   String _tab = 'home'; // home | ai | settings
-  String? _subject; // 非空时进入科目面板（全屏）
   String _aiMode = 'gen'; // gen | help
 
   bool _dataReady = false;
@@ -182,35 +181,27 @@ class _HomePageState extends State<HomePage> {
     if (!_dataReady) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final wide = MediaQuery.of(context).size.width >= 760;
+    // 系统返回键：非「出题」标签时先回到「出题」，已在出题页才允许退出应用。
+    //
+    // 科目面板不在这里处理——它已经是一个**独立路由**（见 _openSubject），
+    // 返回键由路由栈自然弹出。
+    //
+    // 为什么当初必须改成路由：面板若只是本页换个子树渲染，就没有路由可弹，
+    // 按返回会直接退出应用；而且嵌套 PopScope 会**同时触发所有处理器**
+    // （不是内层优先），于是「预览页返回」会连带把 _subject 置空、直接跳回首页。
+    return PopScope(
+      canPop: _tab == 'home',
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_tab != 'home') setState(() => _tab = 'home');
+      },
+      child: _buildBody(context),
+    );
+  }
 
-    // 进入某个科目：全屏面板，不显示底部导航，靠返回键回首页
-    if (_subject != null) {
-      final s = _kSubjects.firstWhere((e) => e.key == _subject);
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: const Color(0xff2f6fd0),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => setState(() => _subject = null),
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('${s.emoji} ${s.name}',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
-              Text(_ctxText(),
-                  style: const TextStyle(fontSize: 11, color: Colors.white70)),
-            ],
-          ),
-        ),
-        body: _panelFor(s.key),
-      );
-    }
+  /// 页面主体（原 build 的内容）
+  Widget _buildBody(BuildContext context) {
+    final wide = MediaQuery.of(context).size.width >= 760;
 
     return Scaffold(
       appBar: AppBar(
@@ -378,7 +369,7 @@ class _HomePageState extends State<HomePage> {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: enabled
-            ? () => setState(() => _subject = s.key)
+            ? () => _openSubject(s.key)
             : () => _toast('${_versionName(_version)} 不提供${s.name}'),
         child: Container(
           padding: const EdgeInsets.all(13),
@@ -595,6 +586,22 @@ class _HomePageState extends State<HomePage> {
 
   // ---------------- 科目面板 ----------------
 
+  /// 打开科目面板。
+  ///
+  /// 刻意用**路由**而不是页面内状态切换：
+  /// - 状态切换没有路由可弹，系统返回键只能退出应用；
+  /// - 且嵌套 PopScope 会同时触发所有处理器，「预览页返回」会连带跳回首页。
+  void _openSubject(String key) {
+    final s = _kSubjects.firstWhere((e) => e.key == key);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => _SubjectPanelPage(
+        subject: s,
+        ctxText: _ctxText(),
+        panel: _panelFor(key),
+      ),
+    ));
+  }
+
   Widget _panelFor(String key) {
     switch (key) {
       case 'chinese':
@@ -607,5 +614,43 @@ class _HomePageState extends State<HomePage> {
         return CalligraphyPanel(
             grade: _grade, version: _version, volume: _volume);
     }
+  }
+}
+
+/// 科目面板页（独立路由）。
+///
+/// 做成路由是为了让系统返回键有得可弹：预览页 -> 配置页（面板内部处理），
+/// 配置页 -> 首页（路由弹出），首页 -> 退出应用。
+class _SubjectPanelPage extends StatelessWidget {
+  final _Subject subject;
+  final String ctxText;
+  final Widget panel;
+  const _SubjectPanelPage({
+    required this.subject,
+    required this.ctxText,
+    required this.panel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xff2f6fd0),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${subject.emoji} ${subject.name}',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700)),
+            Text(ctxText,
+                style: const TextStyle(fontSize: 11, color: Colors.white70)),
+          ],
+        ),
+      ),
+      body: panel,
+    );
   }
 }
