@@ -1109,11 +1109,9 @@ class _ChinesePanelState extends State<ChinesePanel> {
   Widget build(BuildContext context) {
     return PanelLayout(
       config: _config(),
-      mobileAction: FilledButton.icon(
-        onPressed: _loading ? null : () => _generate(),
-        icon: const Icon(Icons.refresh, size: 18),
-        label: Text(_loading ? '⏳ 生成中…' : '生成预览'),
-      ),
+      onGenerate: _loading ? null : () => _generate(),
+      generateLabel: '生成预览',
+      generateBusy: _loading,
       preview: WorksheetPreviewPanel(
         pages: _pages,
         label: '语文作业', loading: _loading,
@@ -1400,13 +1398,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
               const Text('⚠️ 请只导入您拥有合法使用权的课文内容，使用受版权保护的课文请自行向版权方付费。',
                   style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.5)),
             ],
-          ),
-        ),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: _loading ? null : () => _generate(),
-            child: const Text('生成预览'),
           ),
         ),
         if (_loading)

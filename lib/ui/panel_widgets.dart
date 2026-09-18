@@ -1,18 +1,31 @@
 import 'package:flutter/material.dart';
 
 /// 面板布局：
-/// 桌面/平板（>=760px）：左侧配置 + 右侧预览
-/// 手机（<760px）：配置收进左侧抽屉，主区全屏预览
+/// - 桌面/平板（>=760px）：左侧配置 + 右侧预览，两者同时可见
+/// - 手机（<760px）：配置页与预览页各自全屏。配置页底部常驻「生成」按钮，
+///   点击后切到全屏预览；预览页顶部「调整参数」返回配置。
+///
+/// 这样手机上配置和预览都能占满屏幕，不必在窄抽屉里滚动找设置，
+/// 也不会出现「改完参数还要关抽屉才能看预览」的来回操作。
 class PanelLayout extends StatefulWidget {
   final Widget config;
   final Widget preview;
-  /// 手机端主操作按钮（如「AI 生成」），常驻预览区顶部直接可点
-  final Widget? mobileAction;
+
+  /// 生成动作。手机端底部常驻按钮与桌面端配置列底部按钮都用它。
+  /// 手机端点击后会顺带切到预览页；传 null 则不渲染按钮。
+  final VoidCallback? onGenerate;
+  final String generateLabel;
+  final bool generateBusy;
+  final IconData generateIcon;
+
   const PanelLayout({
     super.key,
     required this.config,
     required this.preview,
-    this.mobileAction,
+    this.onGenerate,
+    this.generateLabel = '生成预览',
+    this.generateBusy = false,
+    this.generateIcon = Icons.refresh,
   });
 
   @override
@@ -20,11 +33,25 @@ class PanelLayout extends StatefulWidget {
 }
 
 class _PanelLayoutState extends State<PanelLayout> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _showPreview = false;
+
+  void _generate() {
+    widget.onGenerate?.call();
+    setState(() => _showPreview = true);
+  }
+
+  Widget _generateButton() {
+    return FilledButton.icon(
+      onPressed: widget.generateBusy ? null : _generate,
+      icon: Icon(widget.generateIcon, size: 18),
+      label: Text(widget.generateBusy ? '生成中…' : widget.generateLabel),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.of(context).size.width >= 760;
+
     if (wide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -33,47 +60,72 @@ class _PanelLayoutState extends State<PanelLayout> {
             width: 320,
             padding: const EdgeInsets.all(14),
             color: const Color(0xfffaf8f2),
-            child: SingleChildScrollView(child: widget.config),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  widget.config,
+                  if (widget.onGenerate != null) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: _generateButton()),
+                  ],
+                ],
+              ),
+            ),
           ),
           Expanded(child: widget.preview),
         ],
       );
     }
-    // 手机：抽屉 + 全屏预览
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        toolbarHeight: 48,
-        backgroundColor: const Color(0xfffaf8f2),
-        title: Row(
-          children: [
-            TextButton.icon(
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              icon: const Icon(Icons.settings_outlined, size: 18),
-              label: const Text('设置'),
-            ),
-          ],
+
+    // 手机：配置页 / 预览页各自全屏
+    return Column(
+      children: [
+        if (_showPreview) _previewBar(),
+        Expanded(
+          child: _showPreview
+              ? widget.preview
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+                  child: widget.config,
+                ),
         ),
-      ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
-            child: widget.config,
-          ),
-        ),
-      ),
-      body: Column(
+        if (!_showPreview && widget.onGenerate != null) _stickyBar(),
+      ],
+    );
+  }
+
+  /// 预览页顶部：返回调整参数
+  Widget _previewBar() {
+    return Container(
+      color: const Color(0xfffaf8f2),
+      padding: const EdgeInsets.fromLTRB(4, 2, 14, 2),
+      child: Row(
         children: [
-          if (widget.mobileAction != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-              child: SizedBox(width: double.infinity, child: widget.mobileAction),
-            ),
-          Expanded(child: widget.preview),
+          TextButton.icon(
+            onPressed: () => setState(() => _showPreview = false),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('调整参数'),
+          ),
+          const Spacer(),
+          const Text('预览',
+              style: TextStyle(fontSize: 12, color: Color(0xff999999))),
         ],
+      ),
+    );
+  }
+
+  /// 配置页底部常驻生成按钮（含安全区，避免被手势条遮挡）
+  Widget _stickyBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xfffaf8f2),
+        border: Border(top: BorderSide(color: Color(0xffe6e2d8))),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(width: double.infinity, child: _generateButton()),
       ),
     );
   }

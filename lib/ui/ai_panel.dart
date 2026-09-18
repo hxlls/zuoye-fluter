@@ -112,11 +112,10 @@ class _AiPanelState extends State<AiPanel> {
   Widget build(BuildContext context) {
     return PanelLayout(
       config: _config(),
-      mobileAction: FilledButton.icon(
-        onPressed: _loading ? null : _generate,
-        icon: const Icon(Icons.auto_awesome, size: 18),
-        label: Text(_loading ? '⏳ 正在生成…' : '🤖 AI 生成作业'),
-      ),
+      onGenerate: _loading ? null : _generate,
+      generateLabel: '🤖 AI 生成作业',
+      generateBusy: _loading,
+      generateIcon: Icons.auto_awesome,
       preview: WorksheetPreviewPanel(
         pages: _pages,
         label: 'AI作业', loading: _loading,
@@ -255,15 +254,6 @@ class _AiPanelState extends State<AiPanel> {
           label: '同时生成答案（附参考答案页；关闭则只出题不给答案）',
           value: _showAnswer,
           onChanged: (v) => setState(() => _showAnswer = v),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _generate,
-            icon: const Icon(Icons.auto_awesome, size: 18),
-            label: const Text('🤖 AI 生成'),
-          ),
         ),
         if (_loading)
           const Padding(

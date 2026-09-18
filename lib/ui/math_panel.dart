@@ -85,11 +85,8 @@ class _MathPanelState extends State<MathPanel> {
   Widget build(BuildContext context) {
     return PanelLayout(
       config: _config(),
-      mobileAction: FilledButton.icon(
-        onPressed: _refresh,
-        icon: const Icon(Icons.refresh, size: 18),
-        label: const Text('生成预览'),
-      ),
+      onGenerate: _refresh,
+      generateLabel: '生成预览',
       preview: WorksheetPreviewPanel(
         pages: _pages,
         label: '数学作业', loading: _loading,
@@ -179,13 +176,6 @@ class _MathPanelState extends State<MathPanel> {
                 },
               ),
             ],
-          ),
-        ),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: _refresh,
-            child: const Text('生成预览'),
           ),
         ),
       ],

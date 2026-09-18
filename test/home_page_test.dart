@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zuoye_fluter/data/app_data.dart';
 import 'package:zuoye_fluter/ui/home_page.dart';
 
 void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
+    // 设置页会渲染 AI 配置卡，其 AiStore.load() 走 SharedPreferences
+    SharedPreferences.setMockInitialValues({});
     await AppData().load();
   });
 
@@ -14,60 +17,65 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const MaterialApp(home: HomePage()));
-    await tester.pump();
+    await tester.pumpAndSettle();
   }
 
-  testWidgets('顶部下拉选择器渲染', (tester) async {
+  testWidgets('底部导航固定三项，不随教材版本增减', (tester) async {
     await pumpHome(tester);
 
-    // 三个下拉都存在
+    final nav = tester.widget<BottomNavigationBar>(
+      find.byType(BottomNavigationBar),
+    );
+    expect(nav.items.length, 3);
+    expect(nav.items.map((i) => i.label).toList(), ['出题', 'AI', '设置']);
+  });
+
+  testWidgets('首页以卡片列出四个科目，并显示当前教材上下文', (tester) async {
+    await pumpHome(tester);
+
+    for (final name in ['练字帖', '语文作业', '数学作业', '英语作业']) {
+      expect(find.text(name), findsOneWidget, reason: '缺少科目卡片 $name');
+    }
+    expect(find.text('人教版 · 上册 · 1年级'), findsOneWidget);
+  });
+
+  testWidgets('设置页提供教材版本 / 学期 / 年级选择', (tester) async {
+    await pumpHome(tester);
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+
     expect(find.text('教材版本'), findsOneWidget);
     expect(find.text('学期'), findsOneWidget);
     expect(find.text('年级'), findsOneWidget);
 
-    // 当前值显示（人教版 / 上册 / 1年级）
-    expect(find.text('人教版'), findsOneWidget);
-    expect(find.text('上册'), findsOneWidget);
-    expect(find.text('1年级'), findsOneWidget);
-
-    // 验证下拉可交互（通过 widget onChanged 触发，避免打开菜单触发框架 ListTile 断言）
-    final buttons = find.byType(DropdownButton<String>);
-    expect(buttons, findsNWidgets(3));
+    for (final v in ['人教版', '统编版', '冀教版', '外研·一起点', '外研·三起点']) {
+      expect(find.text(v), findsOneWidget, reason: '缺少教材版本 $v');
+    }
   });
 
-  testWidgets('教材版本下拉存在且选项正确', (tester) async {
+  testWidgets('切到外研三起点时年级自动归一化并给出提示', (tester) async {
     await pumpHome(tester);
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
 
-    final dropdowns = tester
-        .widgetList<DropdownButton<String>>(find.byType(DropdownButton<String>))
-        .toList();
-    // 第一个是教材版本下拉
-    expect(dropdowns.length, 3);
-    // 通过构造参数验证选项包含 4 个版本
-    final versionItems = dropdowns[0].items!;
-    final labels = versionItems.map((i) => (i.child as Text).data).toSet();
-    expect(labels, containsAll(['人教版', '冀教版', '外研·一起点', '外研·三起点']));
+    // 外研三起点仅 3-6 年级，当前 1 年级应被归一化到 3 年级
+    await tester.tap(find.text('外研·三起点'));
+    await tester.pumpAndSettle();
 
-    // 手动触发 onChanged 模拟切换版本 → 年级重置为 3
-    dropdowns[0].onChanged!('waiyanSQ');
-    await tester.pump();
-    expect(find.text('3年级'), findsOneWidget);
+    expect(find.textContaining('已切到 3 年级'), findsOneWidget);
   });
 
-  testWidgets('学期下拉存在且选项正确', (tester) async {
+  testWidgets('外研版不提供语文，对应卡片置灰并标注', (tester) async {
     await pumpHome(tester);
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('外研·三起点'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('出题'));
+    await tester.pumpAndSettle();
 
-    final dropdowns = tester
-        .widgetList<DropdownButton<String>>(find.byType(DropdownButton<String>))
-        .toList();
-    // 第二个是学期下拉
-    final volumeItems = dropdowns[1].items!;
-    final labels = volumeItems.map((i) => (i.child as Text).data).toSet();
-    expect(labels, containsAll(['上册', '下册']));
-
-    // 手动触发切换学期
-    dropdowns[1].onChanged!('下');
-    await tester.pump();
-    expect(find.text('下册'), findsOneWidget);
+    // 语文卡片仍在原位（导航项不会消失），但标注为不提供
+    expect(find.text('语文作业'), findsOneWidget);
+    expect(find.text('当前版本不提供'), findsWidgets);
   });
 }
