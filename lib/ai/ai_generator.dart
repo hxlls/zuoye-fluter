@@ -132,19 +132,21 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
       ? '\n阅读理解题专项：每题必须同时给出问题(q)与答案(a)，答案(a)严禁留空且必须能从短文找到依据、直接回答该问题；问题须是通顺完整的疑问句，符合中文表达习惯，不可无厘头或牵强。'
       : '';
   final special = subject == 'chinese'
-      ? '题目中的生字/词语要适合该年级，最好从下面该年级生字范围中选取（括号内为该册生字，供参考）：\n生字：${_gradeChineseChars(data, opts)}'
+      ? '题目中的生字/词语**必须**限定在本册写字表范围内，不得使用范围外的生字（越界即为超纲，需重出）：\n本册生字表：${_gradeChineseChars(data, opts)}'
           '${styleIds.contains('zhengshu') ? '\n整本书阅读单：每题围绕下面推荐书目之一设计一份阅读探究单（含内容梳理、精彩语句赏析、主题/人物感悟等3-4个任务），题目(q)写书名与任务，答案(a)写简要指导。可参考书目：${_gradeBooks(data, opts)}' : ''}'
           '${styleIds.contains('kuaxueke') ? '\n跨学科学习：以语文为核心，融合科学、历史、艺术或生活实际设计综合任务，体现"在真实情境中运用语文"。' : ''}'
           '${styleIds.contains('practical') ? '\n实用性阅读与交流：设计贴近生活的应用文与实用交流任务，如写一则通知/留言条/请假条/书信/倡议书（注意格式：称呼、正文、署名、日期规范），或给一段说明书/图表/留言让学生提取关键信息并作答；培养"在生活中学语文、用语文"的能力，语言简明得体。' : ''}'
           : subject == 'english'
-              ? '英文题目词汇要属于该年级常用范围，可参考下面该年级词汇表（供参考）：\n词汇：${_gradeEnglishVocab(data, opts)}'
+              ? '英文题目词汇**必须**限定在下面该年级词汇表内，不得使用表外单词（越界即为超纲，需重出）：\n本年级词汇表：${_gradeEnglishVocab(data, opts)}'
                   '${opts.theme.isNotEmpty ? '\n本题严格围绕 2022 课标主题语境「${opts.theme}」展开（人与自我：生活与学习、做人与做事；人与社会：社会服务与人际沟通、文学与文化；人与自然：自然生态、环境保护）。' : ''}'
                   '${opts.textType.isNotEmpty ? '\n语篇类型优先使用「${opts.textType}」（如歌谣、配图故事、说明文、应用文等），贴近该语篇的真实体裁。' : ''}'
                   '${styleIds.contains('culture') ? '\n文化意识：设计围绕中外节日、习俗、文明礼仪或文化对比的题目（如春节/中秋/生日习俗、问候礼仪、中西饮食习惯与餐具差异等），培养跨文化理解与文化自信，语言尽量简单地道。' : ''}'
                   '${styleIds.contains('think') ? '\n思维品质：设计培养逻辑思维与批判性思维的题，如根据线索推理、比较事物异同、判断正误并说明理由、就某个生活话题简单发表自己的看法；题目(q)给出情境与问题，答案(a)给出合理推理与你的理由。' : ''}'
                   '${styleIds.contains('learn') ? '\n学习能力：设计培养自主学习能力与学习策略的题，如制定单词背诵/朗读计划、用图片或词典辅助理解生词、读后自我检查与订正、记录并分享自己的学习方法；题目(q)给出学习情境与任务，答案(a)给出可操作的学习策略或计划示例。' : ''}'
-          : '应用题要贴近生活，答案给出单位。参考该年级数学知识范围：${_gradeMathTopics(data, opts)}'
-              '\n注重培养学生的"量感"（对数量、度量、单位的直观感知与合理估算）与"模型意识"（用数学语言描述现实、建立简单模型）；综合与实践题要结合真实情境。';
+          : '应用题要贴近生活，答案给出单位。\n'
+              '本年级数学题型清单（**只能出这些类型，不得引入清单之外的题型或运算**）：${_gradeMathTopics(data, opts)}\n'
+              '${_gradeMathScope(data, opts)}'
+              '注重培养学生的"量感"（对数量、度量、单位的直观感知与合理估算）与"模型意识"（用数学语言描述现实、建立简单模型）；综合与实践题要结合真实情境。';
 
   return '你是中国$subjectCN教学出题专家。请为"${tb.name}$gname$volName"的学生出一套$diffText难度的作业，共$total题，题型分配如下：\n'
       '$styleLines\n\n'
@@ -160,7 +162,9 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
 /// 该年级语文写字表生字（用于约束 AI 生字/词语范围）
 String _gradeChineseChars(AppData data, AiPromptOpts opts) {
   final list = data.vol(opts.version, opts.grade, opts.volume, 'cally')?.cally ?? [];
-  final chars = list.take(60).map((c) => c[0]).join('、');
+  // 不截断：范围给全，模型才有条件真正守住「不超纲」。旧实现只取 60 个字，
+  // 范围外的生字反而被当成允许的。
+  final chars = list.map((c) => c[0]).join('、');
   return chars.isEmpty ? '（无）' : chars;
 }
 
@@ -170,7 +174,7 @@ String _engVocabText(AppData data, AiPromptOpts opts) {
     return data.eng505.join('、');
   }
   final list = data.vol(opts.version, opts.grade, opts.volume, 'eng')?.eng ?? [];
-  return list.take(50).map((w) => w[0]).join('、');
+  return list.map((w) => w[0]).join('、');
 }
 
 /// 该年级英语词汇表（用于约束 AI 词汇范围）
@@ -184,6 +188,45 @@ String _gradeMathTopics(AppData data, AiPromptOpts opts) {
   final cfg = data.vol(opts.version, opts.grade, opts.volume, 'math')?.math ?? [];
   final topics = cfg.map((t) => t.label).join('、');
   return topics.isEmpty ? '（无）' : topics;
+}
+
+/// 从题型 id 推导「数值与运算范围」硬约束，用于防 AI 超纲。
+///
+/// 题型 id 本身是自描述的（add10 / add20 / add100 / add1000 / mul* / div* / dec* / frac*），
+/// 所以可以从数据推导，不必手写一份课程表——手写的课程知识一旦有误反而更危险。
+///
+/// 只在 1-3 年级给出数值禁令：这三个年级的整数范围是教材明确划定的（20 / 100 / 万以内）
+/// 且数域单一。四年级起大数、小数、分数交错，简单规则概括容易误伤，因此只依赖
+/// 上面的「题型清单」约束，这里返回空串。
+String _gradeMathScope(AppData data, AiPromptOpts opts) {
+  if (opts.grade > 3) return '';
+  final ids =
+      (data.vol(opts.version, opts.grade, opts.volume, 'math')?.math ?? [])
+          .map((t) => t.id)
+          .toSet();
+  if (ids.isEmpty) return '';
+  bool has(String s) => ids.any((i) => i.contains(s));
+
+  final String ceil;
+  if (ids.any((i) => i.contains('1000') || i.contains('10000'))) {
+    ceil = '万以内';
+  } else if (ids.any((i) => i.contains('100'))) {
+    ceil = '100 以内';
+  } else if (ids.any((i) => i.contains('20'))) {
+    ceil = '20 以内';
+  } else {
+    ceil = '10 以内';
+  }
+
+  final parts = <String>['整数运算限制在$ceil'];
+  if (!has('mul') && !has('div')) {
+    parts.add('不得出现乘法和除法');
+  } else if (!has('div')) {
+    parts.add('可含乘法，但不得出现除法');
+  }
+  if (!has('dec')) parts.add('不得出现小数');
+  if (!has('frac')) parts.add('不得出现分数');
+  return '数值与运算硬性约束（越界即为超纲，必须重出）：${parts.join('；')}。\n';
 }
 
 /// 该年级整本书阅读推荐书目（用于约束 AI 整本书阅读单选题）
