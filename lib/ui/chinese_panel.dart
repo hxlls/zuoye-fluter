@@ -4,7 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/app_data.dart';
 import '../data/corpus_store.dart';
+import '../data/type_count_store.dart';
 import '../core/chinese_worksheet.dart';
+import '../core/type_catalog.dart';
 import '../core/worksheet_model.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
@@ -56,7 +58,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
     super.initState();
     // 选「统编版」时，阅读理解默认基于统编版课文出题（课文阅读）
     _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
-    _ensureCounts();
+    _loadCounts();
     _initCorpora();
   }
 
@@ -219,28 +221,45 @@ class _ChinesePanelState extends State<ChinesePanel> {
       }
       CorpusStore.saveActiveId(_activeId);
       CorpusStore.saveCaptureId(_captureId);
-      _ensureCounts();
-      _regenerate();
+      _loadCounts();
     }
   }
 
-  List<String> get _typeIds =>
-      ['pinyin2char', 'char2pinyin', 'zuci', 'gushiFill', 'chengyuFill', 'chengyuGuess', 'mingjuFill', 'duanwen', 'aiyuedu'];
+  /// 当前年级下可用的题型。唯一来源：TypeCatalog。
+  List<TypeSpec> get _specs => TypeCatalog.of(
+        Subject.chinese,
+        version: widget.version,
+        grade: widget.grade,
+      );
 
-  void _ensureCounts() {
-    // 按年级过滤题型
-    final data = AppData();
-    final valid = _typeIds
-        .where((id) {
-          final r = data.cnTypeGrades[id];
-          return r == null || (widget.grade >= r[0] && widget.grade <= r[1]);
-        })
-        .toList();
-    _counts.removeWhere((k, v) => !valid.contains(k));
-    for (final t in valid) {
-      if (!_counts.containsKey(t)) _counts[t] = 6;
-    }
+  List<String> get _typeIds => _specs.map((t) => t.id).toList();
+
+  /// 当前年级不可用的题型。用于在界面上说明「为什么少了几个」，
+  /// 而不是让选项凭空消失（旧实现是 removeWhere 静默丢弃）。
+  List<TypeSpec> get _hiddenSpecs => TypeCatalog.of(
+        Subject.chinese,
+        version: widget.version,
+        grade: widget.grade,
+        includeUnavailable: true,
+      ).where((t) => !t.available).toList();
+
+  /// 读取全局题量偏好并按当前目录补齐缺失项。
+  ///
+  /// 已存在的值（含 0 = 用户主动取消）一律保留——旧实现用 `removeWhere` 直接丢弃
+  /// 失效题型、又不持久化，切一次版本就全没了。
+  Future<void> _loadCounts() async {
+    final seeded = await TypeCountStore.loadSeeded(Subject.chinese, _specs);
+    if (!mounted) return;
+    setState(() {
+      _counts
+        ..clear()
+        ..addAll(seeded);
+    });
+    _regenerate();
   }
+
+  Future<void> _persistCounts() =>
+      TypeCountStore.save(Subject.chinese, _counts);
 
   List<ReadingBlockData> get _corpus {
     final c = _activeCorpus();
@@ -1121,11 +1140,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
 
   Widget _config() {
     final total = _counts.values.fold<int>(0, (s, v) => s + v);
-    final data = AppData();
-    final validTypes = _typeIds.where((id) {
-      final r = data.cnTypeGrades[id];
-      return r == null || (widget.grade >= r[0] && widget.grade <= r[1]);
-    }).toList();
+    final validTypes = _specs;
+    final hidden = _hiddenSpecs;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1180,24 +1196,37 @@ class _ChinesePanelState extends State<ChinesePanel> {
           label: '题型（可多选，每种题型可单独设置题量）',
           child: Column(
             children: [
+              if (hidden.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '${widget.grade} 年级不提供 '
+                    '${hidden.map((t) => t.label).join('、')}，已隐藏。'
+                    '题量设置会保留，切回对应年级即可恢复。',
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xff888888)),
+                  ),
+                ),
               for (final t in validTypes)
                 TypeRow(
-                  label: CHINESE_TYPES_LABELS[t] ?? t,
-                  checked: (_counts[t] ?? 0) > 0,
-                  count: _counts[t] ?? 0,
+                  label: t.label,
+                  checked: (_counts[t.id] ?? 0) > 0,
+                  count: _counts[t.id] ?? 0,
                   onChecked: (v) {
                     setState(() {
-                      if (v && (_counts[t] ?? 0) <= 0) {
-                        _counts[t] = 6;
-                      } else if (!v) { _counts[t] = 0; }
+                      if (v && (_counts[t.id] ?? 0) <= 0) {
+                        _counts[t.id] = t.defaultQty;
+                      } else if (!v) { _counts[t.id] = 0; }
                       _regenerate();
                     });
+                    _persistCounts();
                   },
                   onCount: (n) {
                     setState(() {
-                      _counts[t] = n;
+                      _counts[t.id] = n;
                       _regenerate();
                     });
+                    _persistCounts();
                   },
                 ),
               Text('共 $total 题（每种题型可单独调整题量，0 表示不选该题型）',
@@ -1246,6 +1275,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                       }
                       _regenerate();
                     });
+                    _persistCounts();
                   },
                 ),
               if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}

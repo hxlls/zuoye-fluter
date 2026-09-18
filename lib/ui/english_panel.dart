@@ -6,8 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/english_worksheet.dart';
+import '../core/type_catalog.dart';
 import '../core/wav_merge.dart';
 import '../core/worksheet_model.dart';
+import '../data/type_count_store.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
@@ -46,17 +48,30 @@ class _EnglishPanelState extends State<EnglishPanel> {
   List<ReadingBlockData> _aiListeningItems = [];
   List<ListeningItem> _listeningItems = []; // 保存预览生成的听力题目
 
-  static const _typeIds = ['alphabet', 'trace', 'match', 'cn2en', 'en2cn', 'spell', 'listening', 'aiyuedu', 'ailistening'];
+  /// 当前「版本 × 年级 × 册」下可用的题型。唯一来源：TypeCatalog。
+  List<TypeSpec> get _specs => TypeCatalog.of(
+        Subject.english,
+        version: widget.version,
+        grade: widget.grade,
+      );
 
-  /// 获取当前设置的存储key
-  String get _settingsKey => 'eng_settings_${widget.grade}_${widget.version}_${widget.volume}';
+  /// 当前组合下不可用的题型，用于界面说明（而非静默消失）
+  List<TypeSpec> get _hiddenSpecs => TypeCatalog.of(
+        Subject.english,
+        version: widget.version,
+        grade: widget.grade,
+        includeUnavailable: true,
+      ).where((t) => !t.available).toList();
+
+  /// 显示类选项仍按 版本/年级/册 分档存储（沿用原语义）
+  String get _settingsKey =>
+      'eng_settings_${widget.grade}_${widget.version}_${widget.volume}';
 
   @override
   void initState() {
     super.initState();
     _loadSettings().then((_) {
-      _ensureCounts();
-      _regenerate();
+      if (mounted) _regenerate();
     });
   }
 
@@ -67,13 +82,12 @@ class _EnglishPanelState extends State<EnglishPanel> {
         oldWidget.version != widget.version ||
         oldWidget.volume != widget.volume) {
       _loadSettings().then((_) {
-        _ensureCounts();
-        _regenerate();
+        if (mounted) _regenerate();
       });
     }
   }
 
-  /// 加载保存的设置
+  /// 加载显示选项（按 版本/年级/册 分档）与题量偏好（全局按题型记忆）。
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -84,22 +98,26 @@ class _EnglishPanelState extends State<EnglishPanel> {
           setState(() {
             _showTitle = settings['showTitle'] ?? true;
             _showAnswer = settings['showAnswer'] ?? true;
-            _listeningNarrationOnly = settings['listeningNarrationOnly'] ?? true;
-            if (settings['counts'] != null) {
-              final counts = settings['counts'] as Map<String, dynamic>;
-              counts.forEach((key, value) {
-                if (value is int) _counts[key] = value;
-              });
-            }
+            _listeningNarrationOnly =
+                settings['listeningNarrationOnly'] ?? true;
           });
         }
       }
     } catch (e) {
       // 加载失败使用默认设置
     }
+    // 题量：全局按题型记忆 —— 换年级不必重调一遍，切回来也不会丢。
+    // 已存在的值（含 0 = 用户主动取消）由 seedTypeCounts 保留，不会被填回默认。
+    final seeded = await TypeCountStore.loadSeeded(Subject.english, _specs);
+    if (!mounted) return;
+    setState(() {
+      _counts
+        ..clear()
+        ..addAll(seeded);
+    });
   }
 
-  /// 保存当前设置
+  /// 保存显示选项（题量由 TypeCountStore 单独保存）
   Future<void> _saveSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -107,7 +125,6 @@ class _EnglishPanelState extends State<EnglishPanel> {
         'showTitle': _showTitle,
         'showAnswer': _showAnswer,
         'listeningNarrationOnly': _listeningNarrationOnly,
-        'counts': Map<String, int>.from(_counts),
       };
       await prefs.setString(_settingsKey, json.encode(settings));
     } catch (e) {
@@ -115,22 +132,15 @@ class _EnglishPanelState extends State<EnglishPanel> {
     }
   }
 
-  void _ensureCounts() {
-    final valid = allowedEngTypes(widget.version, widget.grade, _typeIds);
-    _counts.removeWhere((k, v) => !valid.contains(k));
-    // 默认只勾选常用的题型，其余归 0（不选），避免默认作业带上字母书写等
-    final defaults = defaultEngTypes(widget.grade);
-    for (final t in valid) {
-      if (!_counts.containsKey(t)) _counts[t] = defaults.contains(t) ? 8 : 0;
-    }
-  }
+  Future<void> _persistCounts() =>
+      TypeCountStore.save(Subject.english, _counts);
 
   void _regenerate() {
     final result = englishRenderPagesWithResult(EnglishOptions(
       grade: widget.grade,
       version: widget.version,
       volume: widget.volume,
-      types: _typeIds,
+      types: _specs.map((t) => t.id).toList(),
       counts: Map.of(_counts),
       showTitle: _showTitle,
       showAnswer: _showAnswer,
@@ -418,7 +428,8 @@ class _EnglishPanelState extends State<EnglishPanel> {
   }
 
   Widget _config() {
-    final validTypes = allowedEngTypes(widget.version, widget.grade, _typeIds);
+    final validTypes = _specs;
+    final hidden = _hiddenSpecs;
     final total = _counts.values.fold<int>(0, (s, v) => s + v);
 
     return Column(
@@ -434,26 +445,37 @@ class _EnglishPanelState extends State<EnglishPanel> {
           label: '作业类型（可多选，每种类型可单独设置数量）',
           child: Column(
             children: [
+              if (hidden.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '${widget.grade} 年级不提供 '
+                    '${hidden.map((t) => t.label).join('、')}，已隐藏。'
+                    '题量设置会保留，切回对应年级即可恢复。',
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xff888888)),
+                  ),
+                ),
               for (final t in validTypes)
                 TypeRow(
-                  label: _labelFor(t),
-                  checked: (_counts[t] ?? 0) > 0,
-                  count: _counts[t] ?? 0,
+                  label: t.label,
+                  checked: (_counts[t.id] ?? 0) > 0,
+                  count: _counts[t.id] ?? 0,
                   onChecked: (v) {
                     setState(() {
-                      if (v && (_counts[t] ?? 0) <= 0) {
-                        _counts[t] = 8;
-                      } else if (!v) { _counts[t] = 0; }
+                      if (v && (_counts[t.id] ?? 0) <= 0) {
+                        _counts[t.id] = t.defaultQty > 0 ? t.defaultQty : 8;
+                      } else if (!v) { _counts[t.id] = 0; }
                       _regenerate();
-                      _saveSettings();
                     });
+                    _persistCounts();
                   },
                   onCount: (n) {
                     setState(() {
-                      _counts[t] = n;
+                      _counts[t.id] = n;
                       _regenerate();
-                      _saveSettings();
                     });
+                    _persistCounts();
                   },
                 ),
               Text('共 $total 题（每种类型可单独调整数量，0 表示不选）',
@@ -536,10 +558,5 @@ class _EnglishPanelState extends State<EnglishPanel> {
           ),
       ],
     );
-  }
-
-  String _labelFor(String id) {
-    if (widget.grade == 1 && id == 'trace') return '单词描红';
-    return ENG_TYPE_LABELS[id] ?? id;
   }
 }

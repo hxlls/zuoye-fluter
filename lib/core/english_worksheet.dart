@@ -1,5 +1,6 @@
 import '../data/app_data.dart';
 import 'rand_gen.dart';
+import 'type_catalog.dart';
 import 'worksheet_model.dart';
 
 /// 英语作业选项
@@ -82,33 +83,31 @@ class EngGridCardData {
   EngGridCardData(this.kind, this.data);
 }
 
-List<String> defaultEngTypes(int grade) {
-  if (grade == 1) return ['alphabet', 'trace'];
-  return ['trace', 'match'];
-}
+/// 英语默认勾选题型：一年级字母+描红，其余描红+连线。
+///
+/// 规则统一维护在 [TypeCatalog]，此处只做转发，避免面板与渲染层各写一遍而漂移。
+List<String> defaultEngTypes(int grade) => TypeCatalog.defaultEngTypes(grade);
 
-/// 题型是否对当前版本+年级可用
-/// spell（单词拼写）需要学生已具备拼写能力：
-/// - 外研三起点：3-4 年级黑体词为「三会」（听、说、读），5-6 年级才要求「四会」（听写拼写）；
-/// - 其余版本（人教/冀教/一起点）：三年级起要求拼写（低年级以字母、描红、抄写为主）。
-/// listening（听力）：外研三起点三年级才学英语，仅 3-6 年级开放；其余版本 1-6 年级均可。
-/// ailistening（听力短文）：需要一定听力理解能力，3-6 年级开放。
-bool engTypeAllowed(String id, String ver, int grade) {
-  if (id == 'listening') return !(ver == 'waiyanSQ' && grade < 3);
-  if (id == 'ailistening') return grade >= 3;
-  if (id != 'spell') return true;
-  if (ver == 'waiyanSQ') return grade >= 5;
-  return grade >= 3;
-}
+/// 题型是否对当前版本+年级可用。规则见 [TypeCatalog.engTypeAllowed]：
+/// - spell（单词拼写）：外研三起点 3-4 年级黑体词为「三会」（听、说、读），
+///   5-6 年级才要求「四会」（听写拼写）；其余版本三年级起要求拼写。
+/// - listening（听力）：外研三起点三年级才学英语，仅 3-6 年级开放；其余版本 1-6 年级均可。
+/// - ailistening（听力短文）：需要一定听力理解能力，3-6 年级开放。
+bool engTypeAllowed(String id, String ver, int grade) =>
+    TypeCatalog.engTypeAllowed(id, ver, grade);
 
-/// 过滤出对当前版本+年级可用的题型（与面板一致）
+/// 过滤出对当前版本+年级可用的题型。
+///
+/// 直接委托 [TypeCatalog]，确保渲染端与各面板用的是同一份规则——此前两处各写一遍，
+/// 改一处漏一处就会出现「界面能勾但出不了题」。test/type_catalog_test.dart 的
+/// 「反漂移」用例会锁住二者一致。
 List<String> allowedEngTypes(String ver, int grade, List<String> ids) {
-  final data = AppData();
-  return ids.where((id) {
-    final r = data.engTypeGrades[id];
-    final inRange = r == null || (grade >= r[0] && grade <= r[1]);
-    return inRange && engTypeAllowed(id, ver, grade);
-  }).toList();
+  final ok = TypeCatalog.idsOf(
+    Subject.english,
+    version: ver,
+    grade: grade,
+  ).toSet();
+  return ids.where(ok.contains).toList();
 }
 
 

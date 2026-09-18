@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../data/app_data.dart';
 import '../core/math_worksheet.dart';
+import '../core/type_catalog.dart';
 import '../core/worksheet_model.dart';
+import '../data/type_count_store.dart';
 import 'panel_widgets.dart';
 import 'preview_panel.dart';
 
@@ -29,15 +30,18 @@ class _MathPanelState extends State<MathPanel> {
   List<WsPage> _pages = [];
   final bool _loading = false;
 
-  List<MathType> get _cfg =>
-      AppData().vol(widget.version, widget.grade, widget.volume, 'math')?.math ??
-      [];
+  /// 当前「版本 × 年级 × 册」下的题型清单。唯一来源：TypeCatalog。
+  List<TypeSpec> get _specs => TypeCatalog.of(
+        Subject.math,
+        version: widget.version,
+        grade: widget.grade,
+        volume: widget.volume,
+      );
 
   @override
   void initState() {
     super.initState();
-    _ensureCounts();
-    _regenerate();
+    _loadCounts();
   }
 
   @override
@@ -46,28 +50,33 @@ class _MathPanelState extends State<MathPanel> {
     if (oldWidget.grade != widget.grade ||
         oldWidget.version != widget.version ||
         oldWidget.volume != widget.volume) {
-      _ensureCounts();
-      _regenerate();
+      _loadCounts();
     }
   }
 
-  void _ensureCounts() {
-    final valid = _cfg.map((t) => t.id).toSet();
-    _counts.removeWhere((k, v) => !valid.contains(k));
-    final fallback = _cfg.isEmpty ? 0 : (30 / _cfg.length).ceil();
-    for (final t in _cfg) {
-      if (!_counts.containsKey(t.id) || _counts[t.id]! < 1) {
-        _counts[t.id] = fallback;
-      }
-    }
+  /// 读取全局题量偏好并按当前目录补齐缺失项。
+  ///
+  /// 已存在的值（含 0 = 用户主动取消）一律保留——旧实现用 `count < 1` 判断
+  /// 「没设置过」，会把用户取消勾选的题型重新填回默认题量。
+  Future<void> _loadCounts() async {
+    final seeded = await TypeCountStore.loadSeeded(Subject.math, _specs);
+    if (!mounted) return;
+    setState(() {
+      _counts
+        ..clear()
+        ..addAll(seeded);
+    });
+    _regenerate();
   }
+
+  Future<void> _persist() => TypeCountStore.save(Subject.math, _counts);
 
   void _regenerate() {
     _pages = mathRenderPages(MathOptions(
       grade: widget.grade,
       version: widget.version,
       volume: widget.volume,
-      types: _cfg.map((t) => t.id).toList(),
+      types: _specs.map((t) => t.id).toList(),
       counts: Map.of(_counts),
       diff: _diff,
       showAnswer: _showAnswer,
@@ -95,7 +104,7 @@ class _MathPanelState extends State<MathPanel> {
   }
 
   Widget _config() {
-    final cfg = _cfg;
+    final cfg = _specs;
     final total = _counts.values.fold<int>(0, (s, v) => s + v);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,6 +119,9 @@ class _MathPanelState extends State<MathPanel> {
           label: '题型（可多选，每种题型可单独设置题量）',
           child: Column(
             children: [
+              if (cfg.isEmpty)
+                const Text('当前教材版本/年级/册没有数学题型数据。',
+                    style: TextStyle(fontSize: 12, color: Color(0xff888888))),
               for (final t in cfg)
                 TypeRow(
                   label: t.label,
@@ -119,18 +131,20 @@ class _MathPanelState extends State<MathPanel> {
                   onChecked: (v) {
                     setState(() {
                       if (v && (_counts[t.id] ?? 0) <= 0) {
-                        _counts[t.id] = 10;
+                        _counts[t.id] = t.defaultQty;
                       } else if (!v) {
                         _counts[t.id] = 0;
                       }
                       _regenerate();
                     });
+                    _persist();
                   },
                   onCount: (n) {
                     setState(() {
                       _counts[t.id] = n;
                       _regenerate();
                     });
+                    _persist();
                   },
                 ),
               Text('共 $total 题（每种题型可单独调整题量，0 表示不选该题型）',
