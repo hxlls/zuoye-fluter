@@ -350,17 +350,21 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           _secTitle('生成作业'),
-          GridView.count(
-            crossAxisCount: wide ? 4 : 2,
+          // 用固定行高（mainAxisExtent）而不是 childAspectRatio：
+          // 宽高比会让「刚好进入宽屏」的区间（约 760-800px，**iPad 竖屏正是 768px**）
+          // 卡片高度不足，实测溢出 3.7px。固定行高在所有宽度下都够用。
+          GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: wide ? 1.5 : 1.05,
-            children: [
-              for (final s in _kSubjects)
-                _subjectCard(s, supported.contains(s.support)),
-            ],
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: wide ? 4 : 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              mainAxisExtent: 132,
+            ),
+            itemCount: _kSubjects.length,
+            itemBuilder: (_, i) => _subjectCard(
+                _kSubjects[i], supported.contains(_kSubjects[i].support)),
           ),
         ],
       ),
@@ -402,10 +406,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 3),
-              Text(
-                enabled ? s.desc : '当前版本不提供',
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xff939aa6), height: 1.35),
+              Flexible(
+                child: Text(
+                  enabled ? s.desc : '当前版本不提供',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 11, color: Color(0xff939aa6), height: 1.35),
+                ),
               ),
             ],
           ),
