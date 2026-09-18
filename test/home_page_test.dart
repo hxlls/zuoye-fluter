@@ -65,6 +65,31 @@ void main() {
     expect(find.textContaining('已切到 3 年级'), findsOneWidget);
   });
 
+  testWidgets('外研三起点只提供 3-6 年级，且科目仅英语', (tester) async {
+    await pumpHome(tester);
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+
+    // 人教版：1-6 年级齐全
+    expect(find.text('1年级'), findsOneWidget);
+
+    await tester.tap(find.text('外研·三起点'));
+    await tester.pumpAndSettle();
+
+    // 外研三起点在数据里是 {cally:null, math:null, eng:[3,6]}，
+    // 年级选项不应出现 1、2 年级
+    expect(find.text('1年级'), findsNothing);
+    expect(find.text('2年级'), findsNothing);
+    for (final g in [3, 4, 5, 6]) {
+      expect(find.text('$g年级'), findsOneWidget, reason: '缺少 $g 年级');
+    }
+
+    // 该版本只提供英语，其余科目卡片应标注不提供
+    await tester.tap(find.text('出题'));
+    await tester.pumpAndSettle();
+    expect(find.text('当前版本不提供'), findsNWidgets(3)); // 练字帖/语文/数学
+  });
+
   testWidgets('外研版不提供语文，对应卡片置灰并标注', (tester) async {
     await pumpHome(tester);
     await tester.tap(find.text('设置'));

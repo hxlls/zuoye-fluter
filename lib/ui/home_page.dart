@@ -379,6 +379,7 @@ class _HomePageState extends State<HomePage> {
           child: SegButtons(
             options: const [('gen', '🤖 AI 出题'), ('help', '💡 AI 帮答')],
             value: _aiMode,
+            expand: true,
             onChanged: (v) => setState(() => _aiMode = v),
           ),
         ),

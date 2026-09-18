@@ -136,41 +136,56 @@ class SegButtons extends StatelessWidget {
   final List<(String, String)> options; // (value, label)
   final String value;
   final ValueChanged<String> onChanged;
+
+  /// 每项等宽铺满整行。用于页内主导航（如「AI 出题 / AI 帮答」），
+  /// 默认 false 走 Wrap，适合表单里选项数量不定的场景。
+  final bool expand;
+
   const SegButtons({
     super.key,
     required this.options,
     required this.value,
     required this.onChanged,
+    this.expand = false,
   });
+
+  Widget _item(String v, String l) {
+    return InkWell(
+      onTap: () => onChanged(v),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: v == value ? const Color(0xff2f6fd0) : Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+              color: v == value
+                  ? const Color(0xff2f6fd0)
+                  : const Color(0xffcccccc)),
+        ),
+        child: Text(l,
+            textAlign: expand ? TextAlign.center : null,
+            style: TextStyle(
+                fontSize: 13,
+                color:
+                    v == value ? Colors.white : const Color(0xff444444))),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (expand) {
+      final children = <Widget>[];
+      for (var i = 0; i < options.length; i++) {
+        if (i > 0) children.add(const SizedBox(width: 6));
+        children.add(Expanded(child: _item(options[i].$1, options[i].$2)));
+      }
+      return Row(children: children);
+    }
     return Wrap(
       spacing: 6,
-      children: [
-        for (final (v, l) in options)
-          InkWell(
-            onTap: () => onChanged(v),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: v == value ? const Color(0xff2f6fd0) : Colors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                    color: v == value
-                        ? const Color(0xff2f6fd0)
-                        : const Color(0xffcccccc)),
-              ),
-              child: Text(l,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: v == value
-                          ? Colors.white
-                          : const Color(0xff444444))),
-            ),
-          ),
-      ],
+      children: [for (final (v, l) in options) _item(v, l)],
     );
   }
 }

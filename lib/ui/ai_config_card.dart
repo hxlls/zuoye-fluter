@@ -179,22 +179,25 @@ class _AiConfigCardState extends State<AiConfigCard> {
                 _field('API Key', _keyCtl, 'sk-...', obscure: true),
                 _field('语音模型(可选)', _voiceCtl, '如 tts-1 / cosyvoice-v1（听力配音用）'),
                 const SizedBox(height: 10),
-                Row(
+                // 四个按钮在手机窄屏上横排会溢出，改用 Wrap 自动换行；
+                // 状态文字另起一行，避免被挤成竖条
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     FilledButton(onPressed: _save, child: const Text('保存设置')),
-                    const SizedBox(width: 8),
                     OutlinedButton(onPressed: _test, child: const Text('测试')),
-                    const SizedBox(width: 8),
                     OutlinedButton(onPressed: _testVoice, child: const Text('试听语音')),
-                    const SizedBox(width: 8),
                     OutlinedButton(onPressed: _clear, child: const Text('清除')),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(_status,
-                          style: TextStyle(fontSize: 13, color: _statusColor)),
-                    ),
                   ],
                 ),
+                if (_status.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(_status,
+                        style: TextStyle(fontSize: 13, color: _statusColor)),
+                  ),
                 const SizedBox(height: 8),
                 const Text('API Key 使用系统级加密保存：Windows（DPAPI）/ macOS（钥匙串）/ 安卓（系统密钥库 Keystore），仅存本机、不联网上传；每次请求只发给设置里填写的那家服务商。',
                     style: TextStyle(fontSize: 12, color: Color(0xffaaaaaa), height: 1.5)),

@@ -23,7 +23,6 @@ class AiHelpPanel extends StatefulWidget {
 }
 
 class _AiHelpPanelState extends State<AiHelpPanel> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String _subject = 'math';
   final _inputCtl = TextEditingController();
   final List<(String, String)> _messages = []; // (role, content)
@@ -138,33 +137,40 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
         ],
       );
     }
-    // 手机：设置收进抽屉，主区全屏问答
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        toolbarHeight: 48,
-        backgroundColor: const Color(0xfffaf8f2),
-        title: const Text('💡 AI 帮答题',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-        actions: [
-          IconButton(
-            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '设置',
+    // 手机：本组件已嵌在主页面的 body 内，外层已有 AppBar，
+    // 这里再套 Scaffold+AppBar 会出现两条标题栏，故只加一条轻量工具栏
+    return Column(
+      children: [
+        _mobileToolbar(data),
+        Expanded(child: chat),
+      ],
+    );
+  }
+
+  /// 手机端顶部工具栏：显示讲解对象并提供「新对话」
+  Widget _mobileToolbar(AppData data) {
+    final name = data.textbooks[widget.version]?.name ?? '人教版';
+    final g = data.gradeNames[widget.grade] ?? '';
+    final vol = widget.volume == '下' ? '下册' : '上册';
+    return Container(
+      color: const Color(0xfffaf8f2),
+      padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '讲解对象：$name $g$vol',
+              style: const TextStyle(fontSize: 12.5, color: Color(0xff5a6270)),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () => setState(() => _messages.clear()),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('新对话', style: TextStyle(fontSize: 13)),
           ),
         ],
       ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
-            child: _buildSidebar(data),
-          ),
-        ),
-      ),
-      body: chat,
     );
   }
 
@@ -363,7 +369,8 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.5,
+          maxWidth: MediaQuery.of(context).size.width *
+              (MediaQuery.of(context).size.width >= 760 ? 0.5 : 0.78),
         ),
         decoration: BoxDecoration(
           color: isUser ? const Color(0xffd8433b) : Colors.white,
