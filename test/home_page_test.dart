@@ -103,4 +103,51 @@ void main() {
     expect(find.text('语文作业'), findsOneWidget);
     expect(find.text('当前版本不提供'), findsWidgets);
   });
+
+  testWidgets('五个教材版本的年级与科目裁剪全部符合 VERSION_SUPPORT', (tester) async {
+    // 独立断言表：刻意不引用 VERSION_SUPPORT，避免「用被测数据自证」。
+    // 数据源 assets/data.json 的 VERSION_SUPPORT：
+    //   renjiao  {cally:[1,6], math:[1,6], eng:[1,6]}
+    //   tongbiao {cally:[1,6], math:[1,6], eng:[1,6]}
+    //   hebei    {cally:null,  math:[1,6], eng:[1,6]}
+    //   waiyanYQ {cally:null,  math:null,  eng:[1,2]}
+    //   waiyanSQ {cally:null,  math:null,  eng:[3,6]}
+    // 注意：语文作业与练字帖共用 cally 支持键（都源自语文教科书），
+    //       所以 cally 为 null 时这两张卡片一起变成「不提供」。
+    const expectTable = <String, (List<int>, int)>{
+      '人教版':      ([1, 2, 3, 4, 5, 6], 0),
+      '统编版':      ([1, 2, 3, 4, 5, 6], 0),
+      '冀教版':      ([1, 2, 3, 4, 5, 6], 2), // 练字帖 / 语文作业
+      '外研·一起点': ([1, 2],             3), // 练字帖 / 语文作业 / 数学作业
+      '外研·三起点': ([3, 4, 5, 6],       3),
+    };
+
+    for (final entry in expectTable.entries) {
+      final ver = entry.key;
+      final (grades, unavailable) = entry.value;
+
+      await pumpHome(tester);
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(ver));
+      await tester.pumpAndSettle();
+
+      for (final g in [1, 2, 3, 4, 5, 6]) {
+        final f = find.text('$g年级');
+        if (grades.contains(g)) {
+          expect(f, findsOneWidget, reason: '$ver 应提供 $g 年级');
+        } else {
+          expect(f, findsNothing, reason: '$ver 不应出现 $g 年级');
+        }
+      }
+
+      await tester.tap(find.text('出题'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('当前版本不提供'),
+        findsNWidgets(unavailable),
+        reason: '$ver 的「不提供」科目数不符',
+      );
+    }
+  });
 }
