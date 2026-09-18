@@ -309,8 +309,9 @@ class _LongDiv extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 动态宽度：被除数位数越多越宽
+    // 被除数位数越多越宽（作为长除号的最小宽度）
     final dw = (('$a').length * 14.0 + 12).clamp(48.0, 120.0);
+    const ink = Color(0xff242424);
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Row(
@@ -319,20 +320,32 @@ class _LongDiv extends StatelessWidget {
         children: [
           Text('${fmt(b)} ',
               style: _mathStyle(18).copyWith(letterSpacing: 0)),
-          const Text('⟌',
-              style: TextStyle(fontSize: 34, height: 0.8, color: Color(0xff242424))),
-          Container(
-            width: dw,
-            alignment: Alignment.bottomCenter,
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(height: 26),
-                Text(fmt(a),
-                    style: _mathStyle(20).copyWith(letterSpacing: 0)),
-              ],
-            ),
+          // 长除号「厂」**手绘**（左竖线 + 上横线），刻意不用 Unicode 的 '\u27cc'。
+          //
+          // 原因：U+27CC 的字形随字体而异 —— 多数西文字体把横线画在**左侧**
+          // （Linux 长除法的习惯），于是本该压在被除数上方的横线跑到了除数头上，
+          // 中文教材的写法变成「3 \u2310 48」；同一份代码在 Android 与浏览器上
+          // 渲染结果还会不一致。自己画则跨平台稳定，尺寸也可控。
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 横线上方的留白：供学生写商
+              const SizedBox(height: 22),
+              ConstrainedBox(
+                constraints: BoxConstraints(minWidth: dw),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      left: BorderSide(width: 1.6, color: ink),
+                      top: BorderSide(width: 1.6, color: ink),
+                    ),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(7, 5, 14, 2),
+                  child: Text(fmt(a),
+                      style: _mathStyle(20).copyWith(letterSpacing: 0)),
+                ),
+              ),
+            ],
           ),
         ],
       ),

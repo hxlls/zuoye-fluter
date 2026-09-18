@@ -20,7 +20,7 @@ void main() {
     for (final g in [1, 2, 3, 4, 5, 6]) {
       for (final n in [8, 16, 30]) {
         try {
-          final pages = englishRenderPages(EnglishOptions(
+          englishRenderPages(EnglishOptions(
               grade: g,
               version: 'renjiao',
               volume: '上',
