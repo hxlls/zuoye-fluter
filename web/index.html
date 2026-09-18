@@ -17,6 +17,10 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <!-- 必须有 viewport meta：否则手机浏览器按默认 980px 宽布局再缩放，
+       整个应用会显示得极小、排版全乱。Flutter 官方模板本来是带的，
+       本项目这份漏了。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="中国小学作业生成器：练字帖 / 语文 / 数学 / 英语 / AI 出题">
 
