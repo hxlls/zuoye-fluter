@@ -243,6 +243,36 @@ void main() {
       }
     });
 
+    test('连线题不跨页（左右两列必须同页）', () async {
+      await AppData().load();
+      // 历史 bug：英语分页按行装箱，连线题被从中间拆开，
+      // 于是出现「第 3 题的词在第 1 页、答案 f 在第 2 页」这种配对，
+      // 学生根本没法跨页画线。实测六年级英语 8 对里有 2 对跨页。
+      // 必须同时启用前面的题型 —— 只启用连线的话它永远是第一节、
+      // 永远在第 1 页，跨页问题根本复现不出来（这个测试第一版就是这么写的，
+      // 退回修复后依然「通过」，等于没测）。
+      final pages = englishRenderPages(EnglishOptions(
+        grade: 6,
+        version: 'renjiao',
+        volume: '上',
+        types: ['trace', 'match', 'cn2en'],
+        counts: {'trace': 8, 'match': 8, 'cn2en': 8},
+      ));
+      var pagesWithMatch = 0;
+      var rowsTotal = 0;
+      for (final p in pages) {
+        for (final n in p.nodes) {
+          if (n is WsBlock && n.data is WsGridData) {
+            pagesWithMatch++;
+            rowsTotal += (n.data as WsGridData).rows.length;
+          }
+        }
+      }
+      expect(pagesWithMatch, lessThanOrEqualTo(1),
+          reason: '连线题被拆到了 $pagesWithMatch 页，学生无法跨页画线');
+      expect(rowsTotal, 8, reason: '8 对连线应当完整出现');
+    });
+
     test('参考答案不含 HTML 标签', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(

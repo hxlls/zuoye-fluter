@@ -690,12 +690,14 @@ List<List<EngGridCardData>> _pairRows(List<EngGridCardData> cards, int cols) {
   return rows;
 }
 
-WsNode _engNodeFor(_EngSection sec, List<List<EngGridCardData>> subRows) {
+WsNode _engNodeFor(_EngSection sec, List<List<EngGridCardData>> subRows,
+    {int startSeq = 1}) {
   if (sec.block) {
     return WsBlock(WsGridData(rows: [for (final r in subRows) r.first]));
   }
-  // 试卷惯例：小题在本大题内连续编号（1. 2. 3.…）
-  var seq = 0;
+  // 试卷惯例：小题在本大题内连续编号（1. 2. 3.…）。
+  // startSeq 用于「一节被拆到两页」的情况，保证第二页接着编号而不是从 1 重来。
+  var seq = startSeq - 1;
   final cards = <WsCard>[];
   for (final r in subRows) {
     for (final c in r) {
@@ -730,7 +732,24 @@ List<WsPage> _packEngSections(List<_EngSection> sections, EnglishOptions opts) {
   }
 
   for (final sec in sections) {
+    final secH = _engHeadingH + sec.rows.length * (sec.rowH + _engRowGap);
+
+    // 连线题（block）**必须整节放在同一页**：
+    // 它的左右两列是一个整体，拆页后会出现
+    // 「第 3 题的词在第 1 页、答案 f 在第 2 页」这种学生无法连线的配对。
+    // 实测过（六年级英语：8 对里有 2 对跨页）。
+    if (sec.block && secH <= _engPageContent) {
+      if (nodes.isNotEmpty && used + secH > _engPageContent) flush();
+      nodes.add(WsHeading(sec.heading, engStyle: true));
+      nodes.add(_engNodeFor(sec, sec.rows));
+      used += secH;
+      curHeading = null;
+      continue;
+    }
+
+    // 非连线题（或单节本身就超过一页）：按行装箱，允许拆节。
     var gridRows = <List<EngGridCardData>>[];
+    var emitted = 0; // 本节已输出的卡片数，用于拆页后接续编号
     for (final row in sec.rows) {
       final rh = sec.rowH + _engRowGap;
       final needHeading = curHeading != sec.heading;
@@ -738,7 +757,8 @@ List<WsPage> _packEngSections(List<_EngSection> sections, EnglishOptions opts) {
           used + (needHeading ? _engHeadingH : 0) + rh > _engPageContent) {
         // 当前页放不下：先收拢本节的格子，再另起一页
         if (gridRows.isNotEmpty) {
-          nodes.add(_engNodeFor(sec, gridRows));
+          nodes.add(_engNodeFor(sec, gridRows, startSeq: emitted + 1));
+          emitted += gridRows.fold<int>(0, (a, r) => a + r.length);
           gridRows = [];
         }
         flush();
@@ -752,7 +772,7 @@ List<WsPage> _packEngSections(List<_EngSection> sections, EnglishOptions opts) {
       used += rh;
     }
     if (gridRows.isNotEmpty) {
-      nodes.add(_engNodeFor(sec, gridRows));
+      nodes.add(_engNodeFor(sec, gridRows, startSeq: emitted + 1));
       gridRows = [];
       curHeading = null;
     }
