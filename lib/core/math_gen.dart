@@ -394,20 +394,25 @@ MathProblem genMathProblem(String tid, RandGen g) {
     case 'avg':
       {
         // 四年级下：平均数
+        //
+        // **先定平均数，再凑出和为 n×base 的 n 个数**。
+        // 否则 total/n 常除不尽，答案会打印成 81.66666666666667
+        // 这种 16 位小数（小学答案册上不该出现）。
         final n = g.rand(2, 4);
         final base = g.rand(60, 95);
-        var total = 0;
         final nums = <int>[];
-        for (var i = 0; i < n; i++) {
-          final v = base + g.rand(0, 20);
+        var sum = 0;
+        for (var i = 0; i < n - 1; i++) {
+          final v = base + g.rand(-6, 6);
           nums.add(v);
-          total += v;
+          sum += v;
         }
+        nums.add(n * base - sum); // 最后一个数补齐，使平均数恰为 base
         return MathProblem(
             tid: tid,
             word: true,
-            expr: '${nums.join('、')} 的平均数是（　　　）。',
-            ans: total / n);
+            expr: '${g.shuffle(nums).join('、')} 的平均数是（　　　）。',
+            ans: base);
       }
     case 'polyArea':
       {
@@ -480,11 +485,16 @@ MathProblem genMathProblem(String tid, RandGen g) {
         }
         final a = g.rand(3, 9) * 10;
         final b = g.rand(3, 9) * 10;
+        final gcdv = _gcd(a, b);
+        final num = a ~/ gcdv, den = b ~/ gcdv;
         return MathProblem(
             tid: tid,
             word: true,
             expr: '$a : $b 的比值是（　　　）。',
-            ans: a / b);
+            // 比值写成分数：a/b 可能除不尽（如 30:90 = 1/3），
+            // 直接给 double 会打印成 0.3333333333333333。
+            // 分母为 1 时写整数（如 60:30 = 2）。
+            ans: den == 1 ? '$num' : '$num/$den');
       }
     case 'circle':
       {

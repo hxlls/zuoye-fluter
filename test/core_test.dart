@@ -203,6 +203,23 @@ void main() {
       }
     });
 
+    test('答案不出现未格式化的长小数', () async {
+      await AppData().load();
+      // 历史 bug：比值/平均数直接把 double 当答案，
+      // 打印出来是 0.3333333333333333 / 81.66666666666667 这种 16 位小数，
+      // 小学答案册上不该出现这种数字。
+      final g = RandGen(diff: 'mid', grade: 6);
+      final longDecimal = RegExp(r'\d\.\d{6,}');
+      for (final tid in ['ratio', 'avg']) {
+        for (var i = 0; i < 500; i++) {
+          final p = genMathProblem(tid, g);
+          final a = p.ans.toString();
+          expect(longDecimal.hasMatch(a), false,
+              reason: '$tid 第 $i 次答案「$a」含未格式化的长小数');
+        }
+      }
+    });
+
     test('参考答案不含 HTML 标签', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(
