@@ -105,23 +105,26 @@ class _MathCard extends StatelessWidget {
       body = _vertical(prob.a, prob.b, prob.op);
     }
 
-    // 序号与题目分离布局：序号固定占一行，题目在下方，避免重叠
+    // 试卷惯例：序号与题目**同一行**（「1. 2+5=____」）。
+    // 原先序号单独占一行、题目在下方，既浪费纵向空间也不像试卷。
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-      // 试卷版式：题目不套卡片框，靠留白分隔（原为圆角边框卡片）
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      // 试卷版式：题目不套卡片框，靠留白分隔
       decoration: const BoxDecoration(color: Colors.white),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${numLabel ?? ""}.',
-              style: const TextStyle(
-                  fontSize: 12, color: Color(0xff6a6a6a), fontWeight: FontWeight.w700)),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Center(child: body),
-          ),
+          if (numLabel != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 5, top: 3),
+              child: Text('$numLabel.',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xff555555),
+                      fontWeight: FontWeight.w600)),
+            ),
+          Expanded(child: Center(child: body)),
         ],
       ),
     );
