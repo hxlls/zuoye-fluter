@@ -11,7 +11,14 @@ class RandGen {
       : scale = diff == "easy" ? 1 : (diff == "mid" ? 2 : 3),
         _r = seed != null ? Random(seed) : Random();
 
+  /// 取 [min, max] 闭区间内的随机整数。
+  ///
+  /// **防御区间倒挂**：若调用方把 max 传得比 min 小，返回 min 而不是抛异常。
+  /// 历史 bug：`rand(100, 999 - aa)` 在 aa 取到 900 时退化成 `nextInt(0)`，
+  /// 抛 RangeError 让整份作业生成失败（概率约 1/801，一份 20 题的卷子约 2.5%）。
+  /// 随机数生成不该成为崩溃源，这里兜一道底。
   int rand(int min, int max) {
+    if (max <= min) return min;
     return min + _r.nextInt(max - min + 1);
   }
 

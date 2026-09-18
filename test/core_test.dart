@@ -146,8 +146,10 @@ void main() {
         diff: 'mid',
         showAnswer: true,
       ));
-      // 收集所有 math 卡片的 key
-      final keys = <String>{};
+      // 必须用 List 收集 —— 原先收进 Set 再比较 Set 长度，
+      // `keys.length == keys.toSet().length` 恒为真，
+      // 这个测试实际上从未验证过任何东西（已修）。
+      final keys = <String>[];
       for (final p in pages) {
         for (final n in p.nodes) {
           if (n is WsGrid) {
@@ -161,7 +163,24 @@ void main() {
         }
       }
       // 无重复
-      expect(keys.length, keys.toSet().length);
+      expect(keys.length, keys.toSet().length, reason: '同一份卷子里不应出现重复题目');
+    });
+
+    test('add1000 反复生成不崩溃（区间倒挂回归）', () async {
+      await AppData().load();
+      // 历史 bug：三位数加法里 aa 可能取到 900，此时 999-aa=99 < 100，
+      // rand(100, 99) → Random.nextInt(0) → RangeError，整份作业生成失败。
+      // 概率约 1/801，一份 20 题的卷子约 2.5% 会崩。
+      // 跑足够多次把它逼出来（30000 次下几乎必然命中）。
+      final g = RandGen(diff: 'mid', grade: 4);
+      for (var i = 0; i < 30000; i++) {
+        final p = genMathProblem('add1000', g);
+        expect(p.ans, greaterThanOrEqualTo(0), reason: '第 $i 次生成的答案不应为负');
+        if (p.op == '+') {
+          expect(p.a + p.b, lessThanOrEqualTo(999),
+              reason: '三位数加法结果不应超过 999');
+        }
+      }
     });
 
     test('参考答案不含 HTML 标签', () async {

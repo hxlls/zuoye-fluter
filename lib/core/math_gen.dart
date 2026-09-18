@@ -124,7 +124,10 @@ MathProblem genMathProblem(String tid, RandGen g) {
       {
         final op = g.rand(1, 2) == 1 ? '+' : '-';
         if (op == '+') {
-          final aa = g.rand(100, 900);
+          // 三位数加法，和不超过 999。
+          // aa 上限必须是 899 —— 取 900 时 999-900=99 < 100，
+          // 区间倒挂成 rand(100, 99)，历史上会直接抛 RangeError。
+          final aa = g.rand(100, 899);
           final b = g.rand(100, 999 - aa);
           return _ab(tid, aa, b, '+', aa + b);
         }
