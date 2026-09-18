@@ -166,6 +166,7 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
       rows: _pairRows(buildAlphabet(), 2),
       cols: 2,
       rowH: _engRowH('letter'),
+      numbered: false,
     ));
   }
 
@@ -179,6 +180,7 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
       rows: _pairRows(cards, 2),
       cols: 2,
       rowH: _engRowH('trace'),
+      numbered: false,
     ));
   }
 
@@ -643,12 +645,18 @@ class _EngSection {
   final int cols;
   final bool block; // 连线题：整行块（WsBlock/WsGridData）
   final double rowH; // 预估行高（px）
+
+  /// 是否给小题编号。描红/抄写类（字母书写、单词抄写）**不编号**——
+  /// 真实试卷的抄写练习也不编号，编号反而像题目。
+  final bool numbered;
+
   _EngSection({
     required this.heading,
     required this.rows,
     this.cols = 2,
     this.block = false,
     required this.rowH,
+    this.numbered = true,
   });
 }
 
@@ -686,11 +694,16 @@ WsNode _engNodeFor(_EngSection sec, List<List<EngGridCardData>> subRows) {
   if (sec.block) {
     return WsBlock(WsGridData(rows: [for (final r in subRows) r.first]));
   }
-  return WsGrid(
-    [for (final r in subRows) for (final c in r) WsCard('eng', c)],
-    cols: sec.cols,
-    evenly: true,
-  );
+  // 试卷惯例：小题在本大题内连续编号（1. 2. 3.…）
+  var seq = 0;
+  final cards = <WsCard>[];
+  for (final r in subRows) {
+    for (final c in r) {
+      seq++;
+      cards.add(WsCard('eng', c, num: sec.numbered ? seq : null));
+    }
+  }
+  return WsGrid(cards, cols: sec.cols, evenly: true);
 }
 
 // A4 (1123px) 减去上下留白与标题栏后的可用内容高度；行高与间距均为保守预估

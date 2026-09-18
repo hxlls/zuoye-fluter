@@ -31,7 +31,9 @@ Widget buildWsCardWidget(WsCard card) {
   if (card.kind == 'math') {
     return _MathCard(data: card.data as MathItemData, numLabel: card.num);
   }
-  if (card.kind == 'cn') return _CnCard(data: card.data as CnCardData);
+  if (card.kind == 'cn') {
+    return _CnCard(data: card.data as CnCardData, num: card.num);
+  }
   if (card.kind == 'ai') {
     return _AiCard(data: card.data as AiCardData, num: card.num);
   }
@@ -39,7 +41,7 @@ Widget buildWsCardWidget(WsCard card) {
     final d = card.data as EngGridCardData;
     if (d.kind == 'letter') return _LetterCard(data: d.data);
     if (d.kind == 'trace') return _TraceCard(data: d.data);
-    return _WordQuestionCard(data: d.data);
+    return _WordQuestionCard(data: d.data, num: card.num);
   }
   return const SizedBox();
 }
@@ -343,10 +345,34 @@ class _LongDiv extends StatelessWidget {
 /// 语文卡片
 class _CnCard extends StatelessWidget {
   final CnCardData data;
-  const _CnCard({required this.data});
+
+  /// 小题序号（本节内从 1 起）。试卷惯例：每道小题都编号。
+  final int? num;
+
+  const _CnCard({required this.data, this.num});
 
   @override
   Widget build(BuildContext context) {
+    final body = _buildBody(context);
+    if (num == null) return body;
+    // 序号在左，与题目同一行（「1. hǎo（ ）」）
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 4, top: 2),
+          child: Text('$num.',
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xff555555),
+                  fontWeight: FontWeight.w600)),
+        ),
+        Expanded(child: Center(child: body)),
+      ],
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     switch (data.type) {
       case 'pinyin2char':
         return Column(
@@ -359,18 +385,21 @@ class _CnCard extends StatelessWidget {
                     letterSpacing: 1,
                     color: Color(0xff242424))),
             const SizedBox(height: 8),
-            _bracketLine(width: 4),
+            _bracketLine(width: 3),
           ],
         );
       case 'char2pinyin':
+        // 「给汉字注音」：**先看到字，再注音**。
+        // 原先四线三格画在汉字上方，学生先看到的是空格子，
+        // 观感上和「看拼音写词语」一样，属于顺序反了。
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _pinyinFourLine(),
-            const SizedBox(height: 4),
             Text(data.ch,
                 style: const TextStyle(
                     fontSize: 38, color: Color(0xff181818), fontFamily: _kaiTi)),
+            const SizedBox(height: 4),
+            _pinyinFourLine(),
           ],
         );
       case 'zuci':
@@ -381,9 +410,9 @@ class _CnCard extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 38, color: Color(0xff181818), fontFamily: _kaiTi)),
             const SizedBox(height: 4),
-            _bracketLine(width: 4),
-            _bracketLine(width: 4),
-            _bracketLine(width: 4),
+            _bracketLine(width: 3),
+            _bracketLine(width: 3),
+            _bracketLine(width: 3),
           ],
         );
       case 'gushiFill':
@@ -495,13 +524,18 @@ class _CnCard extends StatelessWidget {
 
 
   /// 括号式答题空位（全角括号内留空）
-  Widget _bracketLine({int width = 4}) {
+  /// 括号作答区。
+  ///
+  /// 原先字号 26 + 4 个全角空格，单个括号占掉近三分之一行宽，
+  /// 一行只能放 3 项、整页显得很空。收紧到 23 + 3 个空格，
+  /// 仍够一年级学生写一个字，但密度接近真实试卷。
+  Widget _bracketLine({int width = 3}) {
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Text(
         '（${'　' * width}）',
         style: const TextStyle(
-            fontSize: 26, color: Color(0xff535353), height: 1.4),
+            fontSize: 23, color: Color(0xff535353), height: 1.35),
       ),
     );
   }
@@ -656,10 +690,33 @@ class _TraceCard extends StatelessWidget {
 /// 单词题（中译英/英译中/拼写）
 class _WordQuestionCard extends StatelessWidget {
   final EngCardData data;
-  const _WordQuestionCard({required this.data});
+
+  /// 小题序号（描红/抄写类不编号，此处为 null）
+  final int? num;
+
+  const _WordQuestionCard({required this.data, this.num});
 
   @override
   Widget build(BuildContext context) {
+    final body = _buildBody(context);
+    if (num == null) return body;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 4, top: 2),
+          child: Text('$num.',
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xff555555),
+                  fontWeight: FontWeight.w600)),
+        ),
+        Expanded(child: body),
+      ],
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     if (data.type == 'listening') {
       const letters = 'ABCD';
       return Column(

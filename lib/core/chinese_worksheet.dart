@@ -282,27 +282,41 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     }
 
     final rh = (colFlow ? colH(type) : rowH(type)) + 10;
+    // 试卷惯例：小题在本大题内连续编号（1. 2. 3.…）。
+    // 补位卡（pad）不编号，所以序号与卡片一一对应地记在 rowNum 里。
+    var seq = 0;
     var row = <CnCardData>[];
+    var rowNum = <int?>[];
     for (final it in items) {
       if (row.isEmpty && curH + rh > usableH) flush();
+      seq++;
       row.add(it);
+      rowNum.add(seq);
       if (row.length == perRow) {
         curContent.add(WsGrid(
-          [for (final c in row) WsCard('cn', c)],
+          [
+            for (var i = 0; i < row.length; i++)
+              WsCard('cn', row[i], num: rowNum[i])
+          ],
           cols: perRow,
           evenly: false,
           itemHeight: rh,
         ));
         curH += rh;
         row = [];
+        rowNum = [];
       }
     }
     if (row.isNotEmpty) {
       while (row.length < perRow) {
         row.add(CnCardData.pad(type));
+        rowNum.add(null);
       }
       curContent.add(WsGrid(
-        [for (final c in row) WsCard('cn', c)],
+        [
+          for (var i = 0; i < row.length; i++)
+            WsCard('cn', row[i], num: rowNum[i])
+        ],
         cols: perRow,
         evenly: false,
         itemHeight: rh,
