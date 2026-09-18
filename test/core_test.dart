@@ -19,7 +19,7 @@ void main() {
   group('AppData', () {
     test('加载数据', () async {
       await AppData().load();
-      expect(AppData().textbooks.length, 4);
+      expect(AppData().textbooks.length, 5); // 人教/冀教/外研(一起)/外研(三起)/统编版
       expect(AppData().gradeNames[1], '一年级');
       // 人教版一年级上册生字
       final cally = AppData().vol('renjiao', 1, '上', 'cally')!.cally!;
