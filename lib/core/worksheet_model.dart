@@ -43,12 +43,29 @@ class WsSection extends WsNode {
   WsSection(this.text, {this.mathStyle = false});
 }
 
+/// 大题下方的说明行（如「例：日 → 日出、日记」）。
+///
+/// 刻意**不是** WsSection —— WsSection 会被预览层识别为「大题开始」并编号，
+/// 说明行不该占一个大题号。
+class WsNote extends WsNode {
+  final String text;
+  WsNote(this.text);
+}
+
 /// 数学/英语大标题（math-title / eng-title）
 class WsHeading extends WsNode {
   final String title;
   final String? unit; // math 单元说明（灰色小字）
   final bool engStyle; // eng-title 蓝色
-  WsHeading(this.title, {this.unit, this.engStyle = false});
+
+  /// 是否为大题的**续页标题**（同一大题被分页拆开后，在后续页重新出现的标题）。
+  ///
+  /// 续页标题**不参与大题编号**，否则同一个大题会在页 1 是「一」、页 2 变成「二」，
+  /// 得分栏的列数也会虚高。渲染时标成「（续）」。
+  final bool continuation;
+
+  WsHeading(this.title,
+      {this.unit, this.engStyle = false, this.continuation = false});
 }
 
 /// 卡片网格

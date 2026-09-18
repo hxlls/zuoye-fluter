@@ -764,7 +764,9 @@ List<WsPage> _packEngSections(List<_EngSection> sections, EnglishOptions opts) {
         flush();
       }
       if (curHeading != sec.heading) {
-        nodes.add(WsHeading(sec.heading, engStyle: true));
+        // emitted > 0 说明本节已在上一页出现过 → 这是续页标题，不参与大题编号
+        nodes.add(WsHeading(sec.heading,
+            engStyle: true, continuation: emitted > 0));
         used += _engHeadingH;
         curHeading = sec.heading;
       }

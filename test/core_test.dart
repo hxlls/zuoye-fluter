@@ -344,6 +344,30 @@ void main() {
       }
     });
 
+    test('大题被拆到两页时，续页不再重复编号', () async {
+      await AppData().load();
+      // 历史 bug：一节被拆到两页后，续页会再发一个 WsHeading，
+      // 被当成「新大题」——同一个「字母书写练习」在页 1 是「一」、
+      // 页 2 变成「二」，得分栏的列数也因此虚高。
+      final pages = englishRenderPages(EnglishOptions(
+        grade: 1,
+        version: 'renjiao',
+        volume: '上',
+        types: const ['alphabet', 'trace'],
+        counts: const {'alphabet': 20, 'trace': 20},
+      ));
+      // 只统计「真正的大题开始」（续页标题已被排除）
+      final titles = <String>[];
+      for (final p in pages) {
+        for (final n in p.nodes) {
+          if (n is WsHeading && !n.continuation) titles.add(n.title);
+        }
+      }
+      expect(titles.length, titles.toSet().length,
+          reason: '同一个大题被编了多次号：$titles');
+      expect(titles, isNotEmpty, reason: '应至少有一个大题');
+    });
+
     test('参考答案不含 HTML 标签', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(

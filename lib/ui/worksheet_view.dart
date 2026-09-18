@@ -92,7 +92,8 @@ class WorksheetPageView extends StatelessWidget {
   /// 而数学的 WsSection 是「直接写出得数。」这种**小题说明**（mathStyle=true），
   /// 不算新大题。
   static bool isSectionStart(WsNode n) =>
-      n is WsHeading || (n is WsSection && !n.mathStyle);
+      (n is WsHeading && !n.continuation) ||
+      (n is WsSection && !n.mathStyle);
 
   /// 给本页节点逐一标出所属大题序号（非大题节点为 null）
   List<int?> _sectionNumbers() {
@@ -170,12 +171,21 @@ class WorksheetPageView extends StatelessWidget {
         number: sectionNo == null ? null : cnNumber(sectionNo),
       );
     }
+    if (node is WsNote) {
+      // 与「小题说明」同款缩进灰字，紧跟所属大题标题
+      return Padding(
+        padding: const EdgeInsets.only(left: 24, bottom: 8),
+        child: Text(node.text,
+            style: const TextStyle(fontSize: 13.5, color: Color(0xff666666))),
+      );
+    }
     if (node is WsHeading) {
       return _Heading(
         title: node.title,
         unit: node.unit,
         engStyle: node.engStyle,
         number: sectionNo == null ? null : cnNumber(sectionNo),
+        continuation: node.continuation,
       );
     }
     if (node is WsGrid) {
@@ -338,11 +348,15 @@ class _Heading extends StatelessWidget {
   /// 大题中文序号（如「一」）
   final String? number;
 
+  /// 续页标题：不编号，标成「（续）」
+  final bool continuation;
+
   const _Heading({
     required this.title,
     this.unit,
     this.engStyle = false,
     this.number,
+    this.continuation = false,
   });
 
   @override
@@ -356,7 +370,9 @@ class _Heading extends StatelessWidget {
         children: [
           Flexible(
             child: Text(
-              number == null ? title : '$number、$title',
+              continuation
+                  ? '$title（续）'
+                  : (number == null ? title : '$number、$title'),
               style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
