@@ -273,6 +273,41 @@ void main() {
       expect(rowsTotal, 8, reason: '8 对连线应当完整出现');
     });
 
+    test('大题标题不与它的题目分页', () async {
+      await AppData().load();
+      // 历史 bug：判断标题能否放下时只算了标题高度、没算第一行题目，
+      // 于是标题留在上一页底部、题目全被挤到下一页
+      // （实测一年级数学「三、比较大小」：第 1 页只有标题和说明，6 道题在第 2 页）。
+      // 断言：任何一页都不能以「大题标题」结尾。
+      // 必须扫多组「年级 × 题量」——孤立标题只在**特定填充量**下才出现，
+      // 只试一组很容易碰不到（这个测试的第一版就是只试了 count: 60，
+      // 退回修复后依然通过，等于没测）。
+      for (final g in [1, 2, 3, 4, 5, 6]) {
+        for (final n in [8, 12, 16, 20, 24, 30, 36, 40, 50, 60, 80, 100]) {
+          final pages = mathRenderPages(MathOptions(
+            grade: g,
+            version: 'renjiao',
+            volume: '上',
+            count: n,
+            showAnswer: false,
+          ));
+          for (var i = 0; i < pages.length; i++) {
+            final nodes = pages[i].nodes;
+            if (nodes.isEmpty) continue;
+            final last = nodes.last;
+            // 注意：大题标题后面**紧跟一行说明**（WsSection, mathStyle），
+            // 所以孤立时页尾是 WsSection 而不是 WsHeading ——
+            // 这个测试的第一版只查了 WsHeading，退回修复后依然通过。
+            final orphan = last is WsHeading ||
+                (last is WsSection && last.mathStyle);
+            expect(orphan, false,
+                reason: '$g 年级 / $n 题：第 ${i + 1} 页以大题标题/说明结尾'
+                    '（题目被挤到了下一页）');
+          }
+        }
+      }
+    });
+
     test('参考答案不含 HTML 标签', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(

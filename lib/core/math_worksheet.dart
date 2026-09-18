@@ -161,7 +161,16 @@ List<WsPage> mathRenderPages(MathOptions opts) {
 
   for (final sec in sections) {
     const secH = 60.0;
-    if (curH + secH > usableH && curNodes.isNotEmpty) {
+    final perRow = sec.cols ?? (sec.vertical ? 4 : 3);
+    final itemH = (sec.itemH ?? (sec.vertical ? 138 : 74)).toDouble();
+
+    // 标题必须与它的**第一行题目**同页。
+    //
+    // 原先只判断标题自己放不放得下（curH + secH > usableH），
+    // 于是会出现「标题孤零零留在上一页底部、题目全在下一页」的孤立标题——
+    // 实测一年级数学「三、比较大小」就是这样：第 1 页只有标题和说明，
+    // 6 道题全在第 2 页且没有任何标题。
+    if (curH + secH + itemH > usableH && curNodes.isNotEmpty) {
       flushPage();
       curTitle = opts.showTitle ? mathTitle(pageNo[0]) : null;
     }
@@ -172,8 +181,6 @@ List<WsPage> mathRenderPages(MathOptions opts) {
     final instr = data.mathInstruction[sec.tid] ?? '计算下面各题。';
     curNodes.add(WsSection(instr, mathStyle: true));
 
-    final perRow = sec.cols ?? (sec.vertical ? 4 : 3);
-    final itemH = (sec.itemH ?? (sec.vertical ? 138 : 74)).toDouble();
     var row = <WsCard>[];
     for (var i = 0; i < sec.items.length; i++) {
       if (row.isEmpty) {
