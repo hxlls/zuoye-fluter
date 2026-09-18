@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/scope_guard.dart';
 import '../core/worksheet_model.dart';
+import '../data/ai_pref_store.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
@@ -40,24 +41,97 @@ class _AiPanelState extends State<AiPanel> {
   @override
   void initState() {
     super.initState();
-    _ensureStyles();
+    _restore();
   }
 
-  void _ensureStyles() {
-    final opts = AI_STYLE_OPTIONS[_subject] ?? AI_STYLE_OPTIONS['math']!;
-    final valid = opts.where((o) {
-      final r = o.grades;
-      return r.isEmpty || (widget.grade >= r[0] && widget.grade <= r[1]);
-    }).toList();
-    _styles.clear();
-    for (var i = 0; i < valid.length; i++) {
-      _styles[valid[i].id] = i == 0 ? 3 : 1;
+  @override
+  void didUpdateWidget(AiPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 年级/版本/册变了：新组合下多出来的题型要补上默认值。
+    // 只补缺失项、不清空——否则用户已取消的勾选会被复活。
+    if (oldWidget.grade != widget.grade ||
+        oldWidget.version != widget.version ||
+        oldWidget.volume != widget.volume) {
+      setState(_seedStyles);
     }
   }
 
+  /// 当前科目在当前年级下可用的题型
+  /// （唯一来源是 AI_STYLE_OPTIONS 里各选项的 grades 区间）
+  List<AiStyleOption> get _validStyles {
+    final opts = AI_STYLE_OPTIONS[_subject] ?? AI_STYLE_OPTIONS['math']!;
+    return opts.where((o) {
+      final r = o.grades;
+      return r.isEmpty || (widget.grade >= r[0] && widget.grade <= r[1]);
+    }).toList();
+  }
+
+  /// 只给「从未设置过」的可用题型补默认值；已存在的值（含 0 = 主动取消）一律尊重。
+  ///
+  /// 旧实现是 `_styles.clear()` 后整表重播种，于是用户取消掉的题型会自己勾回来。
+  void _seedStyles() {
+    final valid = _validStyles;
+    for (var i = 0; i < valid.length; i++) {
+      final id = valid[i].id;
+      if (!_styles.containsKey(id)) _styles[id] = i == 0 ? 3 : 1;
+    }
+  }
+
+  /// 恢复上次的科目 / 题量 / 选项。
+  ///
+  /// home_page 的 tab 容器是 switch 而非 IndexedStack，离开 AI 标签会销毁本面板；
+  /// 不持久化的话，用户为了改年级去一趟设置再回来，勾选和科目就全没了。
+  Future<void> _restore() async {
+    final subject = await AiPrefStore.loadSubject();
+    final loaded = await AiPrefStore.loadStyles(subject ?? _subject);
+    final opts = await AiPrefStore.loadOpts();
+    if (!mounted) return;
+    setState(() {
+      if (subject != null && AI_STYLE_OPTIONS.containsKey(subject)) {
+        _subject = subject;
+      }
+      _styles
+        ..clear()
+        ..addAll(loaded);
+      _diff = opts['diff'] as String? ?? _diff;
+      _theme = opts['theme'] as String? ?? _theme;
+      _textType = opts['textType'] as String? ?? _textType;
+      _showAnswer = opts['showAnswer'] as bool? ?? _showAnswer;
+      _seedStyles();
+    });
+  }
+
+  Future<void> _persistStyles() => AiPrefStore.saveStyles(_subject, _styles);
+
+  Future<void> _persistOpts() => AiPrefStore.saveOpts({
+        'diff': _diff,
+        'theme': _theme,
+        'textType': _textType,
+        'showAnswer': _showAnswer,
+      });
+
+  /// 切换科目：先存下当前科目的题量，再载入目标科目的
+  Future<void> _switchSubject(String v) async {
+    if (v == _subject) return;
+    await _persistStyles();
+    final loaded = await AiPrefStore.loadStyles(v);
+    await AiPrefStore.saveSubject(v);
+    if (!mounted) return;
+    setState(() {
+      _subject = v;
+      _styles
+        ..clear()
+        ..addAll(loaded);
+      _seedStyles();
+    });
+  }
+
   Future<void> _generate() async {
+    // 只提交当前年级下可用的题型。旧实现直接拿 _styles 的全部条目，
+    // 换过年级后残留的失效题型也会被一并发出去。
+    final validIds = _validStyles.map((o) => o.id).toSet();
     final specs = _styles.entries
-        .where((e) => e.value > 0)
+        .where((e) => e.value > 0 && validIds.contains(e.key))
         .map((e) => AiStyleSpec(e.key, e.value))
         .toList();
     if (specs.isEmpty) {
@@ -148,12 +222,10 @@ class _AiPanelState extends State<AiPanel> {
   }
 
   Widget _config() {
-    final opts = AI_STYLE_OPTIONS[_subject] ?? AI_STYLE_OPTIONS['math']!;
-    final valid = opts.where((o) {
-      final r = o.grades;
-      return r.isEmpty || (widget.grade >= r[0] && widget.grade <= r[1]);
-    }).toList();
-    final total = _styles.values.fold<int>(0, (s, v) => s + v);
+    final valid = _validStyles;
+    // 只统计当前年级可用的题型——旧实现把 _styles 的全部条目都算进总数，
+    // 换过年级后失效题型的题量也被计入。
+    final total = valid.fold<int>(0, (s, o) => s + (_styles[o.id] ?? 0));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,12 +294,7 @@ class _AiPanelState extends State<AiPanel> {
               ('chinese', '语文'),
             ],
             value: _subject,
-            onChanged: (v) {
-              setState(() {
-                _subject = v;
-                _ensureStyles();
-              });
-            },
+            onChanged: _switchSubject,
           ),
         ),
         FormGroup(
@@ -245,9 +312,11 @@ class _AiPanelState extends State<AiPanel> {
                         _styles[o.id] = 1;
                       } else if (!v) { _styles[o.id] = 0; }
                     });
+                    _persistStyles();
                   },
                   onCount: (n) {
                     setState(() => _styles[o.id] = n);
+                    _persistStyles();
                   },
                 ),
               Text('共 $total 题（各题型题量可单独调整，0 表示不选该题型）',
@@ -260,7 +329,10 @@ class _AiPanelState extends State<AiPanel> {
           child: SegButtons(
             options: const [('easy', '简单'), ('mid', '中等'), ('hard', '较难')],
             value: _diff,
-            onChanged: (v) => setState(() => _diff = v),
+            onChanged: (v) {
+              setState(() => _diff = v);
+              _persistOpts();
+            },
           ),
         ),
         if (_subject == 'english') ...[
@@ -274,7 +346,10 @@ class _AiPanelState extends State<AiPanel> {
                 ('人与自然', '人与自然'),
               ],
               value: _theme,
-              onChanged: (v) => setState(() => _theme = v),
+              onChanged: (v) {
+                setState(() => _theme = v);
+                _persistOpts();
+              },
             ),
           ),
           FormGroup(
@@ -288,14 +363,20 @@ class _AiPanelState extends State<AiPanel> {
                 ('应用文', '应用文'),
               ],
               value: _textType,
-              onChanged: (v) => setState(() => _textType = v),
+              onChanged: (v) {
+                setState(() => _textType = v);
+                _persistOpts();
+              },
             ),
           ),
         ],
         CheckLabel(
           label: '同时生成答案（附参考答案页；关闭则只出题不给答案）',
           value: _showAnswer,
-          onChanged: (v) => setState(() => _showAnswer = v),
+          onChanged: (v) {
+            setState(() => _showAnswer = v);
+            _persistOpts();
+          },
         ),
         if (_loading)
           const Padding(

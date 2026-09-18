@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/app_data.dart';
+import '../data/ai_pref_store.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
@@ -29,11 +30,42 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
   bool _sending = false;
   String _pendingImage = '';
 
+  static const String _welcome =
+      '你好！我是 AI 作业帮手。把你不会的题目写在下方输入框，我会分步骤讲解并给出答案。'
+      '也可以点「📷」上传题目照片，AI 会自动识别题目再讲解。';
+
   @override
   void initState() {
     super.initState();
-    _messages.add(('ai',
-        '你好！我是 AI 作业帮手。把你不会的题目写在下方输入框，我会分步骤讲解并给出答案。也可以点「📷」上传题目照片，AI 会自动识别题目再讲解。'));
+    _restore();
+  }
+
+  /// 恢复上次的讲解对象与对话内容。
+  ///
+  /// home_page 的 tab 容器是 switch（不是 IndexedStack），离开 AI 标签会销毁本面板。
+  /// 不持久化的话，用户问完一题、切去看看别处再回来，整个对话就没了。
+  Future<void> _restore() async {
+    final subject = await AiPrefStore.loadHelpSubject();
+    final saved = await AiPrefStore.loadHelpMessages();
+    if (!mounted) return;
+    setState(() {
+      if (subject != null) _subject = subject;
+      _messages
+        ..clear()
+        ..addAll(saved.isEmpty ? [('ai', _welcome)] : saved);
+    });
+  }
+
+  Future<void> _persistMessages() => AiPrefStore.saveHelpMessages(_messages);
+
+  /// 清空对话（保留欢迎语）并同步清掉存储
+  void _newChat() {
+    setState(() {
+      _messages
+        ..clear()
+        ..add(('ai', _welcome));
+    });
+    _persistMessages();
   }
 
   Future<void> _send() async {
@@ -55,6 +87,7 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
       _pendingImage = '';
       _sending = true;
     });
+    _persistMessages();
     try {
       final sys = aiHelpSystemPrompt(_subject, AiHelpOpts(
         version: widget.version,
@@ -69,10 +102,12 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
       setState(() {
         _messages.add(('ai', content.isEmpty ? '（AI 未返回内容，请重试）' : content));
       });
+      _persistMessages();
     } catch (e) {
       setState(() {
         _messages.add(('ai', '（出错了：${aiFriendlyError(e)}）'));
       });
+      _persistMessages();
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -165,7 +200,7 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
             ),
           ),
           TextButton.icon(
-            onPressed: () => setState(() => _messages.clear()),
+            onPressed: _newChat,
             icon: const Icon(Icons.refresh, size: 16),
             label: const Text('新对话', style: TextStyle(fontSize: 13)),
           ),
@@ -199,7 +234,7 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () => setState(() => _messages.clear()),
+                onPressed: _newChat,
                 child: const Text('🔄 新对话（清空记录）'),
               ),
             ),
@@ -330,7 +365,10 @@ class _AiHelpPanelState extends State<AiHelpPanel> {
                   ('other', '其他'),
                 ])
                   InkWell(
-                    onTap: () => setState(() => _subject = o.$1),
+                    onTap: () {
+                      setState(() => _subject = o.$1);
+                      AiPrefStore.saveHelpSubject(o.$1);
+                    },
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
