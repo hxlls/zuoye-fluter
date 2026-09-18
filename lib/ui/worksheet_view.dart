@@ -35,12 +35,14 @@ class _ScoreTable extends StatelessWidget {
           ),
         );
 
+    // 末尾加「总分」列——真实试卷的标准卷头就是
+    // 「题序 | 一 | 二 | … | 九 | 总分」，老师最后合计总分用。
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Align(
         alignment: Alignment.centerRight,
         child: SizedBox(
-          width: 52.0 + columns.length * 46.0,
+          width: 52.0 + columns.length * 46.0 + 56.0,
           child: Table(
             border: TableBorder.all(color: line, width: 0.8),
             defaultVerticalAlignment: TableCellVerticalAlignment.middle,
@@ -48,10 +50,12 @@ class _ScoreTable extends StatelessWidget {
               TableRow(children: [
                 cell('题号', head: true),
                 for (final c in columns) cell(c),
+                cell('总分', head: true),
               ]),
               TableRow(children: [
                 cell('得分', head: true),
                 for (final _ in columns) cell(''),
+                cell(''),
               ]),
             ],
           ),

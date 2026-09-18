@@ -355,8 +355,13 @@ class _CnCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final body = _buildBody(context);
     if (num == null) return body;
-    // 序号在左，与题目同一行（「1. hǎo（ ）」）
+    // 序号在左，**紧贴**题目（「1. hǎo（ ）」）。
+    //
+    // 这里用 mainAxisSize.min 而不是 Expanded+Center：
+    // 后者在一行只放一题时（如成语填空整行一道）会把内容推到行中央，
+    // 序号留在最左，中间空一大截，看着不像试卷。
     return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
@@ -367,7 +372,7 @@ class _CnCard extends StatelessWidget {
                   color: Color(0xff555555),
                   fontWeight: FontWeight.w600)),
         ),
-        Expanded(child: Center(child: body)),
+        Flexible(child: body),
       ],
     );
   }
@@ -700,7 +705,9 @@ class _WordQuestionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final body = _buildBody(context);
     if (num == null) return body;
+    // 同 _CnCard：用 min 让序号紧贴题目，避免整行一题时中间空一大截
     return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
@@ -711,7 +718,7 @@ class _WordQuestionCard extends StatelessWidget {
                   color: Color(0xff555555),
                   fontWeight: FontWeight.w600)),
         ),
-        Expanded(child: body),
+        Flexible(child: body),
       ],
     );
   }
