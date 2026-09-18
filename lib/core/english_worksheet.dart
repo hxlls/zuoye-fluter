@@ -141,18 +141,27 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
   final totalN = traceN + matchN + listeningN + cn2enN + en2cnN + spellN;
   final allVocab = pickVocab(data, grade, totalN, ver, vol);
 
+  // 低年级词表容量有限，totalN 可能超过词表实际长度。
+  // 原先直接 sublist(offset, offset + n)，一旦词不够就抛
+  //   RangeError (end): Not in inclusive range 30..38: 60
+  // （二~六年级、单词描红与中译英各 30 题即可稳定触发 → 整份卷子生成失败）。
+  // pickVocab 内部已用 take 做了上限，所以这里按题型顺序「取完为止」：
+  // 词不够时靠后的题型题量自然减少，而不是整体崩溃。
   var offset = 0;
-  final traceVocab = traceN > 0 ? allVocab.sublist(offset, offset + traceN) : <List<String>>[];
-  offset += traceN;
-  final matchVocabList = matchN > 0 ? allVocab.sublist(offset, offset + matchN) : <List<String>>[];
-  offset += matchN;
-  final listeningVocab = listeningN > 0 ? allVocab.sublist(offset, offset + listeningN) : <List<String>>[];
-  offset += listeningN;
-  final cn2enVocab = cn2enN > 0 ? allVocab.sublist(offset, offset + cn2enN) : <List<String>>[];
-  offset += cn2enN;
-  final en2cnVocab = en2cnN > 0 ? allVocab.sublist(offset, offset + en2cnN) : <List<String>>[];
-  offset += en2cnN;
-  final spellVocab = spellN > 0 ? allVocab.sublist(offset, offset + spellN) : <List<String>>[];
+  List<List<String>> takeVocab(int n) {
+    if (n <= 0 || offset >= allVocab.length) return <List<String>>[];
+    final end = offset + n > allVocab.length ? allVocab.length : offset + n;
+    final part = allVocab.sublist(offset, end);
+    offset = end;
+    return part;
+  }
+
+  final traceVocab = takeVocab(traceN);
+  final matchVocabList = takeVocab(matchN);
+  final listeningVocab = takeVocab(listeningN);
+  final cn2enVocab = takeVocab(cn2enN);
+  final en2cnVocab = takeVocab(en2cnN);
+  final spellVocab = takeVocab(spellN);
 
   final sections = <_EngSection>[];
   List<List<String>>? matchVocab;
