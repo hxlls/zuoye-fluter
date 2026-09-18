@@ -278,15 +278,28 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  int get _tabIndex => switch (_tab) {
+        'ai' => 1,
+        'settings' => 2,
+        _ => 0,
+      };
+
+  /// 用 [IndexedStack] 而不是 `switch`：切 Tab **不再销毁**子树。
+  ///
+  /// 原先用 switch 时，每次离开标签都会把面板整棵销毁、回来再重建，
+  /// 由此派生出一整类问题（AI 面板勾选丢失、科目回退、对话清空、
+  /// 已生成的预览消失、异步恢复期间闪一下默认值…）。
+  /// 之前是靠给每个面板补持久化来兜，现在从根上不再销毁。
+  /// 持久化仍然保留——它管的是「重开 App 后还在」，两者互补。
   Widget _tabBody(bool wide) {
-    switch (_tab) {
-      case 'ai':
-        return _aiBody();
-      case 'settings':
-        return _settingsBody();
-      default:
-        return _homeBody(wide);
-    }
+    return IndexedStack(
+      index: _tabIndex,
+      children: [
+        _homeBody(wide),
+        _aiBody(),
+        _settingsBody(),
+      ],
+    );
   }
 
   Widget _bottomNav() {
@@ -418,9 +431,15 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         Expanded(
-          child: _aiMode == 'gen'
-              ? AiPanel(grade: _grade, version: _version, volume: _volume)
-              : AiHelpPanel(grade: _grade, version: _version, volume: _volume),
+          // 同理：切「出题 / 帮答」不再销毁对方，
+          // 已生成的题目与进行中的对话都留在原地
+          child: IndexedStack(
+            index: _aiMode == 'gen' ? 0 : 1,
+            children: [
+              AiPanel(grade: _grade, version: _version, volume: _volume),
+              AiHelpPanel(grade: _grade, version: _version, volume: _volume),
+            ],
+          ),
         ),
       ],
     );

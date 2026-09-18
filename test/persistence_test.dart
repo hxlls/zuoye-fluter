@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zuoye_fluter/data/app_data.dart';
 import 'package:zuoye_fluter/data/panel_pref_store.dart';
 import 'package:zuoye_fluter/data/work_context_store.dart';
+import 'package:zuoye_fluter/ui/ai_help_panel.dart';
+import 'package:zuoye_fluter/ui/ai_panel.dart';
 import 'package:zuoye_fluter/ui/home_page.dart';
 import 'package:zuoye_fluter/ui/math_panel.dart';
 import 'package:zuoye_fluter/ui/panel_widgets.dart';
@@ -143,5 +145,64 @@ void main() {
     await pumpMath();
 
     expect(diffOf(), 'hard', reason: '难度选择应被持久化，而不是每次回到「简单」');
+  });
+
+  group('IndexedStack · 切 Tab 不销毁子树', () {
+    // 用「面板是否还在 widget 树里」区分两种实现：
+    // - IndexedStack：未显示的子树仍在树中（offstage），状态得以保留
+    // - 原先的 switch：直接返回另一个子树，离开的那个被销毁
+    testWidgets('切到「设置」后 AI 出题 / 帮答仍在树中', (tester) async {
+      await pumpHome(tester);
+      expect(find.byType(AiPanel, skipOffstage: false), findsOneWidget);
+
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AiPanel, skipOffstage: false), findsOneWidget,
+          reason: '切 Tab 不应销毁 AI 出题面板');
+      expect(find.byType(AiHelpPanel, skipOffstage: false), findsOneWidget,
+          reason: '切 Tab 不应销毁 AI 帮答面板');
+    });
+
+    testWidgets('「出题 / 帮答」互相切换时不销毁对方', (tester) async {
+      await pumpHome(tester);
+      await tester.tap(find.text('AI'));
+      await tester.pumpAndSettle();
+
+      // 默认在「出题」，帮答也应已在树中
+      expect(find.byType(AiHelpPanel, skipOffstage: false), findsOneWidget);
+
+      await tester.tap(find.textContaining('AI 帮答'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AiPanel, skipOffstage: false), findsOneWidget,
+          reason: '切到帮答不应销毁出题面板（已生成的题目应留在原地）');
+    });
+
+    testWidgets('切回「出题」时题型勾选仍是上次的样子', (tester) async {
+      await pumpHome(tester);
+      await tester.tap(find.text('AI'));
+      await tester.pumpAndSettle();
+
+      // 取消第一行题型
+      await tester.tap(find.byType(Checkbox).first);
+      await tester.pumpAndSettle();
+      final before = tester
+          .widgetList<TypeRow>(find.byType(TypeRow))
+          .first
+          .checked;
+      expect(before, isFalse);
+
+      await tester.tap(find.textContaining('AI 帮答'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('AI 出题'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widgetList<TypeRow>(find.byType(TypeRow)).first.checked,
+        isFalse,
+        reason: '不销毁子树时，勾选状态应原地保留',
+      );
+    });
   });
 }
