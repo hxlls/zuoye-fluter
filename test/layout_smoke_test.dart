@@ -99,8 +99,10 @@ void main() {
       await pumpPanel(tester, 320,
           const AiPanel(grade: 6, version: 'renjiao', volume: '上'));
 
-      // 题型行是 ListView/Column 里的普通行，窄屏下也应存在
-      expect(find.text('计算题'), findsWidgets);
+      // 默认科目是数学（与显示顺序解耦），所以这里应当能查到数学题型。
+      // 不改成「只断言有 TypeRow 就行」——那样等于什么都没验证。
+      expect(find.text('计算题'), findsWidgets,
+          reason: '默认科目为数学，窄屏下应能看到数学题型行');
       expectNoException(tester, '320px AI 出题');
     });
   });

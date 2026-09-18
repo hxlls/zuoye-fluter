@@ -366,6 +366,25 @@ void main() {
       expect(titles.length, titles.toSet().length,
           reason: '同一个大题被编了多次号：$titles');
       expect(titles, isNotEmpty, reason: '应至少有一个大题');
+
+      // 反向错误防线：若把「正常大题」误标成续页，标题会变少，
+      // 上面那条「互不重复」的断言反而照样通过 —— 必须单独断言数量。
+      expect(titles.length, 2,
+          reason: '一年级英语只有「字母书写练习」「单词抄写」2 个大题：$titles');
+
+      // 防空转防线：只有真的发生了拆页，本用例才在验证续页逻辑。
+      // （历史教训：中英连线题的回归测试第一版因为没触发跨页而永远通过。）
+      final conts = <String>[];
+      for (final p in pages) {
+        for (final n in p.nodes) {
+          if (n is WsHeading && n.continuation) conts.add(n.title);
+        }
+      }
+      expect(conts, isNotEmpty, reason: '本用例必须真的触发拆页，否则验证不到续页逻辑');
+      for (final t in conts) {
+        expect(titles.contains(t), isTrue,
+            reason: '续页标题「$t」没有对应的大题，说明该大题被漏编号了');
+      }
     });
 
     test('参考答案不含 HTML 标签', () async {

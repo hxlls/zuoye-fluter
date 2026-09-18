@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/scope_guard.dart';
+import '../data/app_data.dart';
 import '../core/worksheet_model.dart';
 import '../data/ai_pref_store.dart';
 import '../ai/ai_generator.dart';
@@ -25,7 +26,15 @@ class AiPanel extends StatefulWidget {
 }
 
 class _AiPanelState extends State<AiPanel> {
-  String _subject = 'math';
+  /// 首次使用时的默认科目。
+  ///
+  /// **刻意与 [_subjectOptions] 的显示顺序解耦**：显示顺序按主页科目卡片的
+  /// 习惯排（语文/数学/英语），但默认值沿用历史行为（数学）。
+  /// 之前用 `_subjectOptions.first` 当默认值，导致「只是调了下顺序」就
+  /// 悄悄把默认科目从数学改成了语文——这是不该发生的隐式行为变更。
+  static const String _defaultSubject = 'math';
+
+  String _subject = _defaultSubject;
   String _diff = 'easy';
   bool _showAnswer = true;
   String _theme = '';
@@ -52,8 +61,39 @@ class _AiPanelState extends State<AiPanel> {
     if (oldWidget.grade != widget.grade ||
         oldWidget.version != widget.version ||
         oldWidget.volume != widget.volume) {
+      if (oldWidget.version != widget.version &&
+          !_subjectOptions.any((o) => o.$1 == _subject)) {
+        // 换教材版本后原科目可能不再提供（如切到外研只剩英语）
+        _switchSubject(_fallbackSubject);
+        return;
+      }
       setState(_seedStyles);
     }
+  }
+
+  /// 当前教材版本支持的科目。
+  ///
+  /// 口径与主页科目卡片一致：**语文与练字帖共用 cally 支持键**
+  /// （两者都源自语文教科书），所以 cally 为 null 的版本（冀教/外研）不提供语文。
+  /// 原先这里写死了「数学/英语/语文」三项，于是选了「外研·三起点」（只有英语）
+  /// 依然能选语文、数学，选出来的题目自然不对路。
+  List<(String, String)> get _subjectOptions {
+    final support = AppData().versionSupport[widget.version] ??
+        AppData().versionSupport['renjiao']!;
+    final out = <(String, String)>[];
+    if (support['cally'] != null) out.add(('chinese', '语文'));
+    if (support['math'] != null) out.add(('math', '数学'));
+    if (support['eng'] != null) out.add(('english', '英语'));
+    return out.isEmpty ? <(String, String)>[('math', '数学')] : out;
+  }
+
+  /// 当前版本下应使用的科目：优先保留历史默认（数学）；
+  /// 只有当该版本不提供数学时才退到第一个可用科目（如外研只剩英语）。
+  String get _fallbackSubject {
+    final opts = _subjectOptions;
+    return opts.any((o) => o.$1 == _defaultSubject)
+        ? _defaultSubject
+        : opts.first.$1;
   }
 
   /// 当前科目在当前年级下可用的题型
@@ -87,8 +127,12 @@ class _AiPanelState extends State<AiPanel> {
     final opts = await AiPrefStore.loadOpts();
     if (!mounted) return;
     setState(() {
-      if (subject != null && AI_STYLE_OPTIONS.containsKey(subject)) {
+      if (subject != null &&
+          AI_STYLE_OPTIONS.containsKey(subject) &&
+          _subjectOptions.any((o) => o.$1 == subject)) {
         _subject = subject;
+      } else {
+        _subject = _fallbackSubject;
       }
       _styles
         ..clear()
@@ -288,11 +332,7 @@ class _AiPanelState extends State<AiPanel> {
         FormGroup(
           label: '科目',
           child: SegButtons(
-            options: const [
-              ('math', '数学'),
-              ('english', '英语'),
-              ('chinese', '语文'),
-            ],
+            options: _subjectOptions,
             value: _subject,
             onChanged: _switchSubject,
           ),

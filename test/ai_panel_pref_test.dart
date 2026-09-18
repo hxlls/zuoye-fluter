@@ -204,4 +204,109 @@ void main() {
       expect(await AiPrefStore.loadHelpSubject(), isNull);
     });
   });
+
+  group('AI 面板的科目按教材版本过滤', () {
+    // 读 AI 面板「科目」那个 SegButtons 的选项值。
+    // 用选项值而不是文案断言，避免和别处的「语文」字样撞车。
+    List<String> subjectOptions(WidgetTester tester) {
+      for (final s in tester.widgetList<SegButtons>(find.byType(SegButtons))) {
+        if (s.options.any((o) => o.$1 == 'chinese' || o.$1 == 'english')) {
+          return s.options.map((o) => o.$1).toList();
+        }
+      }
+      return <String>[];
+    }
+
+    // 读当前「选中」的科目值（SegButtons.value）
+    String? selectedSubject(WidgetTester tester) {
+      for (final s in tester.widgetList<SegButtons>(find.byType(SegButtons))) {
+        if (s.options.any((o) => o.$1 == 'chinese' || o.$1 == 'english')) {
+          return s.value;
+        }
+      }
+      return null;
+    }
+
+    Future<void> setVersion(WidgetTester tester, String name) async {
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(name));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('人教版：显示顺序为 语文/数学/英语，且默认选中数学', (tester) async {
+      await pumpHome(tester);
+      await gotoAi(tester);
+      // 显示顺序：按主页科目卡片的习惯排
+      expect(subjectOptions(tester), ['chinese', 'math', 'english']);
+      // 默认值：沿用历史行为，必须是数学。
+      // 这一条**不能省**——曾经因为用 `options.first` 当默认值，
+      // 调一次显示顺序就把默认科目悄悄从数学变成了语文。
+      expect(selectedSubject(tester), 'math',
+          reason: '默认科目必须与显示顺序解耦，保持为数学');
+    });
+
+    testWidgets('默认科目的题型清单确实是数学的', (tester) async {
+      await pumpHome(tester);
+      await gotoAi(tester);
+      expect(selectedSubject(tester), 'math');
+      final labels =
+          tester.widgetList<TypeRow>(find.byType(TypeRow)).map((r) => r.label).toList();
+      expect(labels, contains('计算题'));
+      expect(labels, isNot(contains('生字组词')),
+          reason: '默认是数学时不应显示语文题型');
+    });
+
+    testWidgets('该版本不提供数学时，才退到第一个可用科目', (tester) async {
+      await pumpHome(tester);
+      await setVersion(tester, '外研·三起点');
+      await gotoAi(tester);
+      expect(subjectOptions(tester), ['english']);
+      expect(selectedSubject(tester), 'english',
+          reason: '外研不提供数学，应退到唯一可用的英语');
+    });
+
+    testWidgets('冀教版：不提供语文（cally 为 null）', (tester) async {
+      await pumpHome(tester);
+      await setVersion(tester, '冀教版');
+      await gotoAi(tester);
+      expect(subjectOptions(tester), ['math', 'english']);
+    });
+
+    testWidgets('外研·三起点：只剩英语', (tester) async {
+      await pumpHome(tester);
+      await setVersion(tester, '外研·三起点');
+      await gotoAi(tester);
+      expect(subjectOptions(tester), ['english'],
+          reason: '外研三起点只提供英语，原先这里写死了三项');
+    });
+
+    testWidgets('外研·一起点：也只剩英语', (tester) async {
+      await pumpHome(tester);
+      await setVersion(tester, '外研·一起点');
+      await gotoAi(tester);
+      expect(subjectOptions(tester), ['english']);
+    });
+
+    testWidgets('当前科目被版本淘汰时自动切到可用科目', (tester) async {
+      await pumpHome(tester);
+      await gotoAi(tester);
+      // 选语文
+      await tester.tap(find.text('语文'));
+      await tester.pumpAndSettle();
+      expect(subjectOptions(tester), contains('chinese'));
+
+      // 切到外研三起点（不提供语文）——应自动落到英语，而不是停在一个不存在的科目上
+      await setVersion(tester, '外研·三起点');
+      await gotoAi(tester);
+      expect(subjectOptions(tester), ['english']);
+      // 题型列表应变成英语的题型
+      final labels = tester
+          .widgetList<TypeRow>(find.byType(TypeRow))
+          .map((r) => r.label)
+          .toList();
+      expect(labels, isNot(contains('生字组词')),
+          reason: '切到只提供英语的版本后，不应还显示语文题型');
+    });
+  });
 }
