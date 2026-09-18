@@ -7,9 +7,15 @@ import 'package:zuoye_fluter/ui/home_page.dart';
 void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    // 设置页会渲染 AI 配置卡，其 AiStore.load() 走 SharedPreferences
-    SharedPreferences.setMockInitialValues({});
     await AppData().load();
+  });
+
+  setUp(() {
+    // 每个用例前重置存储。home_page 现在会持久化教材版本/学期/年级，
+    // 不重置的话上一个用例选过的「外研三起点 · 3年级」会串进下一个用例
+    // （表现为「1年级」找不到）——这是持久化生效后的必然结果，测试必须隔离。
+    // 同时设置页会渲染 AiConfigCard，其 AiStore.load() 也走 SharedPreferences。
+    SharedPreferences.setMockInitialValues({});
   });
 
   Future<void> pumpHome(WidgetTester tester) async {

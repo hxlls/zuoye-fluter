@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/math_worksheet.dart';
 import '../core/type_catalog.dart';
 import '../core/worksheet_model.dart';
+import '../data/panel_pref_store.dart';
 import '../data/type_count_store.dart';
 import 'panel_widgets.dart';
 import 'preview_panel.dart';
@@ -60,16 +61,28 @@ class _MathPanelState extends State<MathPanel> {
   /// 「没设置过」，会把用户取消勾选的题型重新填回默认题量。
   Future<void> _loadCounts() async {
     final seeded = await TypeCountStore.loadSeeded(Subject.math, _specs);
+    // 选项（难度/附答案/显示标题栏）也一并恢复：面板是 push 出来的全屏页，
+    // 返回时会被销毁，不持久化的话每次重进都回到默认值。
+    final opts = await PanelPrefStore.load('math');
     if (!mounted) return;
     setState(() {
       _counts
         ..clear()
         ..addAll(seeded);
+      _diff = opts['diff'] as String? ?? _diff;
+      _showAnswer = opts['showAnswer'] as bool? ?? _showAnswer;
+      _showTitle = opts['showTitle'] as bool? ?? _showTitle;
     });
     _regenerate();
   }
 
   Future<void> _persist() => TypeCountStore.save(Subject.math, _counts);
+
+  Future<void> _persistOpts() => PanelPrefStore.save('math', {
+        'diff': _diff,
+        'showAnswer': _showAnswer,
+        'showTitle': _showTitle,
+      });
 
   void _regenerate() {
     _pages = mathRenderPages(MathOptions(
@@ -162,6 +175,7 @@ class _MathPanelState extends State<MathPanel> {
                 _diff = v;
                 _regenerate();
               });
+              _persistOpts();
             },
           ),
         ),
@@ -177,6 +191,7 @@ class _MathPanelState extends State<MathPanel> {
                     _showAnswer = v;
                     _regenerate();
                   });
+                  _persistOpts();
                 },
               ),
               CheckLabel(
@@ -187,6 +202,7 @@ class _MathPanelState extends State<MathPanel> {
                     _showTitle = v;
                     _regenerate();
                   });
+                  _persistOpts();
                 },
               ),
             ],

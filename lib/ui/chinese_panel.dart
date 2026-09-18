@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/app_data.dart';
 import '../data/corpus_store.dart';
+import '../data/panel_pref_store.dart';
 import '../data/type_count_store.dart';
 import '../core/chinese_worksheet.dart';
 import '../core/type_catalog.dart';
@@ -249,17 +250,30 @@ class _ChinesePanelState extends State<ChinesePanel> {
   /// 失效题型、又不持久化，切一次版本就全没了。
   Future<void> _loadCounts() async {
     final seeded = await TypeCountStore.loadSeeded(Subject.chinese, _specs);
+    // 选项（附答案/显示标题栏/课文模式）也一并恢复：面板是 push 出来的全屏页，
+    // 返回时会被销毁，不持久化的话每次重进都回到默认值。
+    final opts = await PanelPrefStore.load('chinese');
     if (!mounted) return;
     setState(() {
       _counts
         ..clear()
         ..addAll(seeded);
+      _showAnswer = opts['showAnswer'] as bool? ?? _showAnswer;
+      _showTitle = opts['showTitle'] as bool? ?? _showTitle;
+      // 课文模式：仅当用户手动开关过才覆盖「按版本推断」的默认值
+      _useTextbook = opts['useTextbook'] as bool? ?? _useTextbook;
     });
     _regenerate();
   }
 
   Future<void> _persistCounts() =>
       TypeCountStore.save(Subject.chinese, _counts);
+
+  Future<void> _persistOpts() => PanelPrefStore.save('chinese', {
+        'showAnswer': _showAnswer,
+        'showTitle': _showTitle,
+        'useTextbook': _useTextbook,
+      });
 
   List<ReadingBlockData> get _corpus {
     final c = _activeCorpus();
@@ -1246,6 +1260,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     _showAnswer = v;
                     _regenerate();
                   });
+                  _persistOpts();
                 },
               ),
               CheckLabel(
@@ -1256,6 +1271,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     _showTitle = v;
                     _regenerate();
                   });
+                  _persistOpts();
                 },
               ),
               if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}
@@ -1276,6 +1292,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                       _regenerate();
                     });
                     _persistCounts();
+                    _persistOpts();
                   },
                 ),
               if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}

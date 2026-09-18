@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/app_data.dart';
+import '../data/work_context_store.dart';
 import 'about_panel.dart';
 import 'ai_config_card.dart';
 import 'ai_help_panel.dart';
@@ -67,8 +68,28 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _load() async {
     await AppData().load();
-    if (mounted) setState(() => _dataReady = true);
+    final ctx = await WorkContextStore.load();
+    if (!mounted) return;
+    setState(() {
+      if (ctx != null) {
+        // 防御：版本可能在后续版本里被移除；年级可能不被该版本支持
+        _version = AppData().textbooks.containsKey(ctx.version)
+            ? ctx.version
+            : 'renjiao';
+        _volume = ctx.volume == '下' ? '下' : '上';
+        _grade = ctx.grade.clamp(1, 6);
+        _normalizeGrade();
+      }
+      _dataReady = true;
+    });
   }
+
+  /// 教材版本/学期/年级任一变化后落盘，下次启动直接恢复
+  Future<void> _saveContext() => WorkContextStore.save(
+        version: _version,
+        volume: _volume,
+        grade: _grade,
+      );
 
   // ---------------- 数据查询 ----------------
 
@@ -126,9 +147,22 @@ class _HomePageState extends State<HomePage> {
       _version = k;
       _normalizeGrade();
     });
+    _saveContext();
     if (_grade != before) {
       _toast('${_versionName(k)} 没有 $before 年级，已切到 $_grade 年级');
     }
+  }
+
+  void _setVolume(String v) {
+    if (v == _volume) return;
+    setState(() => _volume = v);
+    _saveContext();
+  }
+
+  void _setGrade(int g) {
+    if (g == _grade) return;
+    setState(() => _grade = g);
+    _saveContext();
   }
 
   void _toast(String msg) {
@@ -424,8 +458,7 @@ class _HomePageState extends State<HomePage> {
                     spacing: 7,
                     children: [
                       for (final (k, l) in const [('上', '上册'), ('下', '下册')])
-                        _chip(l, _volume == k,
-                            () => setState(() => _volume = k)),
+                        _chip(l, _volume == k, () => _setVolume(k)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -435,8 +468,7 @@ class _HomePageState extends State<HomePage> {
                     runSpacing: 7,
                     children: [
                       for (final g in grades)
-                        _chip('$g年级', _grade == g,
-                            () => setState(() => _grade = g)),
+                        _chip('$g年级', _grade == g, () => _setGrade(g)),
                     ],
                   ),
                   const SizedBox(height: 10),

@@ -7,8 +7,12 @@ import 'package:zuoye_fluter/ui/home_page.dart';
 void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    SharedPreferences.setMockInitialValues({});
     await AppData().load();
+  });
+
+  setUp(() {
+    // 每个用例前重置存储，避免教材版本/年级在用例之间串味
+    SharedPreferences.setMockInitialValues({});
   });
 
   Future<void> pumpMobile(WidgetTester tester) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/calligraphy_worksheet.dart';
+import '../data/panel_pref_store.dart';
 import 'panel_widgets.dart';
 import 'preview_panel.dart';
 
@@ -27,8 +28,38 @@ class _CalligraphyPanelState extends State<CalligraphyPanel> {
   @override
   void initState() {
     super.initState();
-    _regenerate();
+    _regenerate();   // 先用默认值渲染，避免首帧空白
+    _loadOpts();     // 再异步覆盖为用户上次的选择
   }
+
+  /// 恢复上次的练字帖选项。面板是 push 出来的全屏页，返回时会被销毁，
+  /// 不持久化的话每次重进都回到默认值（字数/每行格数/练习遍数/拼音/标题栏…）。
+  Future<void> _loadOpts() async {
+    final o = await PanelPrefStore.load('calligraphy');
+    if (!mounted || o.isEmpty) return;
+    setState(() {
+      _opts.source = o['source'] as String? ?? _opts.source;
+      _opts.charCount = o['charCount'] as int? ?? _opts.charCount;
+      _opts.customText = o['customText'] as String? ?? _opts.customText;
+      _opts.practice = o['practice'] as int? ?? _opts.practice;
+      _opts.perRow = o['perRow'] as int? ?? _opts.perRow;
+      _opts.rows = o['rows'] as int? ?? _opts.rows;
+      _opts.showPinyin = o['showPinyin'] as bool? ?? _opts.showPinyin;
+      _opts.showTitle = o['showTitle'] as bool? ?? _opts.showTitle;
+      _regenerate();
+    });
+  }
+
+  Future<void> _persistOpts() => PanelPrefStore.save('calligraphy', {
+        'source': _opts.source,
+        'charCount': _opts.charCount,
+        'customText': _opts.customText,
+        'practice': _opts.practice,
+        'perRow': _opts.perRow,
+        'rows': _opts.rows,
+        'showPinyin': _opts.showPinyin,
+        'showTitle': _opts.showTitle,
+      });
 
   @override
   void didUpdateWidget(CalligraphyPanel oldWidget) {
@@ -61,6 +92,7 @@ class _CalligraphyPanelState extends State<CalligraphyPanel> {
       f();
       _regenerate();
     });
+    _persistOpts();
   }
 
   @override
