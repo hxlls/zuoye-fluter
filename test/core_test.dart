@@ -8,6 +8,7 @@ import 'package:zuoye_fluter/core/english_worksheet.dart';
 import 'package:zuoye_fluter/core/wav_merge.dart';
 import 'package:zuoye_fluter/core/calligraphy_worksheet.dart';
 import 'package:zuoye_fluter/core/rand_gen.dart';
+import 'package:zuoye_fluter/core/type_catalog.dart';
 import 'package:zuoye_fluter/core/worksheet_model.dart';
 import 'package:zuoye_fluter/ai/ai_generator.dart';
 
@@ -216,6 +217,28 @@ void main() {
           final a = p.ans.toString();
           expect(longDecimal.hasMatch(a), false,
               reason: '$tid 第 $i 次答案「$a」含未格式化的长小数');
+        }
+      }
+    });
+
+    test('题型标签都已本地化（不出现英文 id）', () async {
+      await AppData().load();
+      // 历史 bug：ailistening 有实现、代码里也有中文标签，
+      // 但界面读的是 data.json 的 ENG_TYPE_LABELS，那份漏了它，
+      // 于是题型列表里直接显示英文 id「ailistening」。
+      // 这条断言保证「新增题型但忘了加标签」不会再悄悄溜过去。
+      for (final grade in [1, 3, 6]) {
+        for (final v in ['renjiao', 'hebei', 'waiyanSQ', 'waiyanYQ']) {
+          for (final s in TypeCatalog.of(Subject.english,
+              version: v, grade: grade, includeUnavailable: true)) {
+            expect(s.label, isNot(equals(s.id)),
+                reason: '英语题型「${s.id}」在 $v/$grade 年级下标签退化成了 id');
+          }
+          for (final s in TypeCatalog.of(Subject.chinese,
+              version: v, grade: grade, includeUnavailable: true)) {
+            expect(s.label, isNot(equals(s.id)),
+                reason: '语文题型「${s.id}」在 $v/$grade 年级下标签退化成了 id');
+          }
         }
       }
     });
