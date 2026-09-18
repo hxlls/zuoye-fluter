@@ -79,7 +79,7 @@ class _PanelLayoutState extends State<PanelLayout> {
     }
 
     // 手机：配置页 / 预览页各自全屏
-    return Column(
+    final content = Column(
       children: [
         if (_showPreview) _previewBar(),
         Expanded(
@@ -92,6 +92,18 @@ class _PanelLayoutState extends State<PanelLayout> {
         ),
         if (!_showPreview && widget.onGenerate != null) _stickyBar(),
       ],
+    );
+
+    // 手机端：在预览页按系统返回键应**先回到配置页**，而不是直接退出整个面板。
+    // 实机验证过：不加这个的话，预览页按一次返回会一路退出应用
+    // （前台直接变成桌面 NexusLauncherActivity），用户会以为「点返回把应用关了」。
+    return PopScope(
+      canPop: !_showPreview,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() => _showPreview = false);
+      },
+      child: content,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zuoye_fluter/data/app_data.dart';
 import 'package:zuoye_fluter/ui/home_page.dart';
+import 'package:zuoye_fluter/ui/panel_widgets.dart';
 
 void main() {
   setUpAll(() async {
@@ -81,5 +82,40 @@ void main() {
     expect(find.text('教材版本'), findsOneWidget);
     expect(find.text('外研·一起点'), findsOneWidget);
     expect(find.text('年级'), findsOneWidget);
+  });
+
+  testWidgets('手机端预览页按系统返回先回配置页，不退出面板', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: PanelLayout(
+          config: const Text('配置内容'),
+          preview: const Text('预览内容'),
+          onGenerate: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('配置内容'), findsOneWidget);
+
+    // 进入预览
+    await tester.tap(find.text('生成预览'));
+    await tester.pumpAndSettle();
+    expect(find.text('预览内容'), findsOneWidget);
+
+    // 模拟系统返回键：应回到配置页，而不是把整个面板弹掉
+    // （实机上不加 PopScope 时，这一下会直接退出应用）
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('配置内容'), findsOneWidget,
+        reason: '预览页按返回应先回到配置页');
+    expect(find.text('预览内容'), findsNothing);
+
+    // 回到配置页后，返回键应恢复默认行为（正常弹出面板）
+    expect(tester.binding.handlePopRoute(), completes);
   });
 }
