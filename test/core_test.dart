@@ -183,6 +183,26 @@ void main() {
       }
     });
 
+    test('选择题按题干去重（选项乱序不算新题）', () async {
+      await AppData().load();
+      // 历史 bug：选择题的 expr 里含**乱序后的选项**，而 problemKey 直接用 expr，
+      // 于是同一道题换个选项顺序就被当成新题，去重失效，
+      // 同一道题会在同一份卷子上出现两次。
+      final g = RandGen(diff: 'mid', grade: 6);
+      final byStem = <String, Set<String>>{};
+      for (var i = 0; i < 400; i++) {
+        final p = genMathProblem('probability', g);
+        final stem = p.expr!.split('\n').first;
+        byStem.putIfAbsent(stem, () => <String>{}).add(problemKey('probability', p));
+      }
+      // 同一个题干的多次抽取，key 必须唯一
+      for (final e in byStem.entries) {
+        expect(e.value.length, 1,
+            reason: '题干「${e.key}」对应了 ${e.value.length} 个 key，'
+                '说明选项乱序被当成了新题');
+      }
+    });
+
     test('参考答案不含 HTML 标签', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(

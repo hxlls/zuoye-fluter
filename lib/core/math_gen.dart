@@ -16,6 +16,14 @@ class MathProblem {
   final bool longDiv;      // 长除法竖式
   final bool vertical;     // 竖式（普通加减乘）
 
+  /// 去重用的稳定标识；为空时由 [problemKey] 从 expr/a/op/b 推导。
+  ///
+  /// **选择题必须显式给**：它的 [expr] 里含**乱序后的选项**
+  /// （「A. 一定　B. 可能　C. 不可能」），而选项顺序是随机的，
+  /// 同一道题换个顺序就会被当成新题，去重失效——
+  /// 历史上导致同一道题在同一份卷子上出现两次（已修）。
+  final String? dedupKey;
+
   MathProblem({
     required this.tid,
     this.expr,
@@ -28,6 +36,7 @@ class MathProblem {
     this.compare = false,
     this.longDiv = false,
     this.vertical = false,
+    this.dedupKey,
   });
 }
 
@@ -749,7 +758,12 @@ MathProblem _mc(String tid, String q, String correct, List<String> wrong, RandGe
     sb.write('${letters[i]}. ${opts[i]}    ');
   }
   return MathProblem(
-      tid: tid, word: true, expr: sb.toString().trimRight(), ans: letters[idx]);
+      tid: tid,
+      word: true,
+      expr: sb.toString().trimRight(),
+      ans: letters[idx],
+      // 按**题干**去重：expr 里含乱序选项，不能拿来当去重依据
+      dedupKey: q);
 }
 
 /// Fisher-Yates 乱序（基于 RandGen，保证可复现）
@@ -875,6 +889,8 @@ MathProblem genMathCulture(String tid, RandGen g) {
 
 /// 题目去重 key（移植 problemKey）
 String problemKey(String tid, MathProblem prob) {
+  // 显式去重标识优先：选择题靠它排除「选项乱序」的干扰
+  if (prob.dedupKey != null) return 'k|$tid|${prob.dedupKey}';
   if (prob.expr != null) return 'e|$tid|${prob.expr}';
   return '$tid|${prob.a}${prob.op}${prob.b}';
 }
