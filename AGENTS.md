@@ -8,7 +8,7 @@
 小学作业生成器（练字帖 / 语文 / 数学 / 英语 / AI 出题），**Flutter 重写版**。
 技术栈 Dart/Flutter（`lib/`，约 13k 行），目标平台 **Windows 桌面 + Android APK + Web**。
 
-- 原 JS 版（Electron + Capacitor）在 `/home/ling/xiaoxuezuoye`，本目录是其 Dart 移植。
+- 原 JS 版（Electron + Capacitor 实现）是上一代实现，本目录是其 Dart 移植。
 - CI：`.github/workflows/build.yml`。**注意 build job 的触发条件是 `pubspec.yaml`
   版本号发生变化**（比较 `HEAD^` 与 `HEAD`）—— 只推代码不改版本号，
   只会跑 `check`（analyze + test），**不会编译、不会发 Release**。
@@ -189,47 +189,33 @@ bash scripts/validate.sh      # = flutter analyze + flutter test + 版本号一�
 只改 `pubspec.yaml` 的 `version`（格式 `3.1.0+30100`，`+` 后为 versionCode），
 然后 `node scripts/sync-version.js` 同步 `lib/data/app_data.dart`。**不要手改 app_data.dart。**
 
-## Web 预览部署（局域网演示用）
+### 把 Web 版部署到子路径时
 
-```bash
-bash _deploy.sh     # 构建 + 部署 + 自测，一步到位
-```
+Release 里的 Web 包是让用户解压后直接打开 `index.html`，走相对路径、无需额外配置。
+但若要把它挂到某个子路径（例如 `/app/`），有两点必须注意，否则会出现
+「怎么都打不开」或「改完看不到」：
 
-三件必须记住的事：
+- **构建加 `--base-href /app/`**。Flutter 默认生成 `<base href="/">`，
+  会让 `main.dart.js` / `assets/` / `canvaskit/` 全去请求根路径 → 404 → **整页空白**。
+- **构建加 `--pwa-strategy=none`**。默认策略会把 `main.dart.js` 整个缓存进
+  service worker 的 CORE 列表，用户会一直看到旧版本（表现为「你明明说改了，
+  我这边没变化」）。若此前注册过离线 SW，还需用一个会 `skipWaiting` + 清缓存 +
+  `unregister()` 的自我注销脚本来顶替它。
 
-1. **必须带 `--base-href /app/`**。应用部署在 `/app/` 子路径下，而 Flutter 默认生成
-   `<base href="/">`，会让 `main.dart.js` / `assets/` / `canvaskit/` 全部去请求根路径 →
-   **整页空白**。`_deploy.sh` 里有断言，base href 不是 `/app/` 直接 `exit 1`。
-2. **必须带 `--pwa-strategy=none`**，并放一个**自我注销**的 service worker。
-   默认策略会把 `main.dart.js` 整个缓存进 CORE，用户会一直看到旧版本
-   （表现为「你明明说改了，我这边没变化」）。
-3. **给 `flutter_bootstrap.js` 加版本参数** + 注入 `no-store` meta。
-   `python http.server` 不返回 `Cache-Control`，浏览器会用启发式缓存**不重新验证**，
-   这是「部署了但用户看不到」的头号原因。
+## 环境要求
 
-⚠️ `nohup python3 -m http.server &` 会被 SSH 会话结束连带杀掉，服务挂了就重跑 `_serve_up.sh`。
-
-## 环境注意
-
-- Flutter 在 `~/flutter/flutter`；JDK 21 在 `~/jdk21`（系统 Java 25 与 AGP 不兼容）
-- pub 走镜像：`PUB_HOSTED_URL=https://pub.flutter-io.cn`、
+- **Flutter 3.24.5**（CI 固定此版本，更高版本未验证）
+- **JDK 21**：Android Gradle Plugin 与更新版本的 Java 不兼容
+  （例如系统自带的 Java 25 会导致构建失败）
+- 国内网络下建议 pub 走镜像：
+  `PUB_HOSTED_URL=https://pub.flutter-io.cn`、
   `FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn`
-- Android SDK 在 `~/androidsdk`；模拟器 AVD 名 `zuoye`（1080×2340）
-- 本机无 GTK dev 库且无 sudo → 不构建 Linux 桌面版
+- Linux 桌面版需 GTK dev 库；官方分发的是 Windows / Android / Web 三端
 
-## 踩坑备忘
+## 两条经验
 
-- **批量改源码必须显式 `newline="\n"`**：Python 默认会把 `\n` 翻成 CRLF，
-  一个文件能因此显示 830 行变更。改完用
-  `awk '/\r/{n++} END{print n+0}' 文件` 检查（**别用 `grep -c`**，
-  计数为 0 时它返回退出码 1，会干扰脚本逻辑）
-- **dart2js 会把中文转成 `\uXXXX`**：想在产物里验证某句中文是否编进去了，
-  要搜转义串（如「续」→ `\u7eed`），直接搜中文一律 0 命中
-- **看截图下结论前必须裁剪放大**：1080×2340 的截图在会话里被缩到 ~500px，
-  中文字形极易看错，本项目已因此误判 3 次
-- **「测试全绿」不等于「产品没问题」**：本项目的真 bug 全部是
-  「把真实产物逐屏看一遍」发现的。自动断言只覆盖你想到了的那部分
-- **`input swipe` 在 Flutter 预览面板里滚回顶部无效**（InteractiveViewer 拦截），
-  可靠做法是点「调整参数」返回再重新生成
-- **模拟器坐标换算用统一比例 2.16**（截图 1080×2340 对应显示 500px 宽），
-  更稳的是用像素颜色直接定位控件
+- **验证 Web 产物里的中文，要搜转义串**。dart2js 会把中文转成 `\uXXXX`，
+  直接搜中文一律 0 命中（例如想确认「续」是否编进去了，应搜 `\u7eed`）。
+- **「测试全绿」不等于「产品没问题」**。本项目的真 bug 基本都是
+  「把真实产物完整看一遍」发现的 —— 自动断言只覆盖你想到了的那部分。
+  改完与渲染相关的代码后，建议至少把生成结果逐页看一遍。

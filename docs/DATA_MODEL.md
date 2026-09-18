@@ -212,15 +212,13 @@ TypeCatalog（lib/core/type_catalog.dart）★ 题型可用性唯一事实来源
 
 ### 平台差异
 
-- Android：`/data/data/com.ling.zuoye_fluter/shared_prefs/FlutterSharedPreferences.xml`
+- Android：应用私有目录下的 `shared_prefs/FlutterSharedPreferences.xml`
   （键名带 `flutter.` 前缀）
-- Web：浏览器 **localStorage**（与手机端**完全独立**）
-- 调试时可直接注入（`adb shell run-as <pkg> sh -c 'cat > shared_prefs/...'`），
-  但注意 `run-as` 读不了 `/sdcard`，得走 stdin 写入
+- Web：浏览器 **localStorage**（与手机端**完全独立**，设置不会跨端同步）
 
 ## 9. 数据来源与同步
 
-`assets/data.json` 由原 JS 项目（`/home/ling/xiaoxuezuoye`）的
+`assets/data.json` 由原 JS 版项目（Electron + Capacitor 实现）的
 `js/data.js` + `js/yuwen-corpus.js` 经转换脚本生成，**正常情况下不要手改**
 （例外：修 `ENG_TYPE_LABELS` 漏项这类「Dart 侧与 JSON 不一致」的问题时必须补 JSON）。
 
