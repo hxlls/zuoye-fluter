@@ -29,6 +29,24 @@ class ChineseOptions {
 }
 
 /// 语文题型指令
+/// 「照样子给生字组词」的示范词条。
+///
+/// **必须挑一个不在题面上的字** —— 拿题面要考的字当例子，
+/// 等于把答案直接给了学生。按顺序取第一个没被用到的。
+///
+/// 命名用 lowerCamelCase（Dart 官方风格）；本文件里几个大写下划线的
+/// 常量是历史遗留，新代码不沿用它，避免新增 lint。
+const zuciDemo = <List<String>>[
+  ['日', '日出、日记'],
+  ['水', '水果、喝水'],
+  ['花', '花朵、花园'],
+  ['天', '天空、白天'],
+  ['山', '高山、山水'],
+  ['风', '风筝、大风'],
+  ['雨', '下雨、雨水'],
+  ['手', '手心、双手'],
+];
+
 const CHINESE_INSTRUCTION = {
   'pinyin2char': '看拼音，在括号里写出相应的汉字。',
   'char2pinyin': '给下列汉字注上拼音。',
@@ -257,9 +275,6 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
 
   for (final (type, items) in sections) {
     const instrH = 38.0;
-    if (curContent.isNotEmpty && curH + instrH > usableH) flush();
-    curContent.add(WsSection(CHINESE_INSTRUCTION[type] ?? '按要求做题。'));
-    curH += instrH;
 
     final colFlow = type == 'chengyuGuess' || type == 'chengyuFill';
     final twoCol = type == 'gushiFill' || type == 'mingjuFill';
@@ -282,6 +297,24 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     }
 
     final rh = (colFlow ? colH(type) : rowH(type)) + 10;
+
+    // 大题标题（说明）必须与它的**第一行题目**同页。
+    // 原先只算 instrH，于是「说明放得下、第一行放不下」时会出现孤立标题：
+    // 标题留在上一页底部、题目全在下一页（数学那边同样的问题已修，见 math_worksheet）。
+    if (curContent.isNotEmpty && curH + instrH + rh > usableH) flush();
+    curContent.add(WsSection(CHINESE_INSTRUCTION[type] ?? '按要求做题。'));
+    curH += instrH;
+
+    // 「照样子给生字组词」——说明文字要求「照样子」，就得真的给出示范。
+    // 挑一个不在本题题面上的字，否则等于泄露答案。
+    if (type == 'zuci') {
+      final used = items.map((e) => e.ch).toSet();
+      final demo = zuciDemo.firstWhere((d) => !used.contains(d[0]),
+          orElse: () => zuciDemo.first);
+      curContent.add(WsNote('例：${demo[0]} → ${demo[1]}'));
+      curH += 26;
+    }
+
     // 试卷惯例：小题在本大题内连续编号（1. 2. 3.…）。
     // 补位卡（pad）不编号，所以序号与卡片一一对应地记在 rowNum 里。
     var seq = 0;

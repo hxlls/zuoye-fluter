@@ -308,6 +308,42 @@ void main() {
       }
     });
 
+    test('语文：大题标题不与它的题目分页', () async {
+      await AppData().load();
+      // 与数学同源的问题（语文有自己独立的分页逻辑）：
+      // 判断「说明放不放得下」时只算了说明高度，没算第一行题目，
+      // 于是标题会孤零零留在页尾、题目全跑到下一页。
+      for (final g in [1, 2, 3, 4, 5, 6]) {
+        for (final n in [3, 4, 6, 8, 10, 12, 16, 20]) {
+          final pages = chineseRenderPages(ChineseOptions(
+            grade: g,
+            version: 'renjiao',
+            volume: '上',
+            types: const ['pinyin2char', 'char2pinyin', 'zuci', 'gushiFill'],
+            counts: {
+              'pinyin2char': n,
+              'char2pinyin': n,
+              'zuci': n,
+              'gushiFill': n,
+            },
+            showAnswer: false,
+          ));
+          for (var i = 0; i < pages.length; i++) {
+            final nodes = pages[i].nodes;
+            if (nodes.isEmpty) continue;
+            final last = nodes.last;
+            // 语文的大题标题就是 WsSection（非 mathStyle）；
+            // 组词题标题后面还跟一行「例：…」（WsNote），所以两种都要查。
+            final orphan =
+                (last is WsSection && !last.mathStyle) || last is WsNote;
+            expect(orphan, false,
+                reason: '$g 年级 / 每型 $n 题：第 ${i + 1} 页以大题标题/说明结尾'
+                    '（题目被挤到了下一页）');
+          }
+        }
+      }
+    });
+
     test('参考答案不含 HTML 标签', () async {
       await AppData().load();
       final pages = mathRenderPages(MathOptions(
