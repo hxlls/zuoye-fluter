@@ -12,7 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// - `ttsStyle`：TTS 接口风格，决定走哪个端点（见 AiTts.speech）
 ///   - `'audio'`：POST /audio/speech，响应即音频二进制（OpenAI / 通义 / 智谱）
 ///   - `'chat'` ：POST /chat/completions 带 audio 参数，音频在
-///     choices[0].message.audio.data（MiMo；DeepSeek V4.1 Flash 属同类）
+///     choices[0].message.audio.data（MiMo 属此类）
+///   - `'auto'` ：风格未知（自定义地址），由语音模型名前缀推断
 const AI_PROVIDERS = {
   // DeepSeek：模型名以 `GET /models` 的返回为准 —— 2026-09 实测只有
   // `deepseek-flash` 与 `deepseek-v4-pro`（写成 deepseek-flash 会被拒）。
@@ -62,7 +63,9 @@ const AI_PROVIDERS = {
     voice: '',
     ttsStyle: 'audio'
   ),
-  'custom': (base: '', model: '', voice: '', ttsStyle: 'audio'),
+  // 自定义地址：接口风格未知，声明为 'auto'，由 AiEndpoint.ttsStyle
+  // 按语音模型名前缀推断（mimo- 系走 chat，其余走 /audio/speech）
+  'custom': (base: '', model: '', voice: '', ttsStyle: 'auto'),
 };
 
 /// 模型能力表 —— **能力判断的单一来源**。
@@ -145,44 +148,224 @@ class ModelCapability {
 }
 
 /// AI 配置
-class AiConfig {
+/// 一个 API 端点：一份独立的「地址 + Key + 模型」。
+///
+/// 为什么要支持多个：不同厂商能力不同 —— DeepSeek 支持多模态但不提供 TTS，
+/// 小米 MiMo 提供 TTS。此前只有一套 base/key，语音只能与主模型同厂商，
+/// 既无法分工，也无法为不同任务选不同模型。
+class AiEndpoint {
+  String id;
+
+  /// 显示名（如「DeepSeek 主力」），仅用于界面
+  String name;
+
+  /// AI_PROVIDERS 的 key，用于取预设默认值与 TTS 接口风格
   String provider;
+
   String base;
   String model;
+
+  /// 该端点的语音合成模型（听力配音用）。
+  /// **空 = 这个端点不提供 TTS**（旧行为里 voiceModel 为空即是此意）。
+  String voiceModel;
+
+  /// 密钥。内存中为明文；落盘时写入系统安全存储（见 AiStore）。
   String key;
   bool encrypted;
   bool decryptFailed;
-  /// 语音合成模型（听力配音用，如 OpenAI tts-1 / 通义 cosyvoice-v1 / 智谱 glm-4v-voice）
-  String voiceModel;
 
-  AiConfig({
+  AiEndpoint({
+    String? id,
+    this.name = '',
     this.provider = 'deepseek',
     this.base = '',
     this.model = '',
+    this.voiceModel = '',
     this.key = '',
     this.encrypted = false,
     this.decryptFailed = false,
-    this.voiceModel = '',
-  });
+  }) : id = id ?? newEndpointId();
 
-  factory AiConfig.fromJson(Map<String, dynamic> j) => AiConfig(
+  /// TTS 接口风格。
+  ///
+  /// 优先级：服务商预设的**明确**声明（'chat' / 'audio'）→
+  /// 否则（'auto' 或未登记的服务商）按语音模型名前缀推断 ——
+  /// mimo- 系走 chat/completions + audio，其余走 /audio/speech。
+  ///
+  /// ⚠️ 早先写成 `AI_PROVIDERS[provider]?.ttsStyle ?? (前缀判断)`，
+  /// 因为 custom 也在预设表里、且默认给了 'audio'，导致 `??` 右侧
+  /// **永远不执行**，前缀推断成了死代码（自定义地址配上 MiMo 风格接口会错）。
+  String get ttsStyle {
+    final declared = AI_PROVIDERS[provider]?.ttsStyle;
+    if (declared == 'chat' || declared == 'audio') return declared!;
+    return voiceModel.startsWith('mimo-') ? 'chat' : 'audio';
+  }
+
+  /// 该端点是否具备语音合成能力
+  bool get hasTts => voiceModel.trim().isNotEmpty;
+
+  factory AiEndpoint.fromJson(Map<String, dynamic> j) => AiEndpoint(
+        id: (j['id'] as String?) ?? newEndpointId(),
+        name: (j['name'] as String?) ?? '',
         provider: (j['provider'] as String?) ?? 'deepseek',
         base: (j['base'] as String?) ?? '',
         model: (j['model'] as String?) ?? '',
+        voiceModel: (j['voiceModel'] as String?) ?? '',
         key: (j['key'] as String?) ?? '',
         encrypted: (j['encrypted'] as bool?) ?? false,
         decryptFailed: (j['decryptFailed'] as bool?) ?? false,
-        voiceModel: (j['voiceModel'] as String?) ?? '',
       );
 
   Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
         'provider': provider,
         'base': base,
         'model': model,
+        'voiceModel': voiceModel,
         'key': key,
         'encrypted': encrypted,
         'decryptFailed': decryptFailed,
-        'voiceModel': voiceModel,
+      };
+}
+
+String newEndpointId() =>
+    'ep_${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecond % 1000}';
+
+/// AI 配置：若干**端点** + 「用途 → 端点」的绑定。
+///
+/// 分两层是为了让两件变化节奏不同的事各自独立：
+/// - **端点列表**：可任意增删（换厂商、加备用、按能力分工）
+/// - **用途绑定**：`main`（出题 / 帮答 / 看图）与 `voice`（听力配音）各用哪个端点
+///
+/// **兼容层**：保留了旧版的 provider / base / model / key / voiceModel 读写接口
+/// （getter / setter 代理到 main 与 voice 端点），
+/// 因此各面板与 ai_generator 里既有的 `cfg.base` 这类访问**无需任何改动**。
+class AiConfig {
+  List<AiEndpoint> endpoints;
+
+  /// 主模型端点 id（出题 / 帮答 / 看图）
+  String? mainId;
+
+  /// 语音端点 id（听力配音）。为空时**回落到主端点**，保持旧行为。
+  String? voiceId;
+
+  AiConfig({
+    List<AiEndpoint>? endpoints,
+    this.mainId,
+    this.voiceId,
+    // ---- 以下为兼容旧构造用法：传任一项即自动生成/更新主端点 ----
+    String? provider,
+    String? base,
+    String? model,
+    String? key,
+    String? voiceModel,
+  }) : endpoints = endpoints ?? [] {
+    final wantsLegacy = provider != null ||
+        base != null ||
+        model != null ||
+        key != null ||
+        voiceModel != null;
+    if (this.endpoints.isEmpty && wantsLegacy) {
+      final ep = AiEndpoint(
+        id: 'ep_legacy',
+        name: '默认端点',
+        provider: provider ?? 'deepseek',
+        base: base ?? '',
+        model: model ?? '',
+        voiceModel: voiceModel ?? '',
+        key: key ?? '',
+      );
+      this.endpoints.add(ep);
+      this.mainId = ep.id;
+      this.voiceId = ep.id;
+    }
+  }
+
+  AiEndpoint? _byId(String? id) {
+    if (id == null) return null;
+    for (final e in endpoints) {
+      if (e.id == id) return e;
+    }
+    return null;
+  }
+
+  /// 主端点。未指定或已被删除时回落到第一个端点。
+  AiEndpoint? get main {
+    final hit = _byId(mainId);
+    if (hit != null) return hit;
+    return endpoints.isEmpty ? null : endpoints.first;
+  }
+
+  /// 语音端点。未指定时回落到主端点（单端点配置也能配音）。
+  AiEndpoint? get voice => _byId(voiceId) ?? main;
+
+  /// 是否有端点已配置到「可用」程度
+  bool get usable {
+    final m = main;
+    return m != null && m.base.trim().isNotEmpty && m.model.trim().isNotEmpty;
+  }
+
+  bool get hasVoice => voice?.hasTts ?? false;
+
+  /// 语音是否**就绪**：语音端点的地址与语音模型都已配置。
+  /// 注意不能只看 [base]（那是主端点的）—— 语音可能来自另一个厂商。
+  bool get voiceReady {
+    final v = voice;
+    return v != null && v.base.trim().isNotEmpty && v.voiceModel.trim().isNotEmpty;
+  }
+
+  // ------------- 兼容旧接口 -------------
+  String get provider => main?.provider ?? 'deepseek';
+  set provider(String v) { main?.provider = v; }
+  String get base => main?.base ?? '';
+  set base(String v) { main?.base = v; }
+  String get model => main?.model ?? '';
+  set model(String v) { main?.model = v; }
+  String get key => main?.key ?? '';
+  set key(String v) { main?.key = v; }
+  String get voiceModel => voice?.voiceModel ?? '';
+  set voiceModel(String v) { voice?.voiceModel = v; }
+  bool get encrypted => main?.encrypted ?? false;
+  bool get decryptFailed => endpoints.any((e) => e.decryptFailed);
+
+  factory AiConfig.fromJson(Map<String, dynamic> j) {
+    // ---- 新格式：endpoints 列表 ----
+    final rawEps = j['endpoints'];
+    if (rawEps is List) {
+      final eps = <AiEndpoint>[];
+      for (final e in rawEps) {
+        if (e is Map) {
+          eps.add(AiEndpoint.fromJson(Map<String, dynamic>.from(e)));
+        }
+      }
+      if (eps.isNotEmpty) {
+        return AiConfig(
+          endpoints: eps,
+          mainId: j['mainId'] as String?,
+          voiceId: j['voiceId'] as String?,
+        );
+      }
+    }
+    // ---- 旧格式迁移：单套 base/model/key/voiceModel → 1 个端点 ----
+    final ep = AiEndpoint(
+      id: 'ep_legacy',
+      name: '默认端点',
+      provider: (j['provider'] as String?) ?? 'deepseek',
+      base: (j['base'] as String?) ?? '',
+      model: (j['model'] as String?) ?? '',
+      voiceModel: (j['voiceModel'] as String?) ?? '',
+      key: (j['key'] as String?) ?? '',
+      encrypted: (j['encrypted'] as bool?) ?? false,
+      decryptFailed: (j['decryptFailed'] as bool?) ?? false,
+    );
+    return AiConfig(endpoints: [ep], mainId: ep.id, voiceId: ep.id);
+  }
+
+  Map<String, dynamic> toJson() => {
+        'endpoints': [for (final e in endpoints) e.toJson()],
+        'mainId': mainId,
+        'voiceId': voiceId,
       };
 }
 
@@ -192,7 +375,12 @@ class AiStore {
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
-  static const _secKey = 'ai_api_key';
+
+  /// 旧版只有一个密钥槽位，迁移时作为兜底读取
+  static const _legacySecKey = 'ai_api_key';
+
+  /// 每个端点一个独立槽位（同一 App 内多厂商 Key 互不覆盖）
+  static String _secKeyFor(String endpointId) => 'ai_api_key_$endpointId';
 
   static Future<AiConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -200,19 +388,23 @@ class AiStore {
     final cfg = raw != null
         ? AiConfig.fromJson(json.decode(raw) as Map<String, dynamic>)
         : AiConfig();
-    if (cfg.encrypted && cfg.key.isNotEmpty) {
+
+    for (final e in cfg.endpoints) {
+      if (!e.encrypted || e.key.isEmpty) continue;
       try {
-        final plain = await _storage.read(key: _secKey);
+        var plain = await _storage.read(key: _secKeyFor(e.id));
+        // 旧版配置的密钥存在单一槽位里，迁移时兜底取一次
+        plain ??= await _storage.read(key: _legacySecKey);
         if (plain != null) {
-          cfg.key = plain;
-          cfg.decryptFailed = false;
+          e.key = plain;
+          e.decryptFailed = false;
         } else {
-          cfg.key = '';
-          cfg.decryptFailed = true;
+          e.key = '';
+          e.decryptFailed = true;
         }
-      } catch (e) {
-        cfg.key = '';
-        cfg.decryptFailed = true;
+      } catch (err) {
+        e.key = '';
+        e.decryptFailed = true;
       }
     }
     return cfg;
@@ -221,26 +413,60 @@ class AiStore {
   static Future<void> save(AiConfig cfg) async {
     final prefs = await SharedPreferences.getInstance();
     final stored = cfg.toJson();
-    if (cfg.key.isNotEmpty) {
-      try {
-        await _storage.write(key: _secKey, value: cfg.key);
-        stored['key'] = 'encrypted';
-        stored['encrypted'] = true;
-      } catch (e) {
-        stored['key'] = cfg.key;
-        stored['encrypted'] = false;
+    final eps = stored['endpoints'] as List;
+
+    for (var i = 0; i < cfg.endpoints.length; i++) {
+      final e = cfg.endpoints[i];
+      final m = eps[i] as Map<String, dynamic>;
+      if (e.key.isEmpty) {
+        m['encrypted'] = false;
+        continue;
       }
+      try {
+        await _storage.write(key: _secKeyFor(e.id), value: e.key);
+        m['key'] = 'encrypted';
+        m['encrypted'] = true;
+      } catch (err) {
+        // 系统安全存储不可用时退化为明文，与旧版行为一致
+        m['key'] = e.key;
+        m['encrypted'] = false;
+      }
+      m['decryptFailed'] = false;
     }
-    stored['decryptFailed'] = false;
+
     await prefs.setString(_prefsKey, json.encode(stored));
+    // 迁移完成后清掉旧槽位（新槽位已写入）
+    try {
+      await _storage.delete(key: _legacySecKey);
+    } catch (err) {
+      // 忽略：清理旧密钥失败不影响使用
+    }
   }
 
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKey);
+    // 逐个端点清除各自的密钥槽位
+    if (raw != null) {
+      try {
+        final cfg = AiConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
+        for (final e in cfg.endpoints) {
+          try {
+            await _storage.delete(key: _secKeyFor(e.id));
+          } catch (err) {
+            // 忽略单个端点清理失败
+          }
+        }
+      } catch (err) {
+        // 忽略：配置解析失败也要继续清空
+      }
+    }
     await prefs.remove(_prefsKey);
     try {
-      await _storage.delete(key: _secKey);
-    } catch (e) { /* 忽略：清除密钥失败不影响登出 */ }
+      await _storage.delete(key: _legacySecKey);
+    } catch (err) {
+      // 忽略：清除密钥失败不影响登出
+    }
   }
 }
 
@@ -436,27 +662,28 @@ class AiTts {
   /// [speed] 语速控制（0.25-4.0，默认 1.0，听力场景建议 0.8）
   static Future<Uint8List> speech(AiConfig cfg, String text,
       {String voice = 'alloy', String format = 'mp3', double speed = 1.0}) async {
-    if (cfg.base.trim().isEmpty) {
+    // 语音走的是 **voice 端点**，可以与主模型不同厂商：
+    // 例如主模型用 DeepSeek（支持看图但不出声）、语音用小米 MiMo（支持 TTS）。
+    // voiceId 未设置时会回落到主端点，单端点配置的行为与旧版完全一致。
+    final ep = cfg.voice;
+    if (ep == null || ep.base.trim().isEmpty) {
       throw Exception('未配置 API 地址，请先填写 AI 设置');
     }
-    if (cfg.voiceModel.trim().isEmpty) {
+    final model = ep.voiceModel.trim();
+    if (model.isEmpty) {
       throw Exception(
-          '未配置语音模型。请在「AI 智能出题设置」中填写语音模型（如 DeepSeek deepseek-flash、OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
+          '未配置语音模型。请在「AI 智能出题设置」中填写语音模型（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
     }
-    final model = cfg.voiceModel.trim();
-    // 风格优先取服务商预设里的显式声明；预设里没有的（如自定义服务商）
-    // 再按历史规则兜底：mimo- 前缀走 chat 风格，其余走 /audio/speech。
-    final style = AI_PROVIDERS[cfg.provider]?.ttsStyle ??
-        (model.startsWith('mimo-') ? 'chat' : 'audio');
-    return style == 'chat'
-        ? await _speechChat(cfg, text, model, format, voice, speed)
-        : await _speechAudioEndpoint(cfg, text, model, format, voice, speed);
+    // 风格由端点自身决定：服务商预设的显式声明优先，自定义服务商按前缀兜底
+    return ep.ttsStyle == 'chat'
+        ? await _speechChat(ep, text, model, format, voice, speed)
+        : await _speechAudioEndpoint(ep, text, model, format, voice, speed);
   }
 
   /// MiMo 风格：chat/completions + assistant 消息指定合成文本
-  static Future<Uint8List> _speechChat(
-      AiConfig cfg, String text, String model, String format, String voice, double speed) async {
-    var base = cfg.base.trim();
+  static Future<Uint8List> _speechChat(AiEndpoint ep, String text, String model,
+      String format, String voice, double speed) async {
+    var base = ep.base.trim();
     while (base.endsWith('/')) {
       base = base.substring(0, base.length - 1);
     }
@@ -465,7 +692,7 @@ class AiTts {
         : '$base/chat/completions';
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
+      if (ep.key.isNotEmpty) 'Authorization': 'Bearer ${ep.key}',
     };
     // MiMo 内置音色：mimo_default / 冰糖 / 茉莉 / 苏打 / 白桦 / Mia / Chloe / Milo / Dean
     final v = voice == 'alloy' ? 'mimo_default' : voice;
@@ -503,9 +730,9 @@ class AiTts {
   }
 
   /// OpenAI 风格：/audio/speech 返回二进制
-  static Future<Uint8List> _speechAudioEndpoint(AiConfig cfg, String text,
+  static Future<Uint8List> _speechAudioEndpoint(AiEndpoint ep, String text,
       String model, String format, String voice, double speed) async {
-    var base = cfg.base.trim();
+    var base = ep.base.trim();
     while (base.endsWith('/')) {
       base = base.substring(0, base.length - 1);
     }
@@ -514,7 +741,7 @@ class AiTts {
         : '$base/audio/speech';
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
+      if (ep.key.isNotEmpty) 'Authorization': 'Bearer ${ep.key}',
     };
     final body = json.encode({
       'model': model,
