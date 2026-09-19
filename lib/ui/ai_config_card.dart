@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../ai/ai_client.dart';
 
 /// AI 设置卡片（顶部）
+///
+/// 支持**多个 API 端点**：每个端点是一份独立的「地址 + Key + 模型」，
+/// 再由「用途绑定」决定出题 / 帮答 / 看图 用哪个、听力配音用哪个。
+/// 这样才能做「DeepSeek 出题（支持看图）+ MiMo 配音（支持 TTS）」这类分工 ——
+/// 此前语音模型与主模型共用一套 base/key，无法跨厂商。
 class AiConfigCard extends StatefulWidget {
   const AiConfigCard({super.key});
 
@@ -10,15 +15,9 @@ class AiConfigCard extends StatefulWidget {
 }
 
 class _AiConfigCardState extends State<AiConfigCard> {
-  final _baseCtl = TextEditingController();
-  final _modelCtl = TextEditingController();
-  final _keyCtl = TextEditingController();
-  final _voiceCtl = TextEditingController();
-  String _provider = 'deepseek';
+  AiConfig _cfg = AiConfig();
   String _status = '';
   Color _statusColor = const Color(0xff888888);
-  /// 正在拉取模型列表（期间禁用按钮，避免重复请求）
-  bool _loadingModels = false;
   bool _expanded = false;
 
   @override
@@ -29,168 +28,338 @@ class _AiConfigCardState extends State<AiConfigCard> {
 
   Future<void> _load() async {
     final cfg = await AiStore.load();
-    _provider = cfg.provider;
-    _baseCtl.text = cfg.base;
-    _modelCtl.text = cfg.model;
-    _keyCtl.text = cfg.key;
-    _voiceCtl.text = cfg.voiceModel;
-    if (cfg.decryptFailed) {
-      _status = '上次保存的密钥无法解密，请重新输入';
-      _statusColor = const Color(0xffd8433b);
-    }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {
+      _cfg = cfg;
+      if (cfg.decryptFailed) {
+        _status = '有端点的密钥无法解密，请重新输入后再保存';
+        _statusColor = const Color(0xffd8433b);
+      }
+    });
   }
 
-  Future<void> _save() async {
-    final cfg = AiConfig(
-      provider: _provider,
-      base: _baseCtl.text.trim(),
-      model: _modelCtl.text.trim(),
-      key: _keyCtl.text.trim(),
-      voiceModel: _voiceCtl.text.trim(),
-    );
-    if (cfg.base.isEmpty || cfg.model.isEmpty) {
-      setState(() {
-        _status = '请填写 API 地址与模型';
-        _statusColor = const Color(0xffd8433b);
-      });
-      return;
-    }
-    await AiStore.save(cfg);
+  /// 统一落盘入口：任何改动都立即保存，避免「改完忘了点保存」。
+  Future<void> _persist(String okMessage) async {
+    await AiStore.save(_cfg);
+    if (!mounted) return;
     setState(() {
-      _status = '已保存（系统加密）✓';
+      _status = okMessage;
       _statusColor = const Color(0xff2f7d32);
     });
   }
 
-  Future<void> _clear() async {
+  // ---------------- 端点增 / 改 / 删 ----------------
+
+  Future<void> _addEndpoint() async {
+    final created = AiEndpoint(name: '端点 ${_cfg.endpoints.length + 1}');
+    final result = await _editEndpointDialog(created, isNew: true);
+    if (result == null) return;
+    _cfg.endpoints.add(result);
+    // 第一个端点自动承担两个用途，省得再选一次
+    _cfg.mainId ??= result.id;
+    _cfg.voiceId ??= result.id;
+    await _persist('已新增端点「${result.name}」');
+  }
+
+  Future<void> _editEndpoint(AiEndpoint ep) async {
+    final result = await _editEndpointDialog(ep);
+    if (result == null) return;
+    final i = _cfg.endpoints.indexWhere((e) => e.id == ep.id);
+    if (i < 0) return;
+    _cfg.endpoints[i] = result;
+    await _persist('已保存「${result.name}」');
+  }
+
+  Future<void> _deleteEndpoint(AiEndpoint ep) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除端点'),
+        content: Text('确定删除「${ep.name}」？该端点保存的 API Key 会一并清除。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('删除')),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    _cfg.endpoints.removeWhere((e) => e.id == ep.id);
+    // 修掉悬空绑定：main 指向被删的 → 落到第一个；
+    // voice 指向被删的 → 置空，读取时回落到主端点
+    if (_cfg.mainId == ep.id) {
+      _cfg.mainId = _cfg.endpoints.isEmpty ? null : _cfg.endpoints.first.id;
+    }
+    if (_cfg.voiceId == ep.id) _cfg.voiceId = null;
+    await _persist('已删除「${ep.name}」');
+  }
+
+  Future<void> _clearAll() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清除全部 AI 设置'),
+        content: const Text('将删除所有端点及其 API Key，确定吗？'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('清除')),
+        ],
+      ),
+    );
+    if (yes != true) return;
     await AiStore.clear();
-    _keyCtl.text = '';
+    if (!mounted) return;
     setState(() {
-      _status = '已清除';
+      _cfg = AiConfig();
+      _status = '已清除全部 AI 设置';
       _statusColor = const Color(0xff888888);
     });
   }
 
-  Future<void> _test() async {
-    final cfg = AiConfig(
-      provider: _provider,
-      base: _baseCtl.text.trim(),
-      model: _modelCtl.text.trim(),
-      key: _keyCtl.text.trim(),
-    );
-    if (cfg.base.isEmpty || cfg.model.isEmpty || cfg.key.isEmpty) {
-      setState(() {
-        _status = '请先填写 API 地址、模型与 Key';
-        _statusColor = const Color(0xffd8433b);
-      });
-      return;
-    }
-    setState(() {
-      _status = '测试中…';
-      _statusColor = const Color(0xff2f6fd0);
-    });
-    try {
-      final reply = await AiClient.chat(cfg, [
-        AiChatMessage('user', '请回复"连接正常"四个字。'),
-      ], temperature: 0);
-      setState(() {
-        _status = '连接正常 ✓（返回：${reply.length > 30 ? reply.substring(0, 30) : reply}）';
-        _statusColor = const Color(0xff2f7d32);
-      });
-    } catch (e) {
-      setState(() {
-        _status = '连接失败：${aiFriendlyError(e)}';
-        _statusColor = const Color(0xffd8433b);
-      });
-    }
-  }
+  // ---------------- 编辑弹层 ----------------
 
-  /// 从 `{base}/models` 拉取可用模型，选中后填入模型输入框。
-  ///
-  /// 这只是便利功能：拉不到（接口不支持该端点 / 网络问题）时会给出提示，
-  /// 用户仍可手动输入模型名，不影响原有流程。
-  Future<void> _loadModels() async {
-    final base = _baseCtl.text.trim();
-    if (base.isEmpty) {
-      setState(() {
-        _status = '请先填写 API 地址';
-        _statusColor = const Color(0xffd8433b);
-      });
-      return;
-    }
-    setState(() {
-      _loadingModels = true;
-      _status = '正在获取模型列表…';
-      _statusColor = const Color(0xff2f6fd0);
-    });
-    try {
-      final models = await AiModels.list(AiConfig(
-        provider: _provider,
-        base: base,
-        model: _modelCtl.text.trim(),
-        key: _keyCtl.text.trim(),
-        voiceModel: _voiceCtl.text.trim(),
-      ));
-      if (!mounted) return;
-      if (models.isEmpty) {
-        setState(() {
-          _loadingModels = false;
-          _status = '该接口未返回任何模型（可手动填写模型名）';
-          _statusColor = const Color(0xffd8433b);
-        });
-        return;
-      }
-      final picked = await showDialog<String>(
-        context: context,
-        builder: (ctx) => SimpleDialog(
-          title: Text('选择模型（共 ${models.length} 个）'),
-          children: [
-            SizedBox(
-              width: MediaQuery.of(ctx).size.width * 0.8,
-              height: 360,
-              child: ListView.builder(
-                itemCount: models.length,
-                itemBuilder: (c, i) {
-                  final id = models[i];
-                  final badge = _capBadge(id);
-                  return ListTile(
-                    dense: true,
-                    title: Text(id, style: const TextStyle(fontSize: 14)),
-                    subtitle: badge == null ? null : Text(badge,
-                        style: const TextStyle(
-                            fontSize: 11, color: Color(0xff2f7d32))),
-                    onTap: () => Navigator.pop(ctx, id),
-                  );
-                },
+  /// 编辑一个端点。弹层内的「测试 / 试听 / 获取模型」都只作用于**弹层里的草稿**，
+  /// 只有点「确定」才写回卡片 —— 中途取消不会留下半截修改。
+  Future<AiEndpoint?> _editEndpointDialog(AiEndpoint src,
+      {bool isNew = false}) async {
+    final nameCtl = TextEditingController(text: src.name);
+    final baseCtl = TextEditingController(text: src.base);
+    final modelCtl = TextEditingController(text: src.model);
+    final keyCtl = TextEditingController(text: src.key);
+    final voiceCtl = TextEditingController(text: src.voiceModel);
+    var provider = src.provider;
+    var status = '';
+    var statusColor = const Color(0xff888888);
+    var busy = false;
+
+    AiEndpoint draft() => AiEndpoint(
+          id: src.id,
+          name: nameCtl.text.trim().isEmpty ? '未命名端点' : nameCtl.text.trim(),
+          provider: provider,
+          base: baseCtl.text.trim(),
+          model: modelCtl.text.trim(),
+          voiceModel: voiceCtl.text.trim(),
+          key: keyCtl.text.trim(),
+        );
+
+    return showDialog<AiEndpoint>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          void say(String m, {bool bad = false}) => setDlg(() {
+                status = m;
+                statusColor =
+                    bad ? const Color(0xffd8433b) : const Color(0xff2f7d32);
+              });
+
+          Future<void> getModels() async {
+            final ep = draft();
+            if (ep.base.isEmpty) {
+              say('请先填写 API 地址', bad: true);
+              return;
+            }
+            setDlg(() {
+              busy = true;
+              status = '正在获取模型列表…';
+              statusColor = const Color(0xff2f6fd0);
+            });
+            try {
+              final models = await AiModels.list(
+                  AiConfig(endpoints: [ep], mainId: ep.id));
+              if (!ctx.mounted) return;
+              if (models.isEmpty) {
+                setDlg(() => busy = false);
+                say('该接口未返回任何模型（可手动填写模型名）', bad: true);
+                return;
+              }
+              final picked = await _pickModelDialog(ctx, models);
+              setDlg(() => busy = false);
+              if (picked != null) {
+                modelCtl.text = picked;
+                say('已选择模型：$picked');
+              } else {
+                say('已取消选择');
+              }
+            } catch (e) {
+              setDlg(() => busy = false);
+              say(aiFriendlyError(e), bad: true);
+            }
+          }
+
+          Future<void> testText() async {
+            final ep = draft();
+            if (ep.base.isEmpty || ep.model.isEmpty || ep.key.isEmpty) {
+              say('请先填写 API 地址、模型与 Key', bad: true);
+              return;
+            }
+            setDlg(() {
+              busy = true;
+              status = '测试中…';
+              statusColor = const Color(0xff2f6fd0);
+            });
+            try {
+              final reply = await AiClient.chat(
+                  AiConfig(endpoints: [ep], mainId: ep.id),
+                  [AiChatMessage('user', '请回复"连接正常"四个字。')],
+                  temperature: 0);
+              setDlg(() => busy = false);
+              say('连接正常（返回：${reply.length > 30 ? reply.substring(0, 30) : reply}）');
+            } catch (e) {
+              setDlg(() => busy = false);
+              say('连接失败：${aiFriendlyError(e)}', bad: true);
+            }
+          }
+
+          Future<void> testVoice() async {
+            final ep = draft();
+            if (ep.base.isEmpty || ep.voiceModel.isEmpty) {
+              say('请先填写 API 地址与语音模型', bad: true);
+              return;
+            }
+            setDlg(() {
+              busy = true;
+              status = '语音测试中…';
+              statusColor = const Color(0xff2f6fd0);
+            });
+            try {
+              final cfg =
+                  AiConfig(endpoints: [ep], mainId: ep.id, voiceId: ep.id);
+              final bytes = await AiTts.speech(cfg, 'Hello, how are you?');
+              setDlg(() => busy = false);
+              say('语音接口正常（生成 ${bytes.length ~/ 1024} KB 音频）');
+            } catch (e) {
+              setDlg(() => busy = false);
+              say('语音失败：${aiFriendlyError(e)}', bad: true);
+            }
+          }
+
+          return AlertDialog(
+            title: Text(isNew ? '新增端点' : '编辑端点'),
+            content: SizedBox(
+              width: MediaQuery.of(ctx).size.width * 0.9,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const SizedBox(
+                          width: 96,
+                          child: Text('服务商', style: TextStyle(fontSize: 13))),
+                      const SizedBox(width: 8),
+                      DropdownButton<String>(
+                        value: AI_PROVIDERS.containsKey(provider)
+                            ? provider
+                            : 'custom',
+                        items: [
+                          for (final e in AI_PROVIDERS.entries)
+                            DropdownMenuItem(value: e.key, child: Text(e.key)),
+                        ],
+                        onChanged: (v) => setDlg(() {
+                          provider = v ?? 'custom';
+                          final p = AI_PROVIDERS[provider]!;
+                          // 只补空白项，不覆盖用户已填内容
+                          if (baseCtl.text.trim().isEmpty) baseCtl.text = p.base;
+                          if (modelCtl.text.trim().isEmpty) {
+                            modelCtl.text = p.model;
+                          }
+                          if (voiceCtl.text.trim().isEmpty) {
+                            voiceCtl.text = p.voice;
+                          }
+                        }),
+                      ),
+                    ]),
+                    _dlgField('名称', nameCtl, '用于区分多个端点，如「DeepSeek 主力」'),
+                    _dlgField('API 地址', baseCtl, 'https://api.deepseek.com'),
+                    _dlgField('模型', modelCtl, '如 deepseek-flash'),
+                    _dlgField('API Key', keyCtl, 'sk-...', obscure: true),
+                    _dlgField('语音模型(可选)', voiceCtl,
+                        '留空 = 该端点不提供配音，如 mimo-v2.5-tts'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: busy ? null : getModels,
+                        icon: const Icon(Icons.list_alt, size: 18),
+                        label: const Text('从接口获取模型列表'),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton(
+                            onPressed: busy ? null : testText,
+                            child: const Text('测试连接')),
+                        OutlinedButton(
+                            onPressed: busy ? null : testVoice,
+                            child: const Text('试听语音')),
+                      ],
+                    ),
+                    if (status.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(status,
+                            style:
+                                TextStyle(fontSize: 12, color: statusColor)),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _loadingModels = false;
-        if (picked != null) {
-          _modelCtl.text = picked;
-          _status = '已选择模型：$picked';
-          _statusColor = const Color(0xff2f7d32);
-        } else {
-          _status = '已取消选择';
-          _statusColor = const Color(0xff888888);
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingModels = false;
-        _status = aiFriendlyError(e);
-        _statusColor = const Color(0xffd8433b);
-      });
-    }
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, draft()),
+                  child: const Text('确定')),
+            ],
+          );
+        },
+      ),
+    );
   }
 
-  /// 已知能力的模型，在列表里给个小提示；**未知的不显示**（不误导）。
+  Future<String?> _pickModelDialog(BuildContext ctx, List<String> models) {
+    return showDialog<String>(
+      context: ctx,
+      builder: (c) => SimpleDialog(
+        title: Text('选择模型（共 ${models.length} 个）'),
+        children: [
+          SizedBox(
+            width: MediaQuery.of(c).size.width * 0.8,
+            height: 360,
+            child: ListView.builder(
+              itemCount: models.length,
+              itemBuilder: (cc, i) {
+                final id = models[i];
+                final badge = _capBadge(id);
+                return ListTile(
+                  dense: true,
+                  title: Text(id, style: const TextStyle(fontSize: 14)),
+                  subtitle: badge == null
+                      ? null
+                      : Text(badge,
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xff2f7d32))),
+                  onTap: () => Navigator.pop(c, id),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 已知能力的模型给个小提示；**未知的不显示**（不误导）。
   String? _capBadge(String model) {
     final cap = ModelCapability.of(model);
     final parts = <String>[
@@ -200,104 +369,65 @@ class _AiConfigCardState extends State<AiConfigCard> {
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
-  Future<void> _testVoice() async {
-    final cfg = AiConfig(
-      provider: _provider,
-      base: _baseCtl.text.trim(),
-      model: _modelCtl.text.trim(),
-      key: _keyCtl.text.trim(),
-      voiceModel: _voiceCtl.text.trim(),
-    );
-    if (cfg.base.isEmpty || cfg.voiceModel.isEmpty) {
-      setState(() {
-        _status = '请填写 API 地址与语音模型';
-        _statusColor = const Color(0xffd8433b);
-      });
-      return;
-    }
-    setState(() {
-      _status = '语音测试中…';
-      _statusColor = const Color(0xff2f6fd0);
-    });
-    try {
-      final bytes = await AiTts.speech(cfg, 'Hello, how are you?');
-      setState(() {
-        _status = '语音接口正常 ✓（生成 ${bytes.length ~/ 1024} KB 音频）';
-        _statusColor = const Color(0xff2f7d32);
-      });
-    } catch (e) {
-      setState(() {
-        _status = '语音失败：${aiFriendlyError(e)}';
-        _statusColor = const Color(0xffd8433b);
-      });
-    }
-  }
+  // ---------------- 主界面 ----------------
 
   @override
   Widget build(BuildContext context) {
+    final eps = _cfg.endpoints;
+    final title = eps.isEmpty
+        ? '🤖 AI 智能出题设置（未配置：填入大模型 API 后即可 AI 生成题目）'
+        : '🤖 AI 智能出题设置（已配置 ${eps.length} 个端点）';
     return Card(
       margin: EdgeInsets.zero,
       child: ExpansionTile(
         initiallyExpanded: _expanded,
         onExpansionChanged: (v) => setState(() => _expanded = v),
-        title: const Text('🤖 AI 智能出题设置（可选：填入大模型 API 后即可 AI 生成题目）',
-            style: TextStyle(fontSize: 14, color: Color(0xff2f6fd0))),
+        title: Text(title,
+            style: const TextStyle(fontSize: 14, color: Color(0xff2f6fd0))),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Text('服务商', style: TextStyle(fontSize: 13)),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: _provider,
-                      items: [
-                        for (final e in AI_PROVIDERS.entries)
-                          DropdownMenuItem(value: e.key, child: Text(e.key)),
-                      ],
-                      onChanged: (v) {
-                        setState(() {
-                          _provider = v ?? 'deepseek';
-                          final p = AI_PROVIDERS[_provider]!;
-                          _baseCtl.text = p.base;
-                          _modelCtl.text = p.model;
-                          _voiceCtl.text = p.voice;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                _field('API 地址', _baseCtl, 'https://api.deepseek.com'),
-                _field('模型', _modelCtl, '如 deepseek-flash / gpt-4o-mini'),
-                _field('API Key', _keyCtl, 'sk-...', obscure: true),
-                _field('语音模型(可选)', _voiceCtl,
-                    '听力配音用，如 tts-1 / cosyvoice-v1 / mimo-v2.5-tts'),
+                const Text('API 端点', style: TextStyle(fontSize: 13)),
                 const SizedBox(height: 4),
-                // 从接口拉取可用模型：填好地址与 Key 后点一下，免去手输模型名。
-                // 各家的 /models 端点实测均可用；不支持时仍可手动输入。
+                if (eps.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Text('还没有端点。新增一个并填入地址与 Key 即可启用 AI 功能。',
+                        style: TextStyle(fontSize: 12, color: Color(0xff888888))),
+                  )
+                else
+                  for (final ep in eps) _endpointTile(ep),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: _loadingModels ? null : _loadModels,
-                    icon: const Icon(Icons.list_alt, size: 18),
-                    label: Text(_loadingModels ? '获取中…' : '从接口获取模型列表'),
+                    onPressed: _addEndpoint,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('新增端点'),
                   ),
                 ),
-                const SizedBox(height: 6),
-                // 按钮在手机窄屏上横排会溢出，改用 Wrap 自动换行；
-                // 状态文字另起一行，避免被挤成竖条
+                const Divider(),
+                const Text('用途绑定', style: TextStyle(fontSize: 13)),
+                _bindingRow('主模型', '出题 / 帮答 / 看图', _cfg.mainId, (v) {
+                  setState(() => _cfg.mainId = v);
+                }),
+                _bindingRow('听力配音', '留空则用主模型', _cfg.voiceId, (v) {
+                  setState(() => _cfg.voiceId = v);
+                }),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    FilledButton(onPressed: _save, child: const Text('保存设置')),
-                    OutlinedButton(onPressed: _test, child: const Text('测试')),
-                    OutlinedButton(onPressed: _testVoice, child: const Text('试听语音')),
-                    OutlinedButton(onPressed: _clear, child: const Text('清除')),
+                    FilledButton(
+                      onPressed: () => _persist('已保存用途绑定'),
+                      child: const Text('保存绑定'),
+                    ),
+                    OutlinedButton(
+                        onPressed: _clearAll, child: const Text('清除全部')),
                   ],
                 ),
                 if (_status.isNotEmpty)
@@ -307,8 +437,10 @@ class _AiConfigCardState extends State<AiConfigCard> {
                         style: TextStyle(fontSize: 13, color: _statusColor)),
                   ),
                 const SizedBox(height: 8),
-                const Text('API Key 使用系统级加密保存：Windows（DPAPI）/ macOS（钥匙串）/ 安卓（系统密钥库 Keystore），仅存本机、不联网上传；每次请求只发给设置里填写的那家服务商。',
-                    style: TextStyle(fontSize: 12, color: Color(0xffaaaaaa), height: 1.5)),
+                const Text(
+                    'API Key 使用系统级加密保存：Windows（DPAPI）/ macOS（钥匙串）/ 安卓（系统密钥库 Keystore），仅存本机、不联网上传；每次请求只发给该端点对应的服务商。',
+                    style: TextStyle(
+                        fontSize: 12, color: Color(0xffaaaaaa), height: 1.5)),
               ],
             ),
           ),
@@ -317,13 +449,116 @@ class _AiConfigCardState extends State<AiConfigCard> {
     );
   }
 
-  Widget _field(String label, TextEditingController ctl, String hint,
-      {bool obscure = false}) {
+  /// 端点一行：名称 + 用途标签 + 摘要 + 编辑 / 删除
+  Widget _endpointTile(AiEndpoint ep) {
+    final isMain = _cfg.main?.id == ep.id;
+    final isVoice = _cfg.voice?.id == ep.id && ep.hasTts;
+    final summary = StringBuffer();
+    summary.write(ep.base.isEmpty ? '未填地址' : ep.base);
+    summary.write('   ·   模型：${ep.model.isEmpty ? '未填' : ep.model}');
+    if (ep.hasTts) summary.write('   ·   语音：${ep.voiceModel}');
+    return Card(
+      margin: const EdgeInsets.only(top: 6),
+      child: ListTile(
+        dense: true,
+        onTap: () => _editEndpoint(ep),
+        title: Wrap(
+          spacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(ep.name,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            if (isMain) _tag('主模型', const Color(0xff2f6fd0)),
+            if (isVoice) _tag('配音', const Color(0xff2f7d32)),
+            if (ep.decryptFailed) _tag('密钥待重填', const Color(0xffd8433b)),
+          ],
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(summary.toString(),
+              style:
+                  const TextStyle(fontSize: 11.5, color: Color(0xff777777))),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, size: 19),
+              tooltip: '编辑',
+              onPressed: () => _editEndpoint(ep),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 19),
+              tooltip: '删除',
+              onPressed: () => _deleteEndpoint(ep),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tag(String text, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withOpacity(0.35), width: 0.5),
+        ),
+        child: Text(text, style: TextStyle(fontSize: 11, color: color)),
+      );
+
+  /// 用途绑定一行：左侧用途名，右侧端点下拉
+  Widget _bindingRow(String label, String note, String? value,
+      ValueChanged<String?> onChanged) {
+    final ids = [for (final e in _cfg.endpoints) e.id];
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
         children: [
-          SizedBox(width: 70, child: Text(label, style: const TextStyle(fontSize: 13))),
+          SizedBox(
+            width: 96,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 13)),
+                Text(note,
+                    style: const TextStyle(
+                        fontSize: 10.5, color: Color(0xff999999))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: ids.contains(value) ? value : null,
+              hint: const Text('未设置（用主模型）',
+                  style: TextStyle(fontSize: 13)),
+              items: [
+                for (final e in _cfg.endpoints)
+                  DropdownMenuItem(
+                      value: e.id,
+                      child:
+                          Text(e.name, style: const TextStyle(fontSize: 13))),
+              ],
+              onChanged: _cfg.endpoints.isEmpty ? null : onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dlgField(String label, TextEditingController ctl, String hint,
+      {bool obscure = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 96,
+              child: Text(label, style: const TextStyle(fontSize: 13))),
           Expanded(
             child: TextField(
               controller: ctl,
