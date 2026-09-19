@@ -148,6 +148,40 @@ TypeCatalog。新增题型时只改一处，并补 `test/type_catalog_test.dart`
   功能词 is/the/my 都不在表内，逐词比对必然大量误报
 - **宁可漏报不要误报**：误报比漏报更伤老师对工具的信任
 
+### 8. 扩展 AI 服务商 / 模型
+
+AI 的可配置项收敛在 `lib/ai/ai_client.dart` 的**两张表**里：
+
+| 要做的事 | 改哪里 | 必要性 |
+|---|---|---|
+| 让新厂商出现在服务商下拉里 | `AI_PROVIDERS` 加一行 | 可选 |
+| 登记某模型能否看图 / 出声 | `MODEL_CAPABILITIES` 加一行 | 可选 |
+| 设置界面 | —— | **无需改动**（下拉由 `AI_PROVIDERS` 自动生成） |
+
+`AI_PROVIDERS` 一行有四个字段：
+
+```dart
+'厂商key': (
+  base: 'https://api.example.com/v1',  // API 地址
+  model: 'model-name',                 // 默认模型
+  voice: '',                           // 语音模型；空 = 该厂商不提供 TTS
+  ttsStyle: 'audio',                   // 'audio' | 'chat' | 'auto'
+),
+```
+
+**多数情况不必改代码**：设置里选 `custom`，自行填地址与模型即可。
+`custom` 的 `ttsStyle` 为 `'auto'`，会按语音模型名前缀推断接口风格
+（`mimo-` 系走 chat/completions + audio，其余走 /audio/speech）。
+只有当希望新厂商出现在**预设下拉**、或让它被自动填入默认值时，才需要加这一行。
+
+**两条纪律**：
+
+1. **模型名以该 API 的 `GET /models` 返回为准**，不要照搬产品宣传里的名字。
+   曾把产品名 `deepseek-v4.1-flash` 写进代码，而 API 实际只认 `deepseek-flash`，
+   直接导致该厂商不可用。
+2. **`MODEL_CAPABILITIES` 只登记实测确认过的能力**。不登记会走「未知即尝试」（安全）；
+   登记错了会**直接误导** —— 把支持视觉的模型标成 `false`，它会在发图前被短路拦截。
+
 ## 数据
 
 `assets/data.json` 的结构、维度、题型规则、语料分布、持久化键设计，
