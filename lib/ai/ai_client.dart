@@ -71,6 +71,11 @@ const AI_PROVIDERS = {
 /// 直接把请求发出去、靠报错反推。这样模型迭代时不必改代码，
 /// 只在**实测确认不支持**时补一条即可。
 ///
+/// ⚠️ **使用纪律：只登记实测确认过的能力。** 未验证的模型宁可留空 ——
+/// 查不到会走「未知即尝试」（安全），而**标错会直接误导**：
+/// 把支持视觉的模型标成 false，它会在发图前被短路拦截，功能直接不可用。
+/// 模型名同理：必须以 `GET /models` 的实际返回为准，不能照搬产品宣传里的名字。
+///
 /// 为什么能力按「模型名」而不是「服务商」登记：
 /// 同一服务商的不同模型能力可以完全不同（通义 qwen-plus 不支持视觉，
 /// qwen-vl-max 支持），所以能力属于模型，服务商那一层只管地址与默认值。
@@ -84,6 +89,7 @@ const MODEL_CAPABILITIES = <String, ({bool vision, bool tts})>{
   // OpenAI
   'gpt-4o': (vision: true, tts: false),
   'gpt-4o-mini': (vision: true, tts: false),
+  'tts-1': (vision: false, tts: true),
   // 通义
   'qwen-vl-max': (vision: true, tts: false),
   'qwen-plus': (vision: false, tts: false),
@@ -92,9 +98,13 @@ const MODEL_CAPABILITIES = <String, ({bool vision, bool tts})>{
   'glm-4v': (vision: true, tts: false),
   'glm-4v-voice': (vision: true, tts: true),
   'glm-4-flash': (vision: false, tts: false),
-  // 小米 MiMo
-  'mimo-v2.5': (vision: false, tts: false),
-  'mimo-v2.5-tts': (vision: false, tts: true),
+  // 小米 MiMo —— 下面的模型清单与能力**全部实测确认**（2026-09）
+  'mimo-v2.5': (vision: true, tts: false), // 多模态可用：响应带 image_tokens
+  'mimo-v2.5-pro': (vision: true, tts: false),
+  'mimo-v2.5-asr': (vision: false, tts: false), // 语音识别，非 TTS
+  'mimo-v2.5-tts': (vision: false, tts: true), // TTS 可用：响应带 message.audio.data
+  'mimo-v2.5-tts-voiceclone': (vision: false, tts: true),
+  'mimo-v2.5-tts-voicedesign': (vision: false, tts: true),
   // Kimi
   'moonshot-v1-8k': (vision: false, tts: false),
   // Ollama（本地；默认的 qwen2.5:7b 是纯文本模型。

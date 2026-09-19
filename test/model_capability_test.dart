@@ -18,6 +18,16 @@ void main() {
     expect(pro.tts, false);
   });
 
+  test('小米 MiMo：实测结论已锁住（多模态可用，TTS 走独立模型）', () {
+    final base = ModelCapability.of('mimo-v2.5');
+    expect(base.vision, true); // 实测：响应带 image_tokens
+    expect(base.tts, false);   // 语音要换 mimo-v2.5-tts
+
+    final tts = ModelCapability.of('mimo-v2.5-tts');
+    expect(tts.tts, true);
+    expect(tts.vision, false);
+  });
+
   test('未知模型：按「未知即尝试」处理，不预设为不支持', () {
     final c = ModelCapability.of('some-brand-new-model-9000');
     expect(c.vision, isNull);
