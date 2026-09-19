@@ -45,8 +45,7 @@
   会让同一个应用在 Android 与浏览器上显示成两个样子
 
 更细的约定与踩坑记录见 **[AGENTS.md](AGENTS.md)**，
-数据结构、维度关系与持久化设计见 **[docs/DATA_MODEL.md](docs/DATA_MODEL.md)**，
-已设计但尚未实现的功能见 **[docs/ROADMAP.md](docs/ROADMAP.md)**。
+数据结构的形状、维度与规则见 **[docs/DATA_MODEL.md](docs/DATA_MODEL.md)**。
 
 ## 开发
 
