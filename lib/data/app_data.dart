@@ -52,7 +52,7 @@ class VolumeData {
 
 /// 全局数据仓库
 class AppData {
-  static const String version = "3.3.2";
+  static const String version = "3.3.3";
 
   late Map<String, Textbook> textbooks;
   late Map<int, String> gradeNames;

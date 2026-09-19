@@ -177,6 +177,10 @@ class _AiConfigCardState extends State<AiConfigCard> {
                     bad ? const Color(0xffd8433b) : const Color(0xff2f7d32);
               });
 
+          // 语音模型候选：把「已知支持配音」的排在前面（见 sortForTts）。
+          // 仍然**不过滤** —— 未知模型可能是该接口专属的配音模型，滤掉等于挡路。
+          final voiceCandidates = ModelCapability.sortForTts(fetchedModels);
+
           Future<void> getModels() async {
             final ep = draft();
             if (ep.base.isEmpty) {
@@ -204,7 +208,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
                 busy = false;
                 fetchedModels = models;
               });
-              say('已获取 ${models.length} 个模型，可在模型下拉框中选择');
+              say('已获取 ${models.length} 个模型，可在模型 / 语音模型下拉框中选择');
             } catch (e) {
               setDlg(() {
                 busy = false;
@@ -358,6 +362,29 @@ class _AiConfigCardState extends State<AiConfigCard> {
                     _dlgField('API Key', keyCtl, 'sk-...', obscure: true),
                     _dlgField('语音模型(可选)', voiceCtl,
                         '留空 = 该端点不提供配音，如 mimo-v2.5-tts'),
+                    if (fetchedModels.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: DropdownButtonFormField<String>(
+                          value: voiceCandidates.contains(voiceCtl.text.trim())
+                              ? voiceCtl.text.trim()
+                              : null,
+                          hint: const Text('从上方模型清单中选择（支持配音的排在前面）',
+                              style: TextStyle(fontSize: 13)),
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final m in voiceCandidates)
+                              DropdownMenuItem(value: m, child: _voiceItem(m)),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) setDlg(() => voiceCtl.text = v);
+                          },
+                        ),
+                      ),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
@@ -418,19 +445,49 @@ class _AiConfigCardState extends State<AiConfigCard> {
         ),
         const SizedBox(width: 6),
         Text(badge,
-            style: const TextStyle(fontSize: 10.5, color: Color(0xff2f7d32))),
+            style: TextStyle(fontSize: 10.5, color: _badgeColor(badge))),
       ],
     );
   }
 
   /// 已知能力的模型给个小提示；**未知的不显示**（不误导）。
+  ///
+  /// 纯 TTS 模型单独标「仅配音」：它就在**主模型**候选里，选错会让出题直接
+  /// 失败（拿 TTS 模型去 /chat/completions 生成题目）。
   String? _capBadge(String model) {
     final cap = ModelCapability.of(model);
+    if (cap.pureTts) return '仅配音';
     final parts = <String>[
       if (cap.vision == true) '支持看图',
       if (cap.tts == true) '支持配音',
     ];
     return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// 徽章配色：能力信息用绿色，警示信息（仅配音）用琥珀色。
+  Color _badgeColor(String badge) =>
+      badge == '仅配音' ? const Color(0xffb26a00) : const Color(0xff2f7d32);
+
+  /// **语音模型**下拉项：只提示与「能不能配音」有关的信息。
+  /// 灰色「不支持配音」是明确结论，值得写出来；未知的留空（不误导）。
+  Widget _voiceItem(String id) {
+    final tts = ModelCapability.of(id).tts;
+    if (tts == null) return Text(id, style: const TextStyle(fontSize: 13));
+    return Row(
+      children: [
+        Expanded(
+          child: Text(id,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(width: 6),
+        Text(tts ? '支持配音' : '不支持配音',
+            style: TextStyle(
+                fontSize: 10.5,
+                color:
+                    tts ? const Color(0xff2f7d32) : const Color(0xff9a9a9a))),
+      ],
+    );
   }
 
   // ---------------- 主界面 ----------------

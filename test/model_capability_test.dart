@@ -65,6 +65,54 @@ void main() {
     });
   });
 
+  test('纯 TTS 模型可被识别（设置界面据此标「仅配音」）', () {
+    expect(ModelCapability.of('mimo-v2.5-tts').pureTts, true);
+    expect(ModelCapability.of('tts-1').pureTts, true);
+    // 既能看图也能出声：不是纯 TTS，标「仅配音」会误伤
+    expect(ModelCapability.of('glm-4v-voice').pureTts, false);
+    // 对话模型
+    expect(ModelCapability.of('mimo-v2.5').pureTts, false);
+    // 未知模型不下结论
+    expect(ModelCapability.of('brand-new-9000').pureTts, false);
+  });
+
+  group('语音模型候选排序 —— sortForTts', () {
+    test('支持配音 → 未知 → 已知不支持', () {
+      final out = ModelCapability.sortForTts([
+        'mimo-v2.5',            // 已知不支持配音
+        'mimo-v2.5-tts',        // 已知支持配音
+        'brand-new-tts-model',  // 未知：不过滤，排在中间
+      ]);
+      expect(out, ['mimo-v2.5-tts', 'brand-new-tts-model', 'mimo-v2.5']);
+    });
+
+    test('同权重按名称升序，且不改动入参', () {
+      final src = [
+        'mimo-v2.5-tts-voicedesign',
+        'mimo-v2.5-tts',
+        'mimo-v2.5-tts-voiceclone',
+      ];
+      final out = ModelCapability.sortForTts(src);
+      expect(out, [
+        'mimo-v2.5-tts',
+        'mimo-v2.5-tts-voiceclone',
+        'mimo-v2.5-tts-voicedesign',
+      ]);
+      expect(src.first, 'mimo-v2.5-tts-voicedesign', reason: '入参不应被改动');
+    });
+
+    test('ttsRank 三档权重', () {
+      expect(ModelCapability.ttsRank('mimo-v2.5-tts'), 0);
+      expect(ModelCapability.ttsRank('whatever-9000'), 1);
+      expect(ModelCapability.ttsRank('mimo-v2.5'), 2);
+    });
+
+    test('空列表与单元素不炸', () {
+      expect(ModelCapability.sortForTts([]), isEmpty);
+      expect(ModelCapability.sortForTts(['only-one']), ['only-one']);
+    });
+  });
+
   test('预设里的服务商默认模型都应能在能力表中找到（防止两张表漂移）', () {
     final missing = <String>[];
     for (final e in AI_PROVIDERS.entries) {

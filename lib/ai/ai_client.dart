@@ -208,6 +208,37 @@ class ModelCapability {
 
   /// 是否已登记（false = 表里没有，结论未知）
   bool get isKnown => vision != null || tts != null;
+
+  /// 是否**只会出声、不能对话**（纯 TTS 模型）。
+  ///
+  /// 这类模型与对话模型混在同一份 `/models` 清单里，很容易被选成主模型 ——
+  /// 拿它去 /chat/completions 出题必然失败。设置界面据此标注「仅配音」。
+  /// **未知模型一律不算**纯 TTS：不替用户下结论（未知即尝试）。
+  bool get pureTts => tts == true && vision != true;
+
+  /// 作为「语音模型」候选时的排序权重：
+  /// 已知支持配音 → 0，未知 → 1，已知不支持配音 → 2。
+  ///
+  /// 这里只算权重、**不做过滤** —— 未知模型照样出现在候选里，只是排在后面。
+  /// 能力表不认识的模型很可能正是该接口专属的配音模型（如 tts-1-hd），
+  /// 提前滤掉等于替用户挡路。
+  static int ttsRank(String model) {
+    final t = of(model).tts;
+    if (t == true) return 0;
+    if (t == null) return 1;
+    return 2;
+  }
+
+  /// 按配音能力给模型清单排序，返回**新列表**（不改动入参）。
+  /// 同权重按名称升序 —— 保证下拉顺序稳定，不随接口返回顺序跳动。
+  static List<String> sortForTts(List<String> models) {
+    final out = [...models];
+    out.sort((a, b) {
+      final byRank = ttsRank(a).compareTo(ttsRank(b));
+      return byRank != 0 ? byRank : a.compareTo(b);
+    });
+    return out;
+  }
 }
 
 /// AI 配置
