@@ -4,45 +4,130 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// AI 提供商预设（含语音模型：听力配音用，可能因账号/模型而异，可在设置中修改）
+/// AI 提供商预设。
+///
+/// 字段：
+/// - `base` / `model`：文本（及多模态）模型
+/// - `voice`：**语音合成模型**，听力配音用。**空字符串 = 该服务商不提供 TTS**
+/// - `ttsStyle`：TTS 接口风格，决定走哪个端点（见 AiTts.speech）
+///   - `'audio'`：POST /audio/speech，响应即音频二进制（OpenAI / 通义 / 智谱）
+///   - `'chat'` ：POST /chat/completions 带 audio 参数，音频在
+///     choices[0].message.audio.data（MiMo；DeepSeek V4.1 Flash 属同类）
 const AI_PROVIDERS = {
   'deepseek': (
     base: 'https://api.deepseek.com',
-    model: 'deepseek-v4-flash',
-    voice: ''
+    model: 'deepseek-v4.1-flash',
+    voice: 'deepseek-v4.1-flash',
+    ttsStyle: 'chat'
   ),
   'openai': (
     base: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
-    voice: 'tts-1'
+    voice: 'tts-1',
+    ttsStyle: 'audio'
   ),
   'qwen': (
     base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     model: 'qwen-plus',
-    voice: 'cosyvoice-v1'
+    voice: 'cosyvoice-v1',
+    ttsStyle: 'audio'
   ),
   'kimi': (
     base: 'https://api.moonshot.cn/v1',
     model: 'moonshot-v1-8k',
-    voice: ''
+    voice: '',
+    ttsStyle: 'audio'
   ),
   'glm': (
     base: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-flash',
-    voice: 'glm-4v-voice'
+    voice: 'glm-4v-voice',
+    ttsStyle: 'audio'
   ),
   'mimo': (
     base: 'https://api.xiaomimimo.com/v1',
     model: 'mimo-v2.5',
-    voice: 'mimo-v2.5-tts'
+    voice: 'mimo-v2.5-tts',
+    ttsStyle: 'chat'
   ),
   'ollama': (
     base: 'http://localhost:11434/v1',
     model: 'qwen2.5:7b',
-    voice: ''
+    voice: '',
+    ttsStyle: 'audio'
   ),
-  'custom': (base: '', model: '', voice: ''),
+  'custom': (base: '', model: '', voice: '', ttsStyle: 'audio'),
 };
+
+/// 模型能力表 —— **能力判断的单一来源**。
+///
+/// 只登记**已知**模型。表里查不到的按「未知即尝试」处理（见 [ModelCapability.of]）：
+/// 直接把请求发出去、靠报错反推。这样模型迭代时不必改代码，
+/// 只在**实测确认不支持**时补一条即可。
+///
+/// 为什么能力按「模型名」而不是「服务商」登记：
+/// 同一服务商的不同模型能力可以完全不同（通义 qwen-plus 不支持视觉，
+/// qwen-vl-max 支持），所以能力属于模型，服务商那一层只管地址与默认值。
+///
+/// - `vision`：能否接受图片输入（多模态理解）
+/// - `tts`：能否输出音频（语音合成）
+const MODEL_CAPABILITIES = <String, ({bool vision, bool tts})>{
+  // DeepSeek
+  'deepseek-v4.1-flash': (vision: true, tts: true),
+  'deepseek-v4-flash': (vision: false, tts: false),
+  'deepseek-chat': (vision: false, tts: false),
+  // OpenAI
+  'gpt-4o': (vision: true, tts: false),
+  'gpt-4o-mini': (vision: true, tts: false),
+  // 通义
+  'qwen-vl-max': (vision: true, tts: false),
+  'qwen-plus': (vision: false, tts: false),
+  'cosyvoice-v1': (vision: false, tts: true),
+  // 智谱
+  'glm-4v': (vision: true, tts: false),
+  'glm-4v-voice': (vision: true, tts: true),
+  'glm-4-flash': (vision: false, tts: false),
+  // 小米 MiMo
+  'mimo-v2.5': (vision: false, tts: false),
+  'mimo-v2.5-tts': (vision: false, tts: true),
+  // Kimi
+  'moonshot-v1-8k': (vision: false, tts: false),
+  // Ollama（本地；默认的 qwen2.5:7b 是纯文本模型。
+  // 本机若换跑 llava 等多模态模型，在设置里改成对应模型名即可，
+  // 未登记的模型会按「未知即尝试」处理，不会被误拦）
+  'qwen2.5:7b': (vision: false, tts: false),
+};
+
+/// 单个模型的能力查询结果。
+///
+/// 字段为 `null` 表示**未知**（表里没登记）—— 未知不代表「不支持」，
+/// 而是「去试试看」。调用方应使用 [tryVision] / [tryTts]，
+/// 它们把「未知」视作「允许尝试」。
+class ModelCapability {
+  /// 能否接受图片输入。`null` = 未知
+  final bool? vision;
+
+  /// 能否输出音频。`null` = 未知
+  final bool? tts;
+
+  const ModelCapability(this.vision, this.tts);
+
+  /// 按模型名查询（大小写与首尾空白不敏感）。
+  static ModelCapability of(String model) {
+    final hit = MODEL_CAPABILITIES[model.trim().toLowerCase()];
+    if (hit != null) return ModelCapability(hit.vision, hit.tts);
+    return const ModelCapability(null, null);
+  }
+
+  /// 是否应当按「支持图片」去尝试。未知 → true。
+  bool get tryVision => vision ?? true;
+
+  /// 是否应当按「支持音频输出」去尝试。未知 → true。
+  bool get tryTts => tts ?? true;
+
+  /// 是否已登记（false = 表里没有，结论未知）
+  bool get isKnown => vision != null || tts != null;
+}
 
 /// AI 配置
 class AiConfig {
@@ -180,6 +265,13 @@ class AiClient {
       for (final m in messages) {'role': m.role, 'content': m.content},
     ];
     if (imageBase64 != null && imageBase64.isNotEmpty) {
+      // 已知不支持图片的模型：直接给出明确提示，不必发一个注定失败的请求
+      // （表里查不到的按「未知即尝试」处理，不受此影响）
+      // 用 cfg.model：此处作用域内还没有 model 局部变量
+      if (ModelCapability.of(cfg.model).vision == false) {
+        throw Exception(
+            '当前模型 ${cfg.model} 不支持图片识别。请在「AI 智能出题设置」中改用支持视觉的模型（如 deepseek-v4.1-flash）。');
+      }
       // 最后一条 user 消息改为多模态：文本 + 图片
       final last = msgs.last;
       last['content'] = [
@@ -252,10 +344,11 @@ Future<(int, String)> httpPostJson(String url, Map<String, String> headers, Stri
 }
 
 /// 语音合成（听力配音）
-/// 两种接口：
-/// 1) OpenAI 风格：POST /audio/speech（OpenAI tts-1、通义 cosyvoice 等）
-/// 2) MiMo 风格：POST /chat/completions，assistant 消息 content 为要合成的文本，
-///    响应 choices[0].message.audio.data 为 base64 音频（模型名以 mimo- 开头）
+///
+/// 两种接口风格，由 AI_PROVIDERS 的 `ttsStyle` **显式声明**，不再靠模型名前缀去猜：
+/// 1) `'audio'`：POST /audio/speech，响应即音频二进制（OpenAI tts-1、通义 cosyvoice 等）
+/// 2) `'chat'` ：POST /chat/completions，assistant 消息 content 为待合成文本，
+///    响应 choices[0].message.audio.data 为 base64 音频（MiMo；DeepSeek V4.1 Flash 同属此类）
 class AiTts {
   /// 生成音频字节（默认 mp3；wav 用于面板内拼接静音）
   /// 需在 AI 设置中配置 voiceModel（语音模型名），否则抛异常
@@ -267,10 +360,14 @@ class AiTts {
     }
     if (cfg.voiceModel.trim().isEmpty) {
       throw Exception(
-          '未配置语音模型。请在「AI 智能出题设置」中填写 voiceModel（如 OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
+          '未配置语音模型。请在「AI 智能出题设置」中填写语音模型（如 DeepSeek deepseek-v4.1-flash、OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
     }
     final model = cfg.voiceModel.trim();
-    return model.startsWith('mimo-')
+    // 风格优先取服务商预设里的显式声明；预设里没有的（如自定义服务商）
+    // 再按历史规则兜底：mimo- 前缀走 chat 风格，其余走 /audio/speech。
+    final style = AI_PROVIDERS[cfg.provider]?.ttsStyle ??
+        (model.startsWith('mimo-') ? 'chat' : 'audio');
+    return style == 'chat'
         ? await _speechChat(cfg, text, model, format, voice, speed)
         : await _speechAudioEndpoint(cfg, text, model, format, voice, speed);
   }
@@ -381,7 +478,7 @@ String aiFriendlyError(Object e) {
           r'image_url|unknown variant|does not support image|image.*not (support|supported)|not.*vision|只接受文本|only.*text',
           caseSensitive: false)
       .hasMatch(msg)) {
-    return '当前模型/接口不支持图片识别（只接受文本）。请在顶部「AI 智能出题设置」中改用支持视觉的模型，例如：通义 qwen-vl-max、智谱 glm-4v、OpenAI gpt-4o；DeepSeek 建议先用文字输入。';
+    return '当前模型/接口不支持图片识别（只接受文本）。请在顶部「AI 智能出题设置」中改用支持视觉的模型，例如 DeepSeek deepseek-v4.1-flash、通义 qwen-vl-max、智谱 glm-4v、OpenAI gpt-4o。';
   }
   if (RegExp(
           r'API 返回错误 401|Unauthorized|invalid api key|authentication',

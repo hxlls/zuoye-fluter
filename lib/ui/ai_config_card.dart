@@ -175,9 +175,10 @@ class _AiConfigCardState extends State<AiConfigCard> {
                   ],
                 ),
                 _field('API 地址', _baseCtl, 'https://api.deepseek.com'),
-                _field('模型', _modelCtl, 'deepseek-chat'),
+                _field('模型', _modelCtl, '如 deepseek-v4.1-flash / gpt-4o-mini'),
                 _field('API Key', _keyCtl, 'sk-...', obscure: true),
-                _field('语音模型(可选)', _voiceCtl, '如 tts-1 / cosyvoice-v1（听力配音用）'),
+                _field('语音模型(可选)', _voiceCtl,
+                    '听力配音用，如 deepseek-v4.1-flash / tts-1 / cosyvoice-v1'),
                 const SizedBox(height: 10),
                 // 四个按钮在手机窄屏上横排会溢出，改用 Wrap 自动换行；
                 // 状态文字另起一行，避免被挤成竖条
