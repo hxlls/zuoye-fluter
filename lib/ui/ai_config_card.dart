@@ -204,7 +204,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
                 busy = false;
                 fetchedModels = models;
               });
-              say('已获取 \${models.length} 个模型，可在模型下拉框中选择');
+              say('已获取 ${models.length} 个模型，可在模型下拉框中选择');
             } catch (e) {
               setDlg(() {
                 busy = false;
