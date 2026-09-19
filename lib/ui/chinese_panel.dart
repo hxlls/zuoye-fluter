@@ -9,6 +9,7 @@ import '../data/type_count_store.dart';
 import '../core/chinese_worksheet.dart';
 import '../core/type_catalog.dart';
 import '../core/worksheet_model.dart';
+import '../core/textbook_structurer.dart';
 import '../ai/ai_generator.dart';
 import '../ai/ai_client.dart';
 import 'panel_widgets.dart';
@@ -18,6 +19,7 @@ import 'book_list_panel.dart';
 import 'practical_panel.dart';
 import 'export_file.dart';
 import 'ai_config_card.dart';
+import 'pdf_import_flow.dart';
 
 /// 语文作业面板
 class ChinesePanel extends StatefulWidget {
@@ -52,6 +54,13 @@ class _ChinesePanelState extends State<ChinesePanel> {
   String? _activeId;
   /// 常驻采集目标（sticky：导入/拍照归档到此，跨会话保持）
   String? _captureId;
+
+  /// 本次会话内已解析的「教材 PDF 分段」，按语料 id 记。
+  /// 分段导入时后一段开头那点正文属于前一段的最后一课，靠这些段来续接
+  /// （见 `mergeSegments`）。只在内存里：跨会话续接请把页码范围覆盖到上次
+  /// 导入处 —— 同一课会被更完整的正文覆盖，不会重复。
+  final Map<String, List<TextbookParseResult>> _pdfSegments = {};
+
   // 内置课文现以「内置语料」形式直接出现在语料下拉中，无需回退开关
 
   @override
@@ -691,6 +700,62 @@ class _ChinesePanelState extends State<ChinesePanel> {
           '（累计 ${target.items.length} 篇）');
     } catch (e) {
       _showSnack('拍照导入失败：${aiFriendlyError(e)}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// PDF 教材导入：整本或任意页码范围 → 结构化课文 → 合并归档进语料库。
+  ///
+  /// **零 AI 成本**：走的是 PDF 自带的文本层（先把拼音注音按字体剔掉、
+  /// 把被注音打断的行按坐标拼回、再去掉跨页水印），不调用任何模型。
+  /// 因此对扫描图片版的 PDF 无效 —— 那种得先 OCR，或改用「拍照导入」。
+  Future<void> _importCorpusFromPdf() async {
+    final target = _captureCorpus();
+    if (target == null) {
+      _showSnack('无采集目标，请先新建语料库');
+      return;
+    }
+    final previous = _pdfSegments[target.id] ?? const <TextbookParseResult>[];
+    if (mounted) setState(() => _loading = true);
+    try {
+      final outcome = await importTextbookPdf(
+        context,
+        previous: previous,
+        fallbackName: target.name,
+      );
+      if (outcome == null) return; // 用户取消，或流程内已提示过原因
+
+      final res = _mergeItems(target.items, outcome.items,
+          fileSource: 'licensed',
+          corpusVersion: target.version,
+          corpusGrade: target.grade,
+          corpusVolume: target.volume);
+      target.items = res.$1;
+      if (target.source.isEmpty) target.source = 'licensed';
+      target.origin = 'imported-pdf';
+      _pdfSegments[target.id] = outcome.segments;
+
+      // 导入成功后让该语料成为「活跃语料」，保证「导入即出阅读」
+      _activeId = target.id;
+      // 采集目标保持为该语料（sticky）
+      _captureId = target.id;
+      await CorpusStore.saveActiveId(_activeId);
+      await CorpusStore.saveCaptureId(_captureId);
+      await CorpusStore.saveCorpora(
+          _corpora.where((c) => c.origin != 'bundled').toList());
+      await _loadCorpusStatus();
+      _regenerate();
+      if (mounted) setState(() {});
+
+      final cut = outcome.picked.where((l) => l.cutOff).toList();
+      _showSnack('已导入第 ${outcome.firstPage}–${outcome.lastPage} 页'
+          '（共 ${outcome.totalPages} 页）：新增 ${res.$2} 篇 / 更新 ${res.$3} 篇，'
+          '该教材累计 ${outcome.totalLessons} 课。'
+          '${cut.isEmpty ? '' : '「${cut.first.title}」正文被页码区间切断。'}'
+          '${outcome.suggestNextPage == 0 ? '已到最后一页，导入完成。' : '下次可从第 ${outcome.suggestNextPage} 页继续导入。'}');
+    } catch (e) {
+      _showSnack('PDF 导入失败：$e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1405,7 +1470,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
               const Padding(
                 padding: EdgeInsets.only(bottom: 6),
                 child: Text(
-                  '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档到上方目标；也可导入 .json 语料文件。分多次拍同一本会自动合并去重。',
+                  '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档到上方目标；也可导入 .json 语料文件。分多次拍同一本会自动合并去重。\n'
+                  '若有带文本层的教材 PDF（出版社电子版），用「导入教材 PDF」更省事：自动切分单元与课、零 AI 成本，且可分次按页码范围导入。',
                   style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                 ),
               ),
@@ -1427,6 +1493,11 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     onPressed: _importCorpus,
                     icon: const Icon(Icons.upload_file, size: 16),
                     label: const Text('导入语料(.json)'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _importCorpusFromPdf,
+                    icon: const Icon(Icons.picture_as_pdf, size: 16),
+                    label: const Text('导入教材 PDF'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _previewCorpus,

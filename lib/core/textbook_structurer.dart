@@ -154,6 +154,11 @@ class TextbookParseResult {
   /// 本次实际解析的页数
   final int pageCount;
 
+  /// 本次解析区间的首/末绝对页号（空结果为 0）。
+  /// 分段导入靠它算「下一段从第几页起」，并识别重复导入的同一段。
+  final int firstPageNo;
+  final int lastPageNo;
+
   const TextbookParseResult({
     required this.name,
     required this.toc,
@@ -163,7 +168,12 @@ class TextbookParseResult {
     this.leadingText = '',
     this.leadingPages = const [],
     this.pageCount = 0,
+    this.firstPageNo = 0,
+    this.lastPageNo = 0,
   });
+
+  /// 接着导入时建议的起始页（1-based）。
+  int get nextPage => lastPageNo + 1;
 
   int get unitCount => toc.where((e) => e.isUnit).length;
   int get charCount => lessons.fold(0, (a, b) => a + b.charCount);
@@ -510,5 +520,7 @@ TextbookParseResult structureTextbook(
     leadingText: lead.join('\n'),
     leadingPages: leadPages,
     pageCount: pages.length,
+    firstPageNo: pages.isEmpty ? 0 : pages.first.pageNumber,
+    lastPageNo: lastPageNo,
   );
 }
