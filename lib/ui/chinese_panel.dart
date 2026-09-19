@@ -661,46 +661,13 @@ class _ChinesePanelState extends State<ChinesePanel> {
     try {
       final bytes = await file.readAsBytes();
       final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      final cfg = await AiStore.load();
-      if (cfg.base.isEmpty || cfg.model.isEmpty) {
-        _showSnack('请先在顶部「AI 智能出题设置」中填写 API 地址，并选用支持看图的多模态大模型'
-            '（如 qwen-vl-max / glm-4v / gpt-4o）；纯文本模型无法识别图片。');
-        return;
-      }
-      const prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
-          '请识别页面中的课文/对话，并严格按以下 JSON 输出：\n'
-          '{"name":"识别到的课本名（如 冀教版语文三年级上册）",'
-          '"items":[{"grade":3,"volume":"上","unit":"第一单元","title":"课文标题",'
-          '"author":"作者/出处","text":"课文正文（尽量完整抄录，多课分别列出）","questions":[]}]}\n'
-          '要求：1) grade 用数字（一年级=1…六年级=6），volume 用"上"或"下"，依据页眉/封面判断；'
-          '2) 一页含多篇课文时分别列出，unit 填所属单元名；'
-          '3) text 尽量完整抄录原文（含标点），不要改写；只显示部分则抄录可见部分；'
-          '4) questions 固定为空数组；5) 只输出一个 JSON 对象，不要其他文字。';
-      final content = await AiClient.chat(
-        cfg,
-        [AiChatMessage('user', prompt)],
-        imageBase64: b64,
-        jsonMode: true,
-      );
-      final data = aiExtractJson(content);
-      final items = data['items'];
-      if (items is! List || items.isEmpty) {
-        _showSnack('未识别到课文，请换一张更清晰或正文更完整的页面试试。');
-        return;
-      }
+      final incoming = await _structureCorpusPage(b64);
+      if (incoming == null) return; // 已在内部提示过原因
       // 合并进「常驻采集目标」（分页/重拍可累积，按课文身份去重；sticky 保证多次拍摄落到同一本）
       final target = _captureCorpus();
       if (target == null) {
         _showSnack('无采集目标，请先新建语料库');
         return;
-      }
-      final incoming = <Map<String, dynamic>>[];
-      for (final e in items) {
-        if (e is Map) {
-          final m = <String, dynamic>{};
-          (e).forEach((k, v) => m['$k'] = v);
-          incoming.add(m);
-        }
       }
       final res = _mergeItems(target.items, incoming,
           fileSource: 'licensed',
@@ -727,6 +694,53 @@ class _ChinesePanelState extends State<ChinesePanel> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// 调视觉模型把**一页课本图片**结构化成课文条目。
+  ///
+  /// 抽出来是为了让「拍照导入」与「PDF 导入」**共用同一份提示词** ——
+  /// 复制成两份的话，改一处必漏另一处（本项目吃过「同一份数据两处定义」的亏）。
+  ///
+  /// 返回 null 表示**已在内部提示过用户原因**，调用方直接返回即可，不要重复报错。
+  /// 入库合并由调用方负责 —— 本方法只做「图片 → 结构化条目」这一件事。
+  Future<List<Map<String, dynamic>>?> _structureCorpusPage(
+      String imageBase64) async {
+    final cfg = await AiStore.load();
+    if (cfg.base.isEmpty || cfg.model.isEmpty) {
+      _showSnack('请先在顶部「AI 智能出题设置」中填写 API 地址，并选用支持看图的多模态大模型'
+          '（如 qwen-vl-max / glm-4v / gpt-4o）；纯文本模型无法识别图片。');
+      return null;
+    }
+      const prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
+          '请识别页面中的课文/对话，并严格按以下 JSON 输出：\n'
+          '{"name":"识别到的课本名（如 冀教版语文三年级上册）",'
+          '"items":[{"grade":3,"volume":"上","unit":"第一单元","title":"课文标题",'
+          '"author":"作者/出处","text":"课文正文（尽量完整抄录，多课分别列出）","questions":[]}]}\n'
+          '要求：1) grade 用数字（一年级=1…六年级=6），volume 用"上"或"下"，依据页眉/封面判断；'
+          '2) 一页含多篇课文时分别列出，unit 填所属单元名；'
+          '3) text 尽量完整抄录原文（含标点），不要改写；只显示部分则抄录可见部分；'
+          '4) questions 固定为空数组；5) 只输出一个 JSON 对象，不要其他文字。';
+    final content = await AiClient.chat(
+      cfg,
+      [AiChatMessage('user', prompt)],
+      imageBase64: imageBase64,
+      jsonMode: true,
+    );
+    final data = aiExtractJson(content);
+    final items = data['items'];
+    if (items is! List || items.isEmpty) {
+      _showSnack('未识别到课文，请换一张更清晰或正文更完整的页面试试。');
+      return null;
+    }
+    final out = <Map<String, dynamic>>[];
+    for (final e in items) {
+      if (e is Map) {
+        final m = <String, dynamic>{};
+        e.forEach((k, v) => m['$k'] = v);
+        out.add(m);
+      }
+    }
+    return out;
   }
 
   Future<void> _clearCorpus() async {

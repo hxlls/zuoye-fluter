@@ -16,7 +16,7 @@ class Corpus {
   String? volume;
   // 语料级来源声明：'' 未声明(版权自负) / 'original' AI原创·非版权 / 'licensed' 用户声明授权
   String source;
-  // 进入方式：bundled(内置) / imported-json / photo / ai
+  // 进入方式：bundled(内置) / imported-json / imported-pdf / photo / ai
   String origin;
   List<Map<String, dynamic>> items;
 
