@@ -14,10 +14,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///   - `'chat'` ：POST /chat/completions 带 audio 参数，音频在
 ///     choices[0].message.audio.data（MiMo；DeepSeek V4.1 Flash 属同类）
 const AI_PROVIDERS = {
+  // DeepSeek：模型名以 `GET /models` 的返回为准 —— 2026-09 实测只有
+  // `deepseek-flash` 与 `deepseek-v4-pro`（写成 deepseek-flash 会被拒）。
+  // 两者**均支持多模态**（实测发 1x1 图片被正常接受）。
+  // 但**该 endpoint 不提供 TTS**：/audio/speech 返回 404，chat 的 audio
+  // 参数会被静默忽略（200 但无 audio 字段），故 voice 留空。
+  // 若你的服务确实支持语音，把 voice 填上模型名、ttsStyle 按接口实际形态选即可。
   'deepseek': (
     base: 'https://api.deepseek.com',
-    model: 'deepseek-v4.1-flash',
-    voice: 'deepseek-v4.1-flash',
+    model: 'deepseek-flash',
+    voice: '',
     ttsStyle: 'chat'
   ),
   'openai': (
@@ -72,10 +78,9 @@ const AI_PROVIDERS = {
 /// - `vision`：能否接受图片输入（多模态理解）
 /// - `tts`：能否输出音频（语音合成）
 const MODEL_CAPABILITIES = <String, ({bool vision, bool tts})>{
-  // DeepSeek
-  'deepseek-v4.1-flash': (vision: true, tts: true),
-  'deepseek-v4-flash': (vision: false, tts: false),
-  'deepseek-chat': (vision: false, tts: false),
+  // DeepSeek —— 以 GET /models 的实际返回为准（2026-09 实测）
+  'deepseek-flash': (vision: true, tts: false),
+  'deepseek-v4-pro': (vision: true, tts: false),
   // OpenAI
   'gpt-4o': (vision: true, tts: false),
   'gpt-4o-mini': (vision: true, tts: false),
@@ -270,7 +275,7 @@ class AiClient {
       // 用 cfg.model：此处作用域内还没有 model 局部变量
       if (ModelCapability.of(cfg.model).vision == false) {
         throw Exception(
-            '当前模型 ${cfg.model} 不支持图片识别。请在「AI 智能出题设置」中改用支持视觉的模型（如 deepseek-v4.1-flash）。');
+            '当前模型 ${cfg.model} 不支持图片识别。请在「AI 智能出题设置」中改用支持视觉的模型（如 deepseek-flash）。');
       }
       // 最后一条 user 消息改为多模态：文本 + 图片
       final last = msgs.last;
@@ -426,7 +431,7 @@ class AiTts {
     }
     if (cfg.voiceModel.trim().isEmpty) {
       throw Exception(
-          '未配置语音模型。请在「AI 智能出题设置」中填写语音模型（如 DeepSeek deepseek-v4.1-flash、OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
+          '未配置语音模型。请在「AI 智能出题设置」中填写语音模型（如 DeepSeek deepseek-flash、OpenAI tts-1、通义 cosyvoice-v1、智谱 glm-4v-voice、小米 MiMo mimo-v2.5-tts）。');
     }
     final model = cfg.voiceModel.trim();
     // 风格优先取服务商预设里的显式声明；预设里没有的（如自定义服务商）
@@ -544,7 +549,7 @@ String aiFriendlyError(Object e) {
           r'image_url|unknown variant|does not support image|image.*not (support|supported)|not.*vision|只接受文本|only.*text',
           caseSensitive: false)
       .hasMatch(msg)) {
-    return '当前模型/接口不支持图片识别（只接受文本）。请在顶部「AI 智能出题设置」中改用支持视觉的模型，例如 DeepSeek deepseek-v4.1-flash、通义 qwen-vl-max、智谱 glm-4v、OpenAI gpt-4o。';
+    return '当前模型/接口不支持图片识别（只接受文本）。请在顶部「AI 智能出题设置」中改用支持视觉的模型，例如 DeepSeek deepseek-flash、通义 qwen-vl-max、智谱 glm-4v、OpenAI gpt-4o。';
   }
   if (RegExp(
           r'API 返回错误 401|Unauthorized|invalid api key|authentication',

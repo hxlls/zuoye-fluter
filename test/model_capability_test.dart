@@ -7,14 +7,15 @@ import 'package:zuoye_fluter/ai/ai_client.dart';
 /// 一旦被改错，会直接影响多模态请求与听力配音的走向，所以把行为锁住。
 void main() {
   test('已知模型：能力查得到', () {
-    final v41 = ModelCapability.of('deepseek-v4.1-flash');
-    expect(v41.vision, true);
-    expect(v41.tts, true);
-    expect(v41.isKnown, true);
+    // 模型名以 GET /models 的实际返回为准（2026-09 实测只有这两个）
+    final flash = ModelCapability.of('deepseek-flash');
+    expect(flash.vision, true);   // 多模态实测可用
+    expect(flash.tts, false);     // 该 endpoint 不提供 TTS
+    expect(flash.isKnown, true);
 
-    final old = ModelCapability.of('deepseek-v4-flash');
-    expect(old.vision, false);
-    expect(old.tts, false);
+    final pro = ModelCapability.of('deepseek-v4-pro');
+    expect(pro.vision, true);
+    expect(pro.tts, false);
   });
 
   test('未知模型：按「未知即尝试」处理，不预设为不支持', () {
@@ -27,7 +28,7 @@ void main() {
   });
 
   test('查询对大小写与首尾空白不敏感', () {
-    expect(ModelCapability.of('  DeepSeek-V4.1-Flash  ').vision, true);
+    expect(ModelCapability.of('  DeepSeek-Flash  ').vision, true);
     expect(ModelCapability.of('QWEN-VL-MAX').vision, true);
   });
 

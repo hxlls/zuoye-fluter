@@ -271,10 +271,10 @@ class _AiConfigCardState extends State<AiConfigCard> {
                   ],
                 ),
                 _field('API 地址', _baseCtl, 'https://api.deepseek.com'),
-                _field('模型', _modelCtl, '如 deepseek-v4.1-flash / gpt-4o-mini'),
+                _field('模型', _modelCtl, '如 deepseek-flash / gpt-4o-mini'),
                 _field('API Key', _keyCtl, 'sk-...', obscure: true),
                 _field('语音模型(可选)', _voiceCtl,
-                    '听力配音用，如 deepseek-v4.1-flash / tts-1 / cosyvoice-v1'),
+                    '听力配音用，如 tts-1 / cosyvoice-v1 / mimo-v2.5-tts'),
                 const SizedBox(height: 4),
                 // 从接口拉取可用模型：填好地址与 Key 后点一下，免去手输模型名。
                 // 各家的 /models 端点实测均可用；不支持时仍可手动输入。
