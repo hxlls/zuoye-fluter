@@ -148,6 +148,72 @@ class TextbookLesson {
       '${cutOff ? ", 未完" : ""})';
 }
 
+/// 提取到的文字里汉字占多少 —— 「一节课都切不出来」时用来把原因说准。
+///
+/// 为什么需要它：切不出课有两种完全不同的原因，而给用户的建议是相反的：
+/// - **扫描图片版**（没有文本层）→ 建议先 OCR 或改用「拍照导入」；
+/// - **不是中文教材**（有文本层但正文是外文）→ 建议换中文教材，
+///   改 OCR 或拍照都没用。
+///
+/// 实测三本书的非空白字符里汉字占比：《道德与法治》一年级上册 **77.1%**、
+/// 《语文》六年级下册 **83.0%**、英语《英语（三年级起点）》六年级下册 **2.3%**。
+/// 差距这么大，阈值取 [kChineseHanRatio] 有极宽的安全边。
+class TextLanguageProfile {
+  /// 清洗后正文的非空白字符数（含汉字、字母、数字、标点）
+  final int totalChars;
+
+  /// 其中汉字的个数
+  final int hanChars;
+
+  const TextLanguageProfile({
+    required this.totalChars,
+    required this.hanChars,
+  });
+
+  double get hanRatio => totalChars == 0 ? 0 : hanChars / totalChars;
+
+  /// 文本量是否够下「这是不是中文教材」的结论。
+  ///
+  /// 用户可能只选了封面与版权页（本来就几乎没有课文），
+  /// 此时无论比例多少都不该断言「这不是中文教材」。
+  bool get enoughText => totalChars >= kLangVerdictMinChars;
+
+  /// 看起来不是中文教材：文本量足够，但汉字占比低得离谱。
+  bool get looksNonChinese => enoughText && hanRatio < kChineseHanRatio;
+
+  @override
+  String toString() => 'TextLanguageProfile($totalChars 字符, '
+      '汉字 $hanChars, ${(hanRatio * 100).toStringAsFixed(1)}%)';
+}
+
+/// 下「不是中文教材」结论所需的最少字符数。
+///
+/// 取整页正文的量级：一页教材正文实测 300–500 字（《语文》130 页 51687 字）。
+const int kLangVerdictMinChars = 300;
+
+/// 判「是中文教材」的汉字占比下限。
+///
+/// 实测中文教材 77%–83%、英语教材 2.3%，取 30% 两边各有极大余量：
+/// 即使一本中文教材夹了大量英文（双语读物、附英文原文的书），
+/// 汉字占比也远高于 30%；而外文教材要凑到 30% 汉字几乎不可能。
+const double kChineseHanRatio = 0.3;
+
+/// 统计清洗后正文的语言画像。
+TextLanguageProfile profileLanguage(Iterable<CleanedPage> pages) {
+  var total = 0;
+  var han = 0;
+  for (final p in pages) {
+    for (final l in p.lines) {
+      for (final r in l.text.runes) {
+        if (r == 0x20 || r == 0x0A || r == 0x0D || r == 0x09) continue;
+        total++;
+        if (r >= 0x4E00 && r <= 0x9FFF) han++;
+      }
+    }
+  }
+  return TextLanguageProfile(totalChars: total, hanChars: han);
+}
+
 /// 整本教材的解析结果。
 class TextbookParseResult {
   /// 建议的语料库名（如「道德与法治 一年级上册」）
@@ -187,6 +253,9 @@ class TextbookParseResult {
   /// 判「末课是否被区间切断」要用它。
   final int totalPages;
 
+  /// 提取到的文字的语言画像 —— 只在「一节课都切不出来」时用来把诊断说准。
+  final TextLanguageProfile language;
+
   const TextbookParseResult({
     required this.name,
     required this.toc,
@@ -200,6 +269,7 @@ class TextbookParseResult {
     this.firstPageNo = 0,
     this.lastPageNo = 0,
     this.totalPages = 0,
+    this.language = const TextLanguageProfile(totalChars: 0, hanChars: 0),
   });
 
   /// 接着导入时建议的起始页（1-based）。
@@ -803,6 +873,7 @@ TextbookParseResult structureTextbook(
     firstPageNo: firstPageNo,
     lastPageNo: lastPageNo,
     totalPages: total,
+    language: profileLanguage(pages),
   );
 }
 

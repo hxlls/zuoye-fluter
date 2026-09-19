@@ -153,9 +153,7 @@ Future<PdfImportOutcome?> importTextbookPdf(
     return null;
   }
   if (segment.lessons.isEmpty && segment.leadingText.isEmpty) {
-    _snack(context, '第 ${range.$1}–${range.$2} 页里没有识别到课文。'
-        '若这些页本来就是封面、目录或插图，属正常；否则请确认这本 PDF 带文本层'
-        '（扫描图片版需要先做 OCR，或用「拍照导入」）。');
+    _snack(context, _noLessonMessage(segment, range.$1, range.$2));
     return null;
   }
 
@@ -163,7 +161,7 @@ Future<PdfImportOutcome?> importTextbookPdf(
   final segments = _appendSegment(previous, segment);
   final lessons = mergeSegments(segments);
   if (lessons.isEmpty) {
-    _snack(context, '第 ${range.$1}–${range.$2} 页里没有识别到课文。');
+    _snack(context, _noLessonMessage(segment, range.$1, range.$2));
     return null;
   }
 
@@ -193,6 +191,31 @@ Future<PdfImportOutcome?> importTextbookPdf(
     totalLessons: lessons.length,
     suggestNextPage: range.$2 < probe.pageCount ? range.$2 + 1 : 0,
   );
+}
+
+/// 「一节课都切不出来」时的诊断文案。
+///
+/// 两种情况要给完全相反的建议，所以必须先分清：
+/// - **扫描图片版**（提取不到文字）→ 先 OCR，或改用「拍照导入」；
+/// - **不是中文教材**（有文字但正文是外文）→ 换中文教材；改 OCR 或拍照都没用。
+///
+/// 实测英语教材（人教社·三年级起点 六年级下册）就是第二种：81 页、35548 个字符
+/// 全部提取成功，但汉字只占 2.3%，一节课都切不出来。原来只报「请确认这本 PDF
+/// 带文本层」，会把用户引向完全错误的方向。
+String _noLessonMessage(TextbookParseResult seg, int first, int last) {
+  final lang = seg.language;
+  if (lang.looksNonChinese) {
+    final pct = (lang.hanRatio * 100).toStringAsFixed(
+        lang.hanRatio < 0.095 ? 1 : 0);
+    return '第 $first–$last 页提取到 ${lang.totalChars} 个字符'
+        '（其中汉字 ${lang.hanChars} 个，占 $pct%）——这本 PDF 的正文不是中文，'
+        '看起来不是中文教材。教材导入是按中文课文设计的，'
+        '其他语种的教材请用「拍照导入」（走视觉识别，不受语种限制）。';
+  }
+  return '第 $first–$last 页里没有识别到课文。'
+      '若这些页本来就是封面、目录或插图，属正常；'
+      '否则请确认这本 PDF 带文本层（扫描图片版需要先做 OCR，'
+      '或用「拍照导入」）。';
 }
 
 /// 把新段并入已解析的段：页码区间完全相同的旧段被替换，避免重复导入同一段时

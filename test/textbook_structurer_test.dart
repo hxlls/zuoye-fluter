@@ -695,4 +695,68 @@ void main() {
           reason: '不带目录文本时，课题不在标题带里就认不出来');
     });
   });
+
+  // 「一节课都切不出来」有两种原因，给用户的建议正好相反（换教材 vs 先 OCR）。
+  // 判据是汉字占比，本组把阈值两侧与「文本量不足不下结论」都钉住。
+  group('语言画像（切不出课时的诊断依据）', () {
+    /// 造 [n] 行正文，每行是 [unit] 重复 [perLine] 次。
+    List<PdfLine> body(String unit, int n, {int perLine = 20}) => [
+          for (var i = 0; i < n; i++) line(120.0 + i * 18, unit * perLine),
+        ];
+
+    test('中文教材：汉字占比高，不会被误判成外文', () {
+      final p = profileLanguage([pg(1, 1, body('开开心心上学去。', 20))]);
+      expect(p.totalChars, greaterThan(kLangVerdictMinChars));
+      // 不会正好 100%：句号这类标点计入总字符但不计入汉字（实测中文教材 77%–83%）
+      expect(p.hanRatio, greaterThan(0.8));
+      expect(p.looksNonChinese, false);
+    });
+
+    test('外文教材：字符数够、汉字占比极低 → 判为非中文', () {
+      final p = profileLanguage([
+        pg(1, 1, body('Slow and steady wins the race. ', 20)),
+      ]);
+      expect(p.totalChars, greaterThan(kLangVerdictMinChars));
+      expect(p.hanRatio, 0);
+      expect(p.looksNonChinese, true);
+    });
+
+    test('文本量不足时不下结论（用户可能只选了封面与版权页）', () {
+      final p = profileLanguage([
+        pg(1, null, [line(200, '英语'), line(300, 'ENGLISH')]),
+      ]);
+      expect(p.enoughText, false);
+      expect(p.looksNonChinese, false,
+          reason: '页数太少，分不清「外文教材」与「这几页本来就没有课文」');
+    });
+
+    test('阈值边界：汉字正好占 30% 不算外文，差一点才算', () {
+      // 阈值两侧各造一本 400 字的书
+      final at30 = profileLanguage([
+        pg(1, 1, [
+          line(120, '${'中' * 120}${'a' * 280}'),
+        ]),
+      ]);
+      expect(at30.totalChars, 400);
+      expect(at30.hanRatio, closeTo(kChineseHanRatio, 1e-9));
+      expect(at30.looksNonChinese, false);
+
+      final at29 = profileLanguage([
+        pg(1, 1, [
+          line(120, '${'中' * 116}${'a' * 284}'),
+        ]),
+      ]);
+      expect(at29.hanRatio, lessThan(kChineseHanRatio));
+      expect(at29.looksNonChinese, true);
+    });
+
+    test('structureTextbook 把画像带进结果', () {
+      final r = structureTextbook([
+        pg(1, 1, body('Slow and steady wins the race. ', 20)),
+      ]);
+      expect(r.lessons, isEmpty);
+      expect(r.language.looksNonChinese, true);
+      expect(r.language.totalChars, greaterThan(kLangVerdictMinChars));
+    });
+  });
 }
