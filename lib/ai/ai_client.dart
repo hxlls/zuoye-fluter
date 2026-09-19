@@ -4,68 +4,131 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// AI 提供商预设。
+/// AI 接口预设。
+class AiProviderPreset {
+  final String label;
+  final String base;
+  const AiProviderPreset({required this.label, required this.base});
+}
+
+/// AI 服务商预设。
+class AiProviderInfo {
+  final String label;
+  final List<AiProviderPreset> presets;
+  final String model;
+  final String voice;
+  final String ttsStyle;
+  const AiProviderInfo({
+    required this.label,
+    required this.presets,
+    required this.model,
+    required this.voice,
+    required this.ttsStyle,
+  });
+}
+
+/// 各服务商的预设接口、默认模型与 TTS 风格。
 ///
 /// 字段：
-/// - `base` / `model`：文本（及多模态）模型
+/// - `presets`：该服务商支持的接口地址候选（第一个为官方默认，最后一个通常是「自定义」）
+/// - `model`：文本（及多模态）默认模型
 /// - `voice`：**语音合成模型**，听力配音用。**空字符串 = 该服务商不提供 TTS**
 /// - `ttsStyle`：TTS 接口风格，决定走哪个端点（见 AiTts.speech）
 ///   - `'audio'`：POST /audio/speech，响应即音频二进制（OpenAI / 通义 / 智谱）
 ///   - `'chat'` ：POST /chat/completions 带 audio 参数，音频在
 ///     choices[0].message.audio.data（MiMo 属此类）
 ///   - `'auto'` ：风格未知（自定义地址），由语音模型名前缀推断
-const AI_PROVIDERS = {
+const AI_PROVIDERS = <String, AiProviderInfo>{
   // DeepSeek：模型名以 `GET /models` 的返回为准 —— 2026-09 实测只有
   // `deepseek-flash` 与 `deepseek-v4-pro`（写成 deepseek-flash 会被拒）。
   // 两者**均支持多模态**（实测发 1x1 图片被正常接受）。
   // 但**该 endpoint 不提供 TTS**：/audio/speech 返回 404，chat 的 audio
   // 参数会被静默忽略（200 但无 audio 字段），故 voice 留空。
   // 若你的服务确实支持语音，把 voice 填上模型名、ttsStyle 按接口实际形态选即可。
-  'deepseek': (
-    base: 'https://api.deepseek.com',
+  'deepseek': AiProviderInfo(
+    label: 'DeepSeek',
+    presets: [
+      AiProviderPreset(label: '官方 API', base: 'https://api.deepseek.com'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'deepseek-flash',
     voice: '',
-    ttsStyle: 'chat'
+    ttsStyle: 'chat',
   ),
-  'openai': (
-    base: 'https://api.openai.com/v1',
+  'openai': AiProviderInfo(
+    label: 'OpenAI',
+    presets: [
+      AiProviderPreset(label: '官方 API', base: 'https://api.openai.com/v1'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'gpt-4o-mini',
     voice: 'tts-1',
-    ttsStyle: 'audio'
+    ttsStyle: 'audio',
   ),
-  'qwen': (
-    base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  'qwen': AiProviderInfo(
+    label: '通义千问',
+    presets: [
+      AiProviderPreset(
+          label: '官方兼容模式',
+          base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'qwen-plus',
     voice: 'cosyvoice-v1',
-    ttsStyle: 'audio'
+    ttsStyle: 'audio',
   ),
-  'kimi': (
-    base: 'https://api.moonshot.cn/v1',
+  'kimi': AiProviderInfo(
+    label: 'Kimi',
+    presets: [
+      AiProviderPreset(label: '官方 API', base: 'https://api.moonshot.cn/v1'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'moonshot-v1-8k',
     voice: '',
-    ttsStyle: 'audio'
+    ttsStyle: 'audio',
   ),
-  'glm': (
-    base: 'https://open.bigmodel.cn/api/paas/v4',
+  'glm': AiProviderInfo(
+    label: '智谱 GLM',
+    presets: [
+      AiProviderPreset(
+          label: '官方 API', base: 'https://open.bigmodel.cn/api/paas/v4'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'glm-4-flash',
     voice: 'glm-4v-voice',
-    ttsStyle: 'audio'
+    ttsStyle: 'audio',
   ),
-  'mimo': (
-    base: 'https://api.xiaomimimo.com/v1',
+  'mimo': AiProviderInfo(
+    label: '小米 MiMo',
+    presets: [
+      AiProviderPreset(label: '官方 API', base: 'https://api.xiaomimimo.com/v1'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'mimo-v2.5',
     voice: 'mimo-v2.5-tts',
-    ttsStyle: 'chat'
+    ttsStyle: 'chat',
   ),
-  'ollama': (
-    base: 'http://localhost:11434/v1',
+  'ollama': AiProviderInfo(
+    label: 'Ollama 本地',
+    presets: [
+      AiProviderPreset(label: '本地默认', base: 'http://localhost:11434/v1'),
+      AiProviderPreset(label: '自定义', base: ''),
+    ],
     model: 'qwen2.5:7b',
     voice: '',
-    ttsStyle: 'audio'
+    ttsStyle: 'audio',
   ),
   // 自定义地址：接口风格未知，声明为 'auto'，由 AiEndpoint.ttsStyle
   // 按语音模型名前缀推断（mimo- 系走 chat，其余走 /audio/speech）
-  'custom': (base: '', model: '', voice: '', ttsStyle: 'auto'),
+  'custom': AiProviderInfo(
+    label: '自定义',
+    presets: [
+      AiProviderPreset(label: '自定义地址', base: ''),
+    ],
+    model: '',
+    voice: '',
+    ttsStyle: 'auto',
+  ),
 };
 
 /// 模型能力表 —— **能力判断的单一来源**。

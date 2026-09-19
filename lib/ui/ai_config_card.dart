@@ -139,6 +139,24 @@ class _AiConfigCardState extends State<AiConfigCard> {
     var statusColor = const Color(0xff888888);
     var busy = false;
 
+    int presetIndexFor(String provider, String base) {
+      final info = AI_PROVIDERS[provider] ?? AI_PROVIDERS['custom']!;
+      final trimmed = base.trim();
+      if (trimmed.isEmpty) {
+        for (int i = 0; i < info.presets.length; i++) {
+          if (info.presets[i].base.isNotEmpty) return i;
+        }
+        return 0;
+      }
+      for (int i = 0; i < info.presets.length; i++) {
+        if (info.presets[i].base == trimmed) return i;
+      }
+      return info.presets.length - 1;
+    }
+
+    var presetIndex = presetIndexFor(provider, src.base);
+    var fetchedModels = <String>[];
+
     AiEndpoint draft() => AiEndpoint(
           id: src.id,
           name: nameCtl.text.trim().isEmpty ? '未命名端点' : nameCtl.text.trim(),
@@ -175,20 +193,23 @@ class _AiConfigCardState extends State<AiConfigCard> {
                   AiConfig(endpoints: [ep], mainId: ep.id));
               if (!ctx.mounted) return;
               if (models.isEmpty) {
-                setDlg(() => busy = false);
+                setDlg(() {
+                  busy = false;
+                  fetchedModels = [];
+                });
                 say('该接口未返回任何模型（可手动填写模型名）', bad: true);
                 return;
               }
-              final picked = await _pickModelDialog(ctx, models);
-              setDlg(() => busy = false);
-              if (picked != null) {
-                modelCtl.text = picked;
-                say('已选择模型：$picked');
-              } else {
-                say('已取消选择');
-              }
+              setDlg(() {
+                busy = false;
+                fetchedModels = models;
+              });
+              say('已获取 \${models.length} 个模型，可在模型下拉框中选择');
             } catch (e) {
-              setDlg(() => busy = false);
+              setDlg(() {
+                busy = false;
+                fetchedModels = [];
+              });
               say(aiFriendlyError(e), bad: true);
             }
           }
@@ -260,25 +281,80 @@ class _AiConfigCardState extends State<AiConfigCard> {
                             : 'custom',
                         items: [
                           for (final e in AI_PROVIDERS.entries)
-                            DropdownMenuItem(value: e.key, child: Text(e.key)),
+                            DropdownMenuItem(
+                            value: e.key, child: Text(e.value.label)),
                         ],
                         onChanged: (v) => setDlg(() {
                           provider = v ?? 'custom';
                           final p = AI_PROVIDERS[provider]!;
-                          // 只补空白项，不覆盖用户已填内容
-                          if (baseCtl.text.trim().isEmpty) baseCtl.text = p.base;
-                          if (modelCtl.text.trim().isEmpty) {
-                            modelCtl.text = p.model;
-                          }
-                          if (voiceCtl.text.trim().isEmpty) {
-                            voiceCtl.text = p.voice;
-                          }
+                          presetIndex = presetIndexFor(provider, '');
+                          baseCtl.text = p.presets[presetIndex].base;
+                          modelCtl.text = p.model;
+                          voiceCtl.text = p.voice;
+                          fetchedModels = [];
                         }),
+                      ),
+                    ]),
+                    Row(children: [
+                      const SizedBox(
+                          width: 96,
+                          child: Text('接口', style: TextStyle(fontSize: 13))),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButton<int>(
+                          value: presetIndex,
+                          isExpanded: true,
+                          items: [
+                            for (int i = 0;
+                                i < AI_PROVIDERS[provider]!.presets.length;
+                                i++)
+                              DropdownMenuItem(
+                                  value: i,
+                                  child: Text(
+                                      AI_PROVIDERS[provider]!.presets[i].label,
+                                      style: const TextStyle(fontSize: 13))),
+                          ],
+                          onChanged: (v) {
+                            if (v == null) return;
+                            setDlg(() {
+                              presetIndex = v;
+                              final preset = AI_PROVIDERS[provider]!.presets[v];
+                              if (preset.base.isNotEmpty) {
+                                baseCtl.text = preset.base;
+                              }
+                              fetchedModels = [];
+                            });
+                            if (keyCtl.text.trim().isNotEmpty) getModels();
+                          },
+                        ),
                       ),
                     ]),
                     _dlgField('名称', nameCtl, '用于区分多个端点，如「DeepSeek 主力」'),
                     _dlgField('API 地址', baseCtl, 'https://api.deepseek.com'),
                     _dlgField('模型', modelCtl, '如 deepseek-flash'),
+                    if (fetchedModels.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: DropdownButtonFormField<String>(
+                          value: fetchedModels.contains(modelCtl.text.trim())
+                              ? modelCtl.text.trim()
+                              : null,
+                          hint: const Text('从接口获取的模型列表中选择',
+                              style: TextStyle(fontSize: 13)),
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final m in fetchedModels)
+                              DropdownMenuItem(value: m, child: _modelItem(m)),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) setDlg(() => modelCtl.text = v);
+                          },
+                        ),
+                      ),
                     _dlgField('API Key', keyCtl, 'sk-...', obscure: true),
                     _dlgField('语音模型(可选)', voiceCtl,
                         '留空 = 该端点不提供配音，如 mimo-v2.5-tts'),
@@ -327,35 +403,23 @@ class _AiConfigCardState extends State<AiConfigCard> {
     );
   }
 
-  Future<String?> _pickModelDialog(BuildContext ctx, List<String> models) {
-    return showDialog<String>(
-      context: ctx,
-      builder: (c) => SimpleDialog(
-        title: Text('选择模型（共 ${models.length} 个）'),
-        children: [
-          SizedBox(
-            width: MediaQuery.of(c).size.width * 0.8,
-            height: 360,
-            child: ListView.builder(
-              itemCount: models.length,
-              itemBuilder: (cc, i) {
-                final id = models[i];
-                final badge = _capBadge(id);
-                return ListTile(
-                  dense: true,
-                  title: Text(id, style: const TextStyle(fontSize: 14)),
-                  subtitle: badge == null
-                      ? null
-                      : Text(badge,
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xff2f7d32))),
-                  onTap: () => Navigator.pop(c, id),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+  /// 模型下拉项：已知能力的模型右侧带上能力徽章（看图 / 配音）。
+  Widget _modelItem(String id) {
+    final badge = _capBadge(id);
+    if (badge == null) {
+      return Text(id, style: const TextStyle(fontSize: 13));
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Text(id,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(width: 6),
+        Text(badge,
+            style: const TextStyle(fontSize: 10.5, color: Color(0xff2f7d32))),
+      ],
     );
   }
 
