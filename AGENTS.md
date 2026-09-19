@@ -154,25 +154,39 @@ AI 的可配置项收敛在 `lib/ai/ai_client.dart` 的**两张表**里：
 
 | 要做的事 | 改哪里 | 必要性 |
 |---|---|---|
-| 让新厂商出现在服务商下拉里 | `AI_PROVIDERS` 加一行 | 可选 |
+| 让新厂商出现在服务商下拉里 | `AI_PROVIDERS` 加一项 | 可选 |
+| 给厂商增加接口地址候选 | 该项的 `presets` 加一条 | 可选 |
 | 登记某模型能否看图 / 出声 | `MODEL_CAPABILITIES` 加一行 | 可选 |
-| 设置界面 | —— | **无需改动**（下拉由 `AI_PROVIDERS` 自动生成） |
+| 设置界面 | —— | **无需改动**（下拉均由 `AI_PROVIDERS` 自动生成） |
 
-`AI_PROVIDERS` 一行有四个字段：
+`AI_PROVIDERS` 一项有五个字段，`presets` 是该厂商的**接口地址候选列表**：
 
 ```dart
-'厂商key': (
-  base: 'https://api.example.com/v1',  // API 地址
-  model: 'model-name',                 // 默认模型
-  voice: '',                           // 语音模型；空 = 该厂商不提供 TTS
-  ttsStyle: 'audio',                   // 'audio' | 'chat' | 'auto'
+'厂商key': AiProviderInfo(
+  label: '显示名',                        // 下拉里给用户看的名字
+  presets: [
+    AiProviderPreset(label: '官方 API', base: 'https://api.example.com/v1'),
+    AiProviderPreset(label: '自定义',   base: ''),
+  ],
+  model: 'model-name',                   // 默认模型
+  voice: '',                             // 语音模型；空 = 该厂商不提供 TTS
+  ttsStyle: 'audio',                     // 'audio' | 'chat' | 'auto'
 ),
 ```
+
+设置弹层里「服务商 → 接口 → 模型」三者是**联动**的：
+
+1. 选服务商 → 自动填入该厂商第一个预设接口、默认模型与语音模型
+2. 选接口 → 填入对应地址；若 API Key 已填，**自动拉取 `GET /models`**
+3. 模型 → 从拉回的列表里选，或继续手动输入（手动输入始终可用）
+
+因此**接口候选的 `label` 要写清来源**（如「官方 API」「自定义」），
+`base` 为空串的项表示交给用户手填 —— 约定放在列表**最后一项**。
 
 **多数情况不必改代码**：设置里选 `custom`，自行填地址与模型即可。
 `custom` 的 `ttsStyle` 为 `'auto'`，会按语音模型名前缀推断接口风格
 （`mimo-` 系走 chat/completions + audio，其余走 /audio/speech）。
-只有当希望新厂商出现在**预设下拉**、或让它被自动填入默认值时，才需要加这一行。
+只有当希望新厂商出现在**预设下拉**、或让它被自动填入默认值时，才需要加这一项。
 
 **两条纪律**：
 
