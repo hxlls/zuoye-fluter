@@ -148,35 +148,38 @@ const AI_PROVIDERS = <String, AiProviderInfo>{
 ///
 /// - `vision`：能否接受图片输入（多模态理解）
 /// - `tts`：能否输出音频（语音合成）
-const MODEL_CAPABILITIES = <String, ({bool vision, bool tts})>{
+/// - `voiceNeeds`：**合成前还需要额外输入什么**（如参考音频、音色描述）。
+///   空串 = 给了模型名就能出声。非空 = 本应用没有这些输入的入口，
+///   选中必然失败 —— 界面据此标注，试听前拦下（见 [ModelCapability.needsExtraInput]）。
+const MODEL_CAPABILITIES = <String, ({bool vision, bool tts, String voiceNeeds})>{
   // DeepSeek —— 以 GET /models 的实际返回为准（2026-09 实测）
-  'deepseek-flash': (vision: true, tts: false),
-  'deepseek-v4-pro': (vision: true, tts: false),
+  'deepseek-flash': (vision: true, tts: false, voiceNeeds: ''),
+  'deepseek-v4-pro': (vision: true, tts: false, voiceNeeds: ''),
   // OpenAI
-  'gpt-4o': (vision: true, tts: false),
-  'gpt-4o-mini': (vision: true, tts: false),
-  'tts-1': (vision: false, tts: true),
+  'gpt-4o': (vision: true, tts: false, voiceNeeds: ''),
+  'gpt-4o-mini': (vision: true, tts: false, voiceNeeds: ''),
+  'tts-1': (vision: false, tts: true, voiceNeeds: ''),
   // 通义
-  'qwen-vl-max': (vision: true, tts: false),
-  'qwen-plus': (vision: false, tts: false),
-  'cosyvoice-v1': (vision: false, tts: true),
+  'qwen-vl-max': (vision: true, tts: false, voiceNeeds: ''),
+  'qwen-plus': (vision: false, tts: false, voiceNeeds: ''),
+  'cosyvoice-v1': (vision: false, tts: true, voiceNeeds: ''),
   // 智谱
-  'glm-4v': (vision: true, tts: false),
-  'glm-4v-voice': (vision: true, tts: true),
-  'glm-4-flash': (vision: false, tts: false),
+  'glm-4v': (vision: true, tts: false, voiceNeeds: ''),
+  'glm-4v-voice': (vision: true, tts: true, voiceNeeds: ''),
+  'glm-4-flash': (vision: false, tts: false, voiceNeeds: ''),
   // 小米 MiMo —— 下面的模型清单与能力**全部实测确认**（2026-09）
-  'mimo-v2.5': (vision: true, tts: false), // 多模态可用：响应带 image_tokens
-  'mimo-v2.5-pro': (vision: true, tts: false),
-  'mimo-v2.5-asr': (vision: false, tts: false), // 语音识别，非 TTS
-  'mimo-v2.5-tts': (vision: false, tts: true), // TTS 可用：响应带 message.audio.data
-  'mimo-v2.5-tts-voiceclone': (vision: false, tts: true),
-  'mimo-v2.5-tts-voicedesign': (vision: false, tts: true),
+  'mimo-v2.5': (vision: true, tts: false, voiceNeeds: ''), // 多模态可用：响应带 image_tokens
+  'mimo-v2.5-pro': (vision: true, tts: false, voiceNeeds: ''),
+  'mimo-v2.5-asr': (vision: false, tts: false, voiceNeeds: ''), // 语音识别，非 TTS
+  'mimo-v2.5-tts': (vision: false, tts: true, voiceNeeds: ''), // TTS 可用：响应带 message.audio.data
+  'mimo-v2.5-tts-voiceclone': (vision: false, tts: true, voiceNeeds: '参考音频'),
+  'mimo-v2.5-tts-voicedesign': (vision: false, tts: true, voiceNeeds: '音色描述'),
   // Kimi
-  'moonshot-v1-8k': (vision: false, tts: false),
+  'moonshot-v1-8k': (vision: false, tts: false, voiceNeeds: ''),
   // Ollama（本地；默认的 qwen2.5:7b 是纯文本模型。
   // 本机若换跑 llava 等多模态模型，在设置里改成对应模型名即可，
   // 未登记的模型会按「未知即尝试」处理，不会被误拦）
-  'qwen2.5:7b': (vision: false, tts: false),
+  'qwen2.5:7b': (vision: false, tts: false, voiceNeeds: ''),
 };
 
 /// 单个模型的能力查询结果。
@@ -191,14 +194,25 @@ class ModelCapability {
   /// 能否输出音频。`null` = 未知
   final bool? tts;
 
-  const ModelCapability(this.vision, this.tts);
+  /// 出声前还需要额外输入什么（如「参考音频」「音色描述」）。
+  /// 空串 = 给了模型名就能直接合成；非空 = 本应用没有对应入口。
+  final String voiceNeeds;
+
+  const ModelCapability(this.vision, this.tts, [this.voiceNeeds = '']);
 
   /// 按模型名查询（大小写与首尾空白不敏感）。
   static ModelCapability of(String model) {
     final hit = MODEL_CAPABILITIES[model.trim().toLowerCase()];
-    if (hit != null) return ModelCapability(hit.vision, hit.tts);
+    if (hit != null) return ModelCapability(hit.vision, hit.tts, hit.voiceNeeds);
     return const ModelCapability(null, null);
   }
+
+  /// 是不是「拿模型名就能直接出声」。未知模型按可试处理（与 tryTts 一致）。
+  bool get readyToSpeak => tts == true && voiceNeeds.isEmpty;
+
+  /// 是否必须先补一份本应用拿不到的输入才能出声（参考音频 / 音色描述）。
+  /// 为真时**必然失败**（已实测 400），界面应提前说明而不是等接口报错。
+  bool get needsExtraInput => tts == true && voiceNeeds.isNotEmpty;
 
   /// 是否应当按「支持图片」去尝试。未知 → true。
   bool get tryVision => vision ?? true;
@@ -217,15 +231,19 @@ class ModelCapability {
   bool get pureTts => tts == true && vision != true;
 
   /// 作为「语音模型」候选时的排序权重：
-  /// 已知支持配音 → 0，未知 → 1，已知不支持配音 → 2。
+  /// **拿模型名就能直接出声** → 0，未知 → 1，其余（不支持配音 / 需额外输入）→ 2。
+  ///
+  /// 注意 0 档要求 `voiceNeeds` 为空：`mimo-v2.5-tts-voiceclone` 虽然
+  /// `tts == true`，但它要参考音频的 DataURL，本应用给不出来，实测 400，
+  /// 排到前面等于诱导用户踩坑。
   ///
   /// 这里只算权重、**不做过滤** —— 未知模型照样出现在候选里，只是排在后面。
   /// 能力表不认识的模型很可能正是该接口专属的配音模型（如 tts-1-hd），
   /// 提前滤掉等于替用户挡路。
   static int ttsRank(String model) {
-    final t = of(model).tts;
-    if (t == true) return 0;
-    if (t == null) return 1;
+    final cap = of(model);
+    if (cap.readyToSpeak) return 0;
+    if (cap.tts == null) return 1;
     return 2;
   }
 

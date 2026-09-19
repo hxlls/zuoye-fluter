@@ -156,7 +156,7 @@ AI 的可配置项收敛在 `lib/ai/ai_client.dart` 的**两张表**里：
 |---|---|---|
 | 让新厂商出现在服务商下拉里 | `AI_PROVIDERS` 加一项 | 可选 |
 | 给厂商增加接口地址候选 | 该项的 `presets` 加一条 | 可选 |
-| 登记某模型能否看图 / 出声 | `MODEL_CAPABILITIES` 加一行 | 可选 |
+| 登记模型能否看图 / 出声 / 出声还缺什么 | `MODEL_CAPABILITIES` 加一行 | 可选 |
 | 设置界面 | —— | **无需改动**（下拉均由 `AI_PROVIDERS` 自动生成） |
 
 `AI_PROVIDERS` 一项有五个字段，`presets` 是该厂商的**接口地址候选列表**：
@@ -179,8 +179,8 @@ AI 的可配置项收敛在 `lib/ai/ai_client.dart` 的**两张表**里：
 1. 选服务商 → 自动填入该厂商第一个预设接口、默认模型与语音模型
 2. 选接口 → 填入对应地址；若 API Key 已填，**自动拉取 `GET /models`**
 3. 模型 → 从拉回的列表里选，或继续手动输入（手动输入始终可用）
-4. 语音模型 → 同样从拉回的列表里选；候选按配音能力排序
-   （`ModelCapability.sortForTts`：支持配音 → 未知 → 已知不支持），
+4. 语音模型 → 同样从拉回的列表里选；候选按「拿到模型名就能出声」排序
+   （`ModelCapability.sortForTts`：可直接用 → 未知 → 不支持 / 需额外输入），
    **不过滤**，留空仍表示该端点不配音
 
 因此**接口候选的 `label` 要写清来源**（如「官方 API」「自定义」），
@@ -191,7 +191,7 @@ AI 的可配置项收敛在 `lib/ai/ai_client.dart` 的**两张表**里：
 （`mimo-` 系走 chat/completions + audio，其余走 /audio/speech）。
 只有当希望新厂商出现在**预设下拉**、或让它被自动填入默认值时，才需要加这一项。
 
-**三条纪律**：
+**四条纪律**：
 
 1. **模型名以该 API 的 `GET /models` 返回为准**，不要照搬产品宣传里的名字。
    曾把产品名 `deepseek-v4.1-flash` 写进代码，而 API 实际只认 `deepseek-flash`，
@@ -201,6 +201,10 @@ AI 的可配置项收敛在 `lib/ai/ai_client.dart` 的**两张表**里：
 3. **纯 TTS 模型只标注、不隐藏**。`mimo-v2.5-tts` 这类模型与对话模型同在
    一份 `/models` 清单里，设置界面据 `pureTts` 标「仅配音」—— 它出现在
    **主模型**候选里，误选会让出题直接失败。
+4. **「是 TTS 模型」不等于「在本应用里能用」**。`mimo-v2.5-tts-voiceclone`
+   要参考音频的 DataURL、`mimo-v2.5-tts-voicedesign` 要音色描述，本应用都没有
+   对应入口，实测直接 400。这类模型用 `voiceNeeds` 登记，界面标出缺什么、
+   试听前拦下，并且**不进候选前排**（见 `ModelCapability.ttsRank`）。
 
 ## 数据
 

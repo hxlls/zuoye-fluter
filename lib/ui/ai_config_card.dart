@@ -248,6 +248,14 @@ class _AiConfigCardState extends State<AiConfigCard> {
               say('请先填写 API 地址与语音模型', bad: true);
               return;
             }
+            // 需要参考音频 / 音色描述的模型：本应用没有这些输入入口，
+            // 发出去必然 400（已实测），提前说清楚，别让用户对着接口报错猜。
+            final need = ModelCapability.of(ep.voiceModel).voiceNeeds;
+            if (need.isNotEmpty) {
+              say('${ep.voiceModel} 需要额外提供$need，本应用未支持，请改用可直接合成'
+                  '的语音模型（如 mimo-v2.5-tts、tts-1、cosyvoice-v1）', bad: true);
+              return;
+            }
             setDlg(() {
               busy = true;
               status = '语音测试中…';
@@ -471,8 +479,16 @@ class _AiConfigCardState extends State<AiConfigCard> {
   /// **语音模型**下拉项：只提示与「能不能配音」有关的信息。
   /// 灰色「不支持配音」是明确结论，值得写出来；未知的留空（不误导）。
   Widget _voiceItem(String id) {
-    final tts = ModelCapability.of(id).tts;
-    if (tts == null) return Text(id, style: const TextStyle(fontSize: 13));
+    final cap = ModelCapability.of(id);
+    if (cap.needsExtraInput) {
+      return _voiceRow(id, '需${cap.voiceNeeds}，未支持', const Color(0xffb26a00));
+    }
+    if (cap.tts == null) return Text(id, style: const TextStyle(fontSize: 13));
+    return _voiceRow(id, cap.tts! ? '支持配音' : '不支持配音',
+        cap.tts! ? const Color(0xff2f7d32) : const Color(0xff9a9a9a));
+  }
+
+  Widget _voiceRow(String id, String note, Color color) {
     return Row(
       children: [
         Expanded(
@@ -481,11 +497,7 @@ class _AiConfigCardState extends State<AiConfigCard> {
               overflow: TextOverflow.ellipsis),
         ),
         const SizedBox(width: 6),
-        Text(tts ? '支持配音' : '不支持配音',
-            style: TextStyle(
-                fontSize: 10.5,
-                color:
-                    tts ? const Color(0xff2f7d32) : const Color(0xff9a9a9a))),
+        Text(note, style: TextStyle(fontSize: 10.5, color: color)),
       ],
     );
   }

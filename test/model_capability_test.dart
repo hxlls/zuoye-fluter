@@ -76,14 +76,54 @@ void main() {
     expect(ModelCapability.of('brand-new-9000').pureTts, false);
   });
 
+  test('需要额外输入的语音模型：能识别，且不被当成可直接用', () {
+    // 实测（2026-09）：voiceclone 要参考音频 DataURL、voicedesign 要音色描述，
+    // 本应用两样都给不出来，调用必 400
+    final clone = ModelCapability.of('mimo-v2.5-tts-voiceclone');
+    expect(clone.tts, true);
+    expect(clone.voiceNeeds, '参考音频');
+    expect(clone.needsExtraInput, true);
+    expect(clone.readyToSpeak, false, reason: '不能进「可直接用」那一档');
+
+    final design = ModelCapability.of('mimo-v2.5-tts-voicedesign');
+    expect(design.voiceNeeds, '音色描述');
+    expect(design.needsExtraInput, true);
+
+    // 能直接出声的模型没有额外要求
+    final plain = ModelCapability.of('mimo-v2.5-tts');
+    expect(plain.voiceNeeds, isEmpty);
+    expect(plain.readyToSpeak, true);
+    expect(plain.needsExtraInput, false);
+  });
+
   group('语音模型候选排序 —— sortForTts', () {
-    test('支持配音 → 未知 → 已知不支持', () {
+    test('可直接配音 → 未知 → 其余（含需额外输入的）', () {
       final out = ModelCapability.sortForTts([
-        'mimo-v2.5',            // 已知不支持配音
-        'mimo-v2.5-tts',        // 已知支持配音
-        'brand-new-tts-model',  // 未知：不过滤，排在中间
+        'mimo-v2.5',                   // 已知不支持配音
+        'mimo-v2.5-tts',               // 可直接配音
+        'brand-new-tts-model',         // 未知：不过滤，排在中间
+        'mimo-v2.5-tts-voiceclone',    // 要参考音频，本应用给不出
       ]);
-      expect(out, ['mimo-v2.5-tts', 'brand-new-tts-model', 'mimo-v2.5']);
+      expect(out, [
+        'mimo-v2.5-tts',
+        'brand-new-tts-model',
+        'mimo-v2.5',
+        'mimo-v2.5-tts-voiceclone',
+      ]);
+    });
+
+    test('MiMo 真实清单：可直接用的排最前，需额外输入的落到最后', () {
+      final out = ModelCapability.sortForTts([
+        'mimo-v2.5-tts-voicedesign',
+        'mimo-v2.5-asr',
+        'mimo-v2.5',
+        'mimo-v2.5-tts-voiceclone',
+        'mimo-v2.5-pro',
+        'mimo-v2.5-tts',
+      ]);
+      expect(out.first, 'mimo-v2.5-tts');
+      expect(out.sublist(out.length - 2),
+          ['mimo-v2.5-tts-voiceclone', 'mimo-v2.5-tts-voicedesign']);
     });
 
     test('同权重按名称升序，且不改动入参', () {
