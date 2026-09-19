@@ -27,14 +27,27 @@ class PdfTextbookExtraction {
   /// 本次提取的起始页（0-based）
   final int firstPageIndex;
 
+  /// **目录页**的版面文本（键为 1-based 绝对页序）。
+  ///
+  /// 只对疑似目录页取，成本可忽略；目录解析走文本顺序而不碰坐标 ——
+  /// 实测这本 PDF 的目录页上词坐标不可信（见 `textbook_structurer.dart`）。
+  final Map<int, String> layoutTexts;
+
   const PdfTextbookExtraction({
     required this.pages,
     required this.totalPages,
     required this.firstPageIndex,
+    this.layoutTexts = const {},
   });
 
   int get extractedCount => pages.length;
 }
+
+/// 只在全书前部找目录 —— 教材目录总在封面之后、正文之前。
+///
+/// 顺带挡掉两种误判：正文页里偶然出现的「省略号+数字」，以及分段导入时
+/// 把后面的页误当目录页。
+const int kTocScanPages = 16;
 
 List<PdfWord> _pageWords(PdfTextExtractor ex, int index) {
   final ws = <PdfWord>[];
@@ -82,10 +95,30 @@ Future<PdfTextbookExtraction> extractPdfWords(
       await Future<void>.delayed(Duration.zero);
       // 用户中途取消：已经提取的部分照样返回，交给上层决定要不要用
     }
+
+    // 目录页的版面文本：只对疑似目录页再取一次（每页几毫秒）。
+    // 判据用词文本拼起来测 —— 目录条目的「点线+页码」在词级也是连着的。
+    final layoutTexts = <int, String>{};
+    for (var i = 0; i < out.length; i++) {
+      final absNo = from + i + 1; // 1-based 绝对页序
+      if (absNo > kTocScanPages) break;
+      if (!looksLikeTocPage(out[i].map((w) => w.text))) continue;
+      try {
+        layoutTexts[absNo] = extractor.extractText(
+          startPageIndex: from + i,
+          endPageIndex: from + i,
+          layoutText: true,
+        );
+      } catch (_) {
+        // 单页取不到版面文本不该让整次导入失败：退回到坐标版解析
+      }
+    }
+
     return PdfTextbookExtraction(
       pages: out,
       totalPages: count,
       firstPageIndex: from,
+      layoutTexts: layoutTexts,
     );
   } finally {
     doc.dispose();
@@ -135,8 +168,14 @@ Future<TextbookParseResult> parseTextbookPdf(
     cleanDocument(ex.pages),
     ex.firstPageIndex, // 页号从 1 起算，平移量即起始下标
   );
-  return structureTextbook(cleaned,
-      fallbackName: fallbackName, knownToc: knownToc);
+  return structureTextbook(
+    cleaned,
+    fallbackName: fallbackName,
+    knownToc: knownToc,
+    tocTexts: ex.layoutTexts,
+    // 分段导入时本段末页不是全书末页，「末课是否被切断」要靠全书总页数判
+    totalPages: ex.totalPages,
+  );
 }
 
 /// 选完文件后的**廉价探测**结果。
@@ -169,7 +208,11 @@ Future<TextbookProbe> probeTextbookPdf(
   final cleaned = _shiftPages(cleanDocument(ex.pages), ex.firstPageIndex);
   return TextbookProbe(
     pageCount: ex.totalPages,
-    result: structureTextbook(cleaned),
+    result: structureTextbook(
+      cleaned,
+      tocTexts: ex.layoutTexts,
+      totalPages: ex.totalPages,
+    ),
   );
 }
 
