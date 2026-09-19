@@ -31,6 +31,29 @@ void main() {
     expect(ModelCapability.of('QWEN-VL-MAX').vision, true);
   });
 
+  group('AiModels.parse —— /models 响应解析', () {
+    test('标准 OpenAI 格式', () {
+      final ids = AiModels.parse(
+          '{"object":"list","data":[{"id":"b-model"},{"id":"a-model"}]}');
+      expect(ids, ['a-model', 'b-model']); // 已排序
+    });
+
+    test('忽略非 id 项与重复项', () {
+      final ids = AiModels.parse(
+          '{"data":[{"id":"x"},{"foo":1},{"id":"x"},{"id":"  "},{"id":"y"}]}');
+      expect(ids, ['x', 'y']);
+    });
+
+    test('缺少 data 数组时抛异常（不硬当成功）', () {
+      expect(() => AiModels.parse('{"object":"list"}'), throwsException);
+      expect(() => AiModels.parse('[]'), throwsException);
+    });
+
+    test('空列表不报错', () {
+      expect(AiModels.parse('{"data":[]}'), isEmpty);
+    });
+  });
+
   test('预设里的服务商默认模型都应能在能力表中找到（防止两张表漂移）', () {
     final missing = <String>[];
     for (final e in AI_PROVIDERS.entries) {

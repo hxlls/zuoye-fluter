@@ -17,6 +17,8 @@ class _AiConfigCardState extends State<AiConfigCard> {
   String _provider = 'deepseek';
   String _status = '';
   Color _statusColor = const Color(0xff888888);
+  /// 正在拉取模型列表（期间禁用按钮，避免重复请求）
+  bool _loadingModels = false;
   bool _expanded = false;
 
   @override
@@ -104,6 +106,100 @@ class _AiConfigCardState extends State<AiConfigCard> {
     }
   }
 
+  /// 从 `{base}/models` 拉取可用模型，选中后填入模型输入框。
+  ///
+  /// 这只是便利功能：拉不到（接口不支持该端点 / 网络问题）时会给出提示，
+  /// 用户仍可手动输入模型名，不影响原有流程。
+  Future<void> _loadModels() async {
+    final base = _baseCtl.text.trim();
+    if (base.isEmpty) {
+      setState(() {
+        _status = '请先填写 API 地址';
+        _statusColor = const Color(0xffd8433b);
+      });
+      return;
+    }
+    setState(() {
+      _loadingModels = true;
+      _status = '正在获取模型列表…';
+      _statusColor = const Color(0xff2f6fd0);
+    });
+    try {
+      final models = await AiModels.list(AiConfig(
+        provider: _provider,
+        base: base,
+        model: _modelCtl.text.trim(),
+        key: _keyCtl.text.trim(),
+        voiceModel: _voiceCtl.text.trim(),
+      ));
+      if (!mounted) return;
+      if (models.isEmpty) {
+        setState(() {
+          _loadingModels = false;
+          _status = '该接口未返回任何模型（可手动填写模型名）';
+          _statusColor = const Color(0xffd8433b);
+        });
+        return;
+      }
+      final picked = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: Text('选择模型（共 ${models.length} 个）'),
+          children: [
+            SizedBox(
+              width: MediaQuery.of(ctx).size.width * 0.8,
+              height: 360,
+              child: ListView.builder(
+                itemCount: models.length,
+                itemBuilder: (c, i) {
+                  final id = models[i];
+                  final badge = _capBadge(id);
+                  return ListTile(
+                    dense: true,
+                    title: Text(id, style: const TextStyle(fontSize: 14)),
+                    subtitle: badge == null ? null : Text(badge,
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xff2f7d32))),
+                    onTap: () => Navigator.pop(ctx, id),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _loadingModels = false;
+        if (picked != null) {
+          _modelCtl.text = picked;
+          _status = '已选择模型：$picked';
+          _statusColor = const Color(0xff2f7d32);
+        } else {
+          _status = '已取消选择';
+          _statusColor = const Color(0xff888888);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingModels = false;
+        _status = aiFriendlyError(e);
+        _statusColor = const Color(0xffd8433b);
+      });
+    }
+  }
+
+  /// 已知能力的模型，在列表里给个小提示；**未知的不显示**（不误导）。
+  String? _capBadge(String model) {
+    final cap = ModelCapability.of(model);
+    final parts = <String>[
+      if (cap.vision == true) '支持看图',
+      if (cap.tts == true) '支持配音',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   Future<void> _testVoice() async {
     final cfg = AiConfig(
       provider: _provider,
@@ -179,8 +275,19 @@ class _AiConfigCardState extends State<AiConfigCard> {
                 _field('API Key', _keyCtl, 'sk-...', obscure: true),
                 _field('语音模型(可选)', _voiceCtl,
                     '听力配音用，如 deepseek-v4.1-flash / tts-1 / cosyvoice-v1'),
-                const SizedBox(height: 10),
-                // 四个按钮在手机窄屏上横排会溢出，改用 Wrap 自动换行；
+                const SizedBox(height: 4),
+                // 从接口拉取可用模型：填好地址与 Key 后点一下，免去手输模型名。
+                // 各家的 /models 端点实测均可用；不支持时仍可手动输入。
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _loadingModels ? null : _loadModels,
+                    icon: const Icon(Icons.list_alt, size: 18),
+                    label: Text(_loadingModels ? '获取中…' : '从接口获取模型列表'),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // 按钮在手机窄屏上横排会溢出，改用 Wrap 自动换行；
                 // 状态文字另起一行，避免被挤成竖条
                 Wrap(
                   spacing: 8,

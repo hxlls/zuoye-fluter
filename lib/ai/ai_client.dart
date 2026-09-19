@@ -343,6 +343,72 @@ Future<(int, String)> httpPostJson(String url, Map<String, String> headers, Stri
   return (resp.statusCode, resp.body);
 }
 
+/// 模型列表（OpenAI 兼容 `GET {base}/models`）
+///
+/// 用途：让用户在设置里一键拉取「当前 Key 可用的模型」，免去手输模型名。
+///
+/// 实测（2026-09）DeepSeek / OpenAI / Kimi / 智谱 / 通义 / 小米 MiMo
+/// 六家的该端点均可用；DeepSeek 的 `{base}` 不含 `/v1` 也能直接拼 `/models`。
+/// 若某接口没有这个端点，调用方会收到 404 并被转成友好提示，
+/// 用户仍可手动输入模型名 —— 所以这只是便利功能，不是必需路径。
+///
+/// ⚠️ 注意：该端点**只返回模型 id，不含能力信息**
+/// （OpenAI 规范的字段只有 id / object / created / owned_by）。
+/// 「能不能看图 / 能不能出声」要另查 [MODEL_CAPABILITIES] 或实际探测。
+class AiModels {
+  /// 拉取模型 id 列表。失败时抛异常（由调用方用 aiFriendlyError 转成提示）。
+  static Future<List<String>> list(AiConfig cfg) async {
+    final base = _trimSlash(cfg.base);
+    if (base.isEmpty) {
+      throw Exception('未配置 API 地址');
+    }
+    final headers = <String, String>{
+      if (cfg.key.isNotEmpty) 'Authorization': 'Bearer ${cfg.key}',
+    };
+    final resp = await http
+        .get(Uri.parse('$base/models'), headers: headers)
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      final body = resp.body;
+      throw Exception(
+          'API 返回错误 ${resp.statusCode}：${body.length > 200 ? body.substring(0, 200) : body}');
+    }
+    return parse(resp.body);
+  }
+
+  /// 解析 `/models` 响应体。抽成纯函数便于单测。
+  ///
+  /// 容错：只取 `data[].id` 是字符串的项；`data` 不是数组时抛异常
+  /// （说明这个接口不是 OpenAI 兼容格式，不该硬当成功处理）。
+  static List<String> parse(String body) {
+    final decoded = json.decode(body);
+    if (decoded is! Map) {
+      throw Exception('返回格式不是 OpenAI 兼容的 /models');
+    }
+    final data = decoded['data'];
+    if (data is! List) {
+      throw Exception('返回格式不是 OpenAI 兼容的 /models（缺少 data 数组）');
+    }
+    final out = <String>[];
+    for (final e in data) {
+      if (e is Map && e['id'] is String) {
+        final id = (e['id'] as String).trim();
+        if (id.isNotEmpty && !out.contains(id)) out.add(id);
+      }
+    }
+    out.sort();
+    return out;
+  }
+
+  static String _trimSlash(String s) {
+    var v = s.trim();
+    while (v.endsWith('/')) {
+      v = v.substring(0, v.length - 1);
+    }
+    return v;
+  }
+}
+
 /// 语音合成（听力配音）
 ///
 /// 两种接口风格，由 AI_PROVIDERS 的 `ttsStyle` **显式声明**，不再靠模型名前缀去猜：
