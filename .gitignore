@@ -45,3 +45,13 @@ app.*.map.json
 # Signing keystore & credentials（勿提交）
 /android/app/upload-keystore.jks
 /android/key.properties
+
+# 教材样本（版权：一律不进仓库）
+# 真实教材 PDF 只用于本地/源码机的提取验证，放在仓库外（如 /home/ling/samples/）。
+# 也不要把教材文字抄进测试夹具——夹具只保留版面形态（点线目录、无「第N课」编号、
+# 父子同页、单元扉页跨行……），课名等文字用合成的。
+*.pdf
+*.epub
+samples/
+**/samples/
+textbook_samples/
