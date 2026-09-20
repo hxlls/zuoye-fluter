@@ -26,11 +26,19 @@ class ChinesePanel extends StatefulWidget {
   final int grade;
   final String version;
   final String volume;
+
+  /// 从设置页「教材语料库」入口进来时为 true：打开后自动滚到语料分组。
+  ///
+  /// 「导入」的直觉路径是设置，所以入口放那儿；但本面板很长（语料分组在
+  /// 三个重面板之后），不滚的话用户还是得自己翻到底。
+  final bool focusCorpus;
+
   const ChinesePanel({
     super.key,
     required this.grade,
     required this.version,
     required this.volume,
+    this.focusCorpus = false,
   });
 
   @override
@@ -61,6 +69,9 @@ class _ChinesePanelState extends State<ChinesePanel> {
   /// 导入处 —— 同一课会被更完整的正文覆盖，不会重复。
   final Map<String, List<TextbookParseResult>> _pdfSegments = {};
 
+  /// 「生成用语料（课文·阅读）」分组的位置，供设置页入口点进来时滚动定位。
+  final GlobalKey _corpusKey = GlobalKey();
+
   // 内置课文现以「内置语料」形式直接出现在语料下拉中，无需回退开关
 
   @override
@@ -70,6 +81,23 @@ class _ChinesePanelState extends State<ChinesePanel> {
     _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
     _loadCounts();
     _initCorpora();
+    if (widget.focusCorpus) {
+      // 首帧之后才拿得到 RenderObject，所以挂到 post-frame 上
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCorpus());
+    }
+  }
+
+  /// 滚到语料分组。用 `Scrollable.ensureVisible` 而不是自己拿 ScrollController：
+  /// 滚动视图在 `PanelLayout` 里（宽窄屏各一个），从这里够不到。
+  void _scrollToCorpus() {
+    if (!mounted) return;
+    final ctx = _corpusKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 260),
+      alignment: 0.02, // 让分组标题贴近顶边，而不是「刚好可见」
+    );
   }
 
   /// 加载语料集合 + 活跃/采集目标，并做校验与默认初始化
@@ -595,6 +623,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
         return;
       }
       if (target.items.isNotEmpty) {
+        if (!mounted) return; // 选文件是异步的，回来时页面可能已卸载
         final choice = await showDialog<String>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -1186,22 +1215,30 @@ class _ChinesePanelState extends State<ChinesePanel> {
   }
 
   Future<void> _generateAIReading() async {
-    // 基于课文模式：若该年级/册暂无本版本课文库，则回退为原创短文并提示
-    final wantTextbook = _useTextbook;
-    if (wantTextbook && !AppData().hasTextbook(widget.version, widget.grade, widget.volume)) {
+    // 出题范围的优先级：**用户导入/选中的语料** > 内置课文库 > 原创短文。
+    // 导入的教材是用户显式给定的范围，必须压过内置库，否则「导入教材约束出题」
+    // 只对本地渲染那条路生效，AI 这条路照样按内置库出题。
+    final corpus = _corpus;
+    final builtinOk =
+        AppData().hasTextbook(widget.version, widget.grade, widget.volume);
+    final wantTextbook = corpus.isEmpty && _useTextbook && builtinOk;
+    if (corpus.isEmpty && _useTextbook && !builtinOk) {
       _showSnack('该年级/册暂无本版本课文库，已改用原创短文模式');
     }
     setState(() => _loading = true);
     try {
-      final items = await aiGenerateReading(AiPromptOpts(
-        version: widget.version,
-        volume: widget.volume,
-        grade: widget.grade,
-        diff: 'easy',
-        showAnswer: true,
-        readingCount: (_counts['aiyuedu'] ?? 2).clamp(1, 4),
-        useTextbook: wantTextbook && AppData().hasTextbook(widget.version, widget.grade, widget.volume),
-      ));
+      final items = await aiGenerateReading(
+        AiPromptOpts(
+          version: widget.version,
+          volume: widget.volume,
+          grade: widget.grade,
+          diff: 'easy',
+          showAnswer: true,
+          readingCount: (_counts['aiyuedu'] ?? 2).clamp(1, 4),
+          useTextbook: wantTextbook,
+        ),
+        corpus: corpus,
+      );
       _aiItems = items;
       _regenerate();
     } catch (e) {
@@ -1393,6 +1430,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
           ),
         ),
         FormGroup(
+          key: _corpusKey,
           label: '生成用语料（课文·阅读）',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1467,11 +1505,27 @@ class _ChinesePanelState extends State<ChinesePanel> {
                 ),
               ),
               const SizedBox(height: 8),
+              // 「导入教材 PDF」单独一行、且用实心按钮。
+              //
+              // 它原来在那排 8 个按钮里排第 4 个，用户反馈「找不到入口」——
+              // 而这恰恰是最省事的那条路（带文本层的出版社电子版，零 AI 成本、
+              // 还能自动切单元与课），不该跟「下载示例格式」这种边角按钮同等份量。
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _loading ? null : _importCorpusFromPdf,
+                  icon: const Icon(Icons.picture_as_pdf, size: 18),
+                  label: const Text('导入教材 PDF（自动切分单元与课）'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
               const Padding(
-                padding: EdgeInsets.only(bottom: 6),
+                padding: EdgeInsets.only(top: 6, bottom: 8),
                 child: Text(
-                  '推荐：拿手机拍下课本页面（或选相册图），AI 自动识别课文并归档到上方目标；也可导入 .json 语料文件。分多次拍同一本会自动合并去重。\n'
-                  '若有带文本层的教材 PDF（出版社电子版），用「导入教材 PDF」更省事：自动切分单元与课、零 AI 成本，且可分次按页码范围导入。',
+                  '带文本层的教材 PDF（出版社电子版）走上面这条：零 AI 成本，可分次按页码范围导入。\n'
+                  '其余方式：拍照 / 相册由 AI 识别课文并归档到上方目标（分多次拍同一本会自动合并去重），也可导入 .json 语料文件。',
                   style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                 ),
               ),
@@ -1493,11 +1547,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     onPressed: _importCorpus,
                     icon: const Icon(Icons.upload_file, size: 16),
                     label: const Text('导入语料(.json)'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _loading ? null : _importCorpusFromPdf,
-                    icon: const Icon(Icons.picture_as_pdf, size: 16),
-                    label: const Text('导入教材 PDF'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _previewCorpus,

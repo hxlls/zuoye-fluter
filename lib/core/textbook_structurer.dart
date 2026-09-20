@@ -1,7 +1,7 @@
 /// PDF 教材导入 · 第二段：把清洗后的页还原成「单元 / 课 / 正文」。
 ///
-/// **划界依据是教材自己的目录页。** 目录把「第1课 开开心心上学去 / 2」或
-/// 「1北京的春节 ……… 2」这样的条目连同书页码印在书上，这是版面无关的
+/// **划界依据是教材自己的目录页。** 目录把「第1课 认识新同学 / 2」或
+/// 「1山那边的邮局 ……… 2」这样的条目连同书页码印在书上，这是版面无关的
 /// 权威来源；页面上的标题行只是旁证。
 ///
 /// 原方案靠「扫标题带」划界，在第二本教材上整本失效，原因有三：
@@ -11,7 +11,7 @@
 /// - 正文首行与课题行可以只差几 pt。六年级下册正文首行 top=58.2–58.4、
 ///   课题 top=62.2，相差 3.8pt，靠位置分不开标题与正文。
 /// - 六年级下册的「阅读材料」里有子篇目（`4狱中联欢`、`7春天的故事`），
-///   形态与正课标题一模一样；「寒食/迢迢牵牛星/十五夜望月」是《古诗三首》
+///   形态与正课标题一模一样；「露珠/会走路的树/数星星的孩子」是《三首童谣》
 ///   的子篇，与父条目同页。这些只有目录能区分。
 ///
 /// 划界规则：
@@ -44,7 +44,7 @@ const double kHeadMaxTop = 92;
 
 /// 判定「带内两行属于同一视觉行」的 top 容差（pt）。
 ///
-/// 单元扉页的「第一单元」与「我是小学生啦」实测 top 只差 1.0pt ——
+/// 单元扉页的「第一单元」与「走进新校园」实测 top 只差 1.0pt ——
 /// 它们本就是同一视觉行，被列聚类拆成了两个 [PdfLine]。拼回时按此容差分组。
 const double kHeadRowTol = 3.0;
 
@@ -60,7 +60,7 @@ class TocEntry {
   /// 为空串
   final String label;
 
-  /// 条目名：「开开心心上学去」/「我是小学生啦」/「为人民服务」
+  /// 条目名：「认识新同学」/「走进新校园」/「身边的材料」
   final String name;
 
   /// 教材上印的书页码（不是 PDF 页序）
@@ -256,6 +256,12 @@ class TextbookParseResult {
   /// 提取到的文字的语言画像 —— 只在「一节课都切不出来」时用来把诊断说准。
   final TextLanguageProfile language;
 
+  /// 本次解析中**整页取不出文字**的页（1-based 绝对页序）。
+  ///
+  /// 由接线层传入（PDF 库在个别页上会抛空指针，见 `pdf_textbook_import.dart`）。
+  /// 这些页的内容是缺的，界面必须如实说明 —— 静默丢页会让人以为整本书都进来了。
+  final List<int> unreadablePages;
+
   const TextbookParseResult({
     required this.name,
     required this.toc,
@@ -270,6 +276,7 @@ class TextbookParseResult {
     this.lastPageNo = 0,
     this.totalPages = 0,
     this.language = const TextLanguageProfile(totalChars: 0, hanChars: 0),
+    this.unreadablePages = const [],
   });
 
   /// 接着导入时建议的起始页（1-based）。
@@ -313,21 +320,21 @@ final RegExp _tocPageHits = RegExp(r'(?:/|[.·]{2,})[0-9]{1,3}');
 /// 目录条目的尾部：`…/2` 或 `………2`。
 ///
 /// 两种连接方式都是实测到的：
-/// - 斜杠 —— 人教社《道德与法治》一年级上册 `第1课开开心心上学去/2`
-/// - 点线 —— 人教社《语文》六年级下册 `1北京的春节...............2`
+/// - 斜杠 —— 人教社《道德与法治》一年级上册 `第1课认识新同学/2`
+/// - 点线 —— 人教社《语文》六年级下册 `1山那边的邮局...............2`
 ///
 /// 点线**要求至少两个点**：书名里常有单个间隔号（`汤姆·索亚历险记`、
 /// `卜算子·送鲍浩然之浙东`），一个点的规则会把书名劈开。
 final RegExp _tocLine = RegExp(r'^(.*?)(?:/|[.·]{2,})([0-9]{1,3})$');
 
-/// 单元条目：`第一单元` / `第一单元我是小学生啦`
+/// 单元条目：`第一单元` / `第一单元走进新校园`
 final RegExp _unitWithName =
     RegExp(r'^(第[一二三四五六七八九十]+单元)[\s\u3000]*(.*)$');
 
-/// 课条目：`第1课开开心心上学去` → 编号 + 课名
+/// 课条目：`第1课认识新同学` → 编号 + 课名
 final RegExp _lessonNo = RegExp(r'^第([0-9]{1,2})课[\s\u3000]*(.*)$');
 
-/// 行首纯序号：`12为人民服务` / `1北京的春节` / `3古诗三首`
+/// 行首纯序号：`12身边的材料` / `1山那边的邮局` / `3三首童谣`
 final RegExp _leadingNo = RegExp(r'^([0-9]{1,2})[\s\u3000]*(.+)$');
 
 final RegExp _digitsOnly = RegExp(r'^[0-9]{1,3}$');
@@ -350,7 +357,7 @@ bool looksLikeTocPage(Iterable<String> lines) {
 ///   右栏 y=215–627，两栏纵向完全重叠；按 y 全局排序会读成「左1 右1 左2
 ///   右2…」，单元分组全乱。
 /// - 行聚类在目录页并不可靠：点线是长串独立的词，实测会出现
-///   `"寒食..........................11迢迢牵牛星"` 这种把两条目并成一行、
+///   `"露珠..........................11会走路的树"` 这种把两条目并成一行、
 ///   内容前后错位的结果。所以分栏之后**按坐标重新拼行**，不信任 [PdfLine]。
 List<TocEntry> parseTableOfContents(List<CleanedPage> tocPages) {
   final out = <TocEntry>[];
@@ -447,7 +454,7 @@ TocEntry? _tocEntryOf(String raw) {
       bookPage: bookPage,
     );
   }
-  // 没有编号的板块：`口语交际：即兴发言`、`写字表`、`古诗词诵读`
+  // 没有编号的板块：`口语交际：即兴发言`、`写字表`、`诗词赏读`
   return TocEntry(isUnit: false, label: '', name: head, bookPage: bookPage);
 }
 
@@ -464,7 +471,7 @@ final RegExp _dotsLine = RegExp(r'^[.·…\u2024\u2025\u2027\s]{2,}([0-9]{1,3})?
 /// 从**版面文本**解析目录条目。
 ///
 /// 为什么不用坐标：实测《语文》六年级下册第 4 页，syncfusion 报的词坐标与
-/// PyMuPDF 对不上 —— `快乐读书吧` 的 y 差了整整一行、`鲁滨逊漂流记` 的 x 差
+/// PyMuPDF 对不上 —— `习作园地` 的 y 差了整整一行、`鲁滨逊漂流记` 的 x 差
 /// 134pt，部分词的 `right` 甚至小于 `left`（负宽度）。据此分栏拼行会得到
 /// 前后错位的条目。而 `extractText(layoutText: true)` 的输出顺序**完全正确**：
 /// 「条目 / 点线 / 页码」三行一组，双栏也按栏内顺序排。
@@ -517,7 +524,7 @@ void _emitToc(List<TocEntry> out, List<String> buf, int bookPage) {
     lines.removeAt(0);
   }
   if (lines.isEmpty || bookPage <= 0) return;
-  // 条目名可能印成两行（`◎ 快乐读书吧：` + `漫步世界名著花园`），拼成一条
+  // 条目名可能印成两行（`◎ 习作园地：` + `我家的院子`），拼成一条
   out.add(_tocEntryOfHead(lines.join(), bookPage));
 }
 
@@ -593,7 +600,7 @@ const List<String> _subjectWords = [
 /// 在第 1–3 页里找出科目名 + 年级 + 册次，拼成建议的语料库名。
 ///
 /// 要求「年级或册次」**必须**命中才认。只认科目词不行：分段导入时这几页是
-/// 正文，实测一段正文里的「你课后参加美术小组吧！」就让整段被命名成「美术」。
+/// 正文，实测一段正文里的「你课后去美术教室帮忙吧！」就让整段被命名成「美术」。
 /// 判不出来就交给调用方传名（分段导入时由首段探测结果提供）。
 String guessTextbookName(List<CleanedPage> pages, {String fallback = '导入教材'}) {
   final head = _normalize([
@@ -622,7 +629,7 @@ String guessTextbookName(List<CleanedPage> pages, {String fallback = '导入教�
 
 /// 取出页面上部「标题带」里的行，排成稳定的阅读顺序。
 ///
-/// 排序而不是直接拼接：单元扉页的「第一单元」与「我是小学生啦」实测 top 只差
+/// 排序而不是直接拼接：单元扉页的「第一单元」与「走进新校园」实测 top 只差
 /// 1.0pt（同一视觉行），却被列聚类拆成了两个 [PdfLine]；按 (top, centerX)
 /// 分组排序，才能稳定拿到「标签在前、名字在后」。
 List<PdfLine> headBand(CleanedPage p) {
@@ -659,10 +666,10 @@ final RegExp _lessonHeadRe = RegExp(r'^第([0-9]{1,2})课(.+)$');
 class _Plan {
   final String unit;
 
-  /// 带编号的完整标题（`第1课 开开心心上学去` / `1 北京的春节`）
+  /// 带编号的完整标题（`第1课 认识新同学` / `1 山那边的邮局`）
   final String title;
 
-  /// 不带编号的课名（`开开心心上学去`）—— 用来在页面上核对该课首页对不对
+  /// 不带编号的课名（`认识新同学`）—— 用来在页面上核对该课首页对不对
   final String name;
 
   final int start;
@@ -697,6 +704,7 @@ TextbookParseResult structureTextbook(
   List<TocEntry>? knownToc,
   Map<int, String>? tocTexts,
   int? totalPages,
+  List<int> unreadablePages = const [],
 }) {
   final byNo = <int, CleanedPage>{for (final p in pages) p.pageNumber: p};
   final lastPageNo = pages.isEmpty ? 0 : pages.last.pageNumber;
@@ -874,6 +882,7 @@ TextbookParseResult structureTextbook(
     lastPageNo: lastPageNo,
     totalPages: total,
     language: profileLanguage(pages),
+    unreadablePages: unreadablePages,
   );
 }
 
@@ -882,11 +891,11 @@ final RegExp _hasHan = RegExp(r'[\u4e00-\u9fff]');
 /// 这一行是不是「本课的标题行」—— 是则该行进标题而不进正文。
 ///
 /// 挡两种情况：
-/// - 整行等于标题（`第1课开开心心上学去`）—— 与位置无关
-/// - 标题被列聚类拆开后的残片（`开开心心上学去` 单独成行）—— **只在标题带内**认
+/// - 整行等于标题（`第1课认识新同学`）—— 与位置无关
+/// - 标题被列聚类拆开后的残片（`认识新同学` 单独成行）—— **只在标题带内**认
 ///
 /// 残片判定必须限定位置：实测《道德与法治》一年级上册第3课的正文首行就叫
-/// `老师，您好！`，与课名一模一样；不限位置的话这一行会被当成标题残片删掉。
+/// `课间的安全`，与课名一模一样；不限位置的话这一行会被当成标题残片删掉。
 /// 编号那一位（`1` 单独成行）由 `digitsOnly` 挡，不归这里管。
 bool _isLessonTitleLine(String text, _Plan pl, double top) {
   final nt = _normalize(text);
@@ -934,7 +943,7 @@ double _titleHitRate(Map<int, CleanedPage> byNo, List<_Plan> plans, int firstPag
   return total == 0 ? 1 : hit / total;
 }
 
-/// 编号条目：`12 为人民服务`（label=`12`）或 `第1课 开开心心上学去`（label=`第1课`）
+/// 编号条目：`12 身边的材料`（label=`12`）或 `第1课 认识新同学`（label=`第1课`）
 final RegExp _numberedLabel = RegExp(r'^(?:[0-9]{1,2}|第[0-9]{1,2}课)$');
 
 bool _isNumbered(TocEntry t) => !t.isUnit && _numberedLabel.hasMatch(t.label);
@@ -948,17 +957,17 @@ bool _isStrong(TocEntry t) => t.isUnit || t.marked || _isNumbered(t);
 ///
 /// - **单元行**（`第一单元`）只切换归属，不单独成条；
 /// - **子条目** —— 编号课目下面挂的无名篇目，并入所属那一课。
-///   实测《语文》六年级下册：《古诗三首》下挂 `寒食/迢迢牵牛星/十五夜望月`
-///   （三条书页 11/11/12）、`文言文二则` 下挂 `学弈/两小儿辩日`（80/81）、
-///   另一处《古诗三首》下挂 `马诗/石灰吟/竹石`（58/58/59）。
+///   实测《语文》六年级下册：《三首童谣》下挂 `露珠/会走路的树/数星星的孩子`
+///   （三条书页 11/11/12）、`两首小诗` 下挂 `溪边/村晚`（80/81）、
+///   另一处《三首童谣》下挂 `露珠/会走路的树/数星星的孩子`（58/58/59）。
 ///   拆成独立条目的话父条目 `end < start` 会被整条丢掉 —— 一次印三首诗的
-///   《古诗三首》就整课消失了，所以必须合并。
+///   《三首童谣》就整课消失了，所以必须合并。
 ///   判据：本身没有编号、上一条是编号课目、且后面还有条目落在更后的页上。
 ///   （末一条排除了 `写字表`/`词语表` 这类印在书末的独立板块 —— 它们后面
 ///   没有任何「强条目」了。）
-/// - 其余各自成条（含 `◎ 口语交际`、`写字表`、`古诗词诵读`）。
+/// - 其余各自成条（含 `◎ 口语交际`、`写字表`、`诗词赏读`）。
 ///
-/// 同页两条时保留「强」的那条：`古诗词诵读` 与 `1 采薇（节选）` 都印在书页
+/// 同页两条时保留「强」的那条：`诗词赏读` 与 `1 溪边（节选）` 都印在书页
 /// 111，留下诗、丢掉只有标题的板块行。
 List<_Plan> _planByToc(
   List<TocEntry> toc,
@@ -1123,7 +1132,7 @@ String _unitFor(Map<int, String> unitHeads, int page) {
 
 /// 单元名从**目录**里推 —— 分段导入时，某一段里可能一页单元扉页都没有。
 ///
-/// 目录里「第一单元 我是小学生啦 / 1」之后、下一个单元条目之前的所有课都归它，
+/// 目录里「第一单元 走进新校园 / 1」之后、下一个单元条目之前的所有课都归它，
 /// 所以找到「第N课」的位置再往前找最近的单元条目即可。
 String _unitFromToc(List<TocEntry> toc, int lessonNo) {
   var current = '';

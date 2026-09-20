@@ -522,25 +522,138 @@ ReadingQuestion _parseReadingQuestion(Map q) {
   return ReadingQuestion(question, answer);
 }
 
-/// AI 阅读生成（语文）
-Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
+/// 一轮阅读出题的取材来源：(标题, 单元, 正文)。
+typedef ReadingSource = ({String title, String unit, String text});
+
+/// 本轮出题取材的篇目。
+///
+/// **有导入语料时全部取自语料** —— 用户显式选定/导入的范围优先于内置课文库；
+/// 两边同时给会让模型看到两个来源、出题范围漂移，正是「导入教材约束出题」失效的成因。
+List<ReadingSource> _readingSources(
+    AiPromptOpts opts, List<ReadingBlockData> corpus) {
+  if (corpus.isNotEmpty) {
+    return [
+      for (final c in corpus) (title: c.title, unit: '', text: c.text.trim()),
+    ];
+  }
+  final data = AppData();
+  return [
+    for (final t in data
+        .yuwenTextsFor(opts.version, opts.grade, opts.volume)
+        .take(opts.readingCount))
+      (title: t.title, unit: t.unit, text: t.text),
+  ];
+}
+
+/// 语料驱动时的来源声明：沿用语料条目的 source，缺省按「已授权使用」处理
+/// ——能进到这里的语料，其来源在导入环节已由用户确认过。
+String _corpusSource(List<ReadingBlockData> corpus) {
+  for (final c in corpus) {
+    if (c.source.isNotEmpty) return c.source;
+  }
+  return 'licensed';
+}
+
+/// AI 阅读生成（语文）。
+///
+/// [corpus] 是用户导入/选中的语料（如「导入教材 PDF」切出的课文）。
+/// 非空时**以它为准**：出题范围由用户选定，不再混入内置课文库。
+Future<List<ReadingBlockData>> aiGenerateReading(
+  AiPromptOpts opts, {
+  List<ReadingBlockData> corpus = const [],
+}) async {
   final cfg = await AiStore.load();
   if (cfg.base.isEmpty || cfg.model.isEmpty) {
     throw Exception('请先在顶部「AI 智能出题设置」中填写 API 地址和模型并保存。');
   }
+  final prompt = aiBuildReadingPrompt(opts, corpus: corpus);
+  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
+      jsonMode: true);
+  return _readingFromAi(
+    content,
+    _readingSources(opts, corpus),
+    source: corpus.isEmpty ? '' : _corpusSource(corpus),
+  );
+}
+
+/// 把模型返回的 JSON 转成阅读块。
+///
+/// 模型没回显正文（text 为空）时，用本地正文按标题补全 —— 避免题块因正文为空
+/// 被整块丢弃（保持原 `ReadingBlockData` 形状与下游不变）。
+List<ReadingBlockData> _readingFromAi(
+  String content,
+  List<ReadingSource> src, {
+  String source = '',
+}) {
+  final j = aiExtractJson(content);
+  final items = j['items'] is List ? j['items'] as List : [];
+  final byTitle = <String, String>{for (final t in src) t.title: t.text};
+  final out = <ReadingBlockData>[];
+  for (final it in items) {
+    if (it is! Map) continue;
+    final aiText = '${it['text'] ?? ''}'.trim();
+    final local = byTitle['${it['title'] ?? ''}'];
+    final text = aiText.isNotEmpty
+        ? aiText
+        : (local?.trim().isNotEmpty == true ? local! : '');
+    if (text.isEmpty) continue; // 既无 AI 正文也无本地正文，跳过（与原行为一致）
+    out.add(ReadingBlockData(
+      title: '${it['title'] ?? '短文'}',
+      author: '${it['author'] ?? ''}',
+      text: text,
+      // 语料驱动的结果里装的还是导入的课本正文，来源声明要跟着走
+      source: source,
+      questions: [
+        for (final q in (it['questions'] as List? ?? []))
+          if (q is Map) _parseReadingQuestion(q)
+      ],
+    ));
+  }
+  return out;
+}
+
+/// 构建 AI 阅读理解的提示词。
+///
+/// **纯函数**（不读配置、不发请求），因此可以直接单测「语料有没有真的进提示词」——
+/// 这是「导入教材能否约束 AI 出题」这条需求唯一可离线验证的落点。
+String aiBuildReadingPrompt(
+  AiPromptOpts opts, {
+  List<ReadingBlockData> corpus = const [],
+}) {
   final data = AppData();
   final tb = data.textbooks[opts.version] ?? data.textbooks['renjiao']!;
   final gname = data.gradeNames[opts.grade] ?? '小学';
   final volName = opts.volume == '下' ? '下册' : '上册';
   final count = opts.readingCount;
-  final chars = (data.vol(opts.version, opts.grade, opts.volume, 'cally')?.cally ?? [])
-      .take(80)
-      .map((c) => c[0])
-      .join('、');
 
-  // 取该版本·年级/册的课文目录（课文模式用其正文补全，原创模式忽略）
-  final texts = data.yuwenTextsFor(opts.version, opts.grade, opts.volume);
-  final sel = texts.take(count).toList();
+  // ---- 导入语料优先 ----
+  // 全书篇目全列（约束「不许超纲选文」），正文只取前 count 篇（控制提示词长度）。
+  if (corpus.isNotEmpty) {
+    final picks = corpus.take(count).toList();
+    final allTitles = corpus.map((c) => c.title).join('、');
+    final passages = picks.map((c) => '【课文】${c.title}\n${c.text}').join('\n\n');
+    return '你是中国小学语文出题专家。用户的出题范围**限定在下面这本导入教材内**'
+        '（共 ${corpus.length} 课）：\n'
+        '【全书篇目】$allTitles\n\n'
+        '本次基于下列 ${picks.length} 篇的真实正文出题：\n\n'
+        '$passages\n\n'
+        '请为$gname学生生成阅读理解练习（每篇出 3-5 道理解题），要求：\n'
+        '1. **严禁超出上面【全书篇目】的范围**：不得另选课文，不得自创篇目；\n'
+        '2. 题目必须紧扣所给课文内容，考查：按原文提取信息、概括主要内容、'
+        '理解关键词句的意思与作用、体会文章表达的思想感情或道理；\n'
+        '3. 适当加入"思维能力/思辨性阅读"类题目（如推断原因、评价人物做法、联系生活实际谈看法）；\n'
+        '4. 每题给出准确答案；难度贴合$gname。\n'
+        '$_kReadingQaRules\n'
+        '只输出一个 JSON 对象，不要输出任何其他文字：\n'
+        '{"items":[{"title":"课文标题","author":"作者/出处","text":"课文正文（可原样或略写）","questions":[{"q":"问题","a":"答案"}]}]}';
+  }
+
+  final chars =
+      (data.vol(opts.version, opts.grade, opts.volume, 'cally')?.cally ?? [])
+          .take(80)
+          .map((c) => c[0])
+          .join('、');
+  final sel = _readingSources(opts, const []);
 
   String prompt;
   if (opts.useTextbook) {
@@ -602,33 +715,7 @@ Future<List<ReadingBlockData>> aiGenerateReading(AiPromptOpts opts) async {
         '只输出一个 JSON 对象，不要输出任何其他文字：\n'
         '{"items":[{"title":"标题","author":"作者","text":"短文正文","questions":[{"q":"问题","a":"答案"}]}]}';
   }
-  final content = await AiClient.chat(cfg, [AiChatMessage('user', prompt)],
-      jsonMode: true);
-  final data2 = aiExtractJson(content);
-  final items = data2['items'] is List ? data2['items'] as List : [];
-  // 课文模式下，若 AI 未回显正文（text 为空），用本地课文正文按标题补全，
-  // 避免题块因 text 为空被整块丢弃（保持原 ReadingBlockData 形状与下游不变）。
-  final srcByTitle = <String, String>{for (final t in sel) t.title: t.text};
-  final out = <ReadingBlockData>[];
-  for (final it in items) {
-    if (it is! Map) continue;
-    final aiText = '${it['text'] ?? ''}'.trim();
-    final src = srcByTitle['${it['title'] ?? ''}'];
-    final text = aiText.isNotEmpty
-        ? aiText
-        : (src?.trim().isNotEmpty == true ? src! : '');
-    if (text.isEmpty) continue; // 既无 AI 正文也无本地课文，跳过（与原行为一致）
-    out.add(ReadingBlockData(
-      title: '${it['title'] ?? '短文'}',
-      author: '${it['author'] ?? ''}',
-      text: text,
-      questions: [
-        for (final q in (it['questions'] as List? ?? []))
-          if (q is Map) _parseReadingQuestion(q)
-      ],
-    ));
-  }
-  return out;
+  return prompt;
 }
 
 /// 基于单篇语料正文生成阅读理解题（语料/课文阅读路径用）。

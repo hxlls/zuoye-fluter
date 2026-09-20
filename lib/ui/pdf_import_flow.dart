@@ -173,6 +173,7 @@ Future<PdfImportOutcome?> importTextbookPdf(
     lastPage: range.$2,
     totalPages: probe.pageCount,
     corpusName: segment.name,
+    unreadablePages: segment.unreadablePages,
   );
   if (chosen == null || !context.mounted) return null;
   if (chosen.isEmpty) {
@@ -204,6 +205,11 @@ Future<PdfImportOutcome?> importTextbookPdf(
 /// 带文本层」，会把用户引向完全错误的方向。
 String _noLessonMessage(TextbookParseResult seg, int first, int last) {
   final lang = seg.language;
+  // 整页读不出的情况优先说 —— 它可能是「一篇都切不出来」的真正原因
+  final unreadable = seg.unreadablePages.isEmpty
+      ? ''
+      : '另有 ${seg.unreadablePages.length} 页整页读不出文字'
+          '（第 ${seg.unreadablePages.join('、')} 页）。';
   if (lang.looksNonChinese) {
     final pct = (lang.hanRatio * 100).toStringAsFixed(
         lang.hanRatio < 0.095 ? 1 : 0);
@@ -212,7 +218,7 @@ String _noLessonMessage(TextbookParseResult seg, int first, int last) {
         '看起来不是中文教材。教材导入是按中文课文设计的，'
         '其他语种的教材请用「拍照导入」（走视觉识别，不受语种限制）。';
   }
-  return '第 $first–$last 页里没有识别到课文。'
+  return '第 $first–$last 页里没有识别到课文。$unreadable'
       '若这些页本来就是封面、目录或插图，属正常；'
       '否则请确认这本 PDF 带文本层（扫描图片版需要先做 OCR，'
       '或用「拍照导入」）。';
@@ -393,6 +399,7 @@ Future<List<TextbookLesson>?> _pickLessons(
   required int lastPage,
   required int totalPages,
   required String corpusName,
+  List<int> unreadablePages = const [],
 }) async {
   final selected = <int>{for (var i = 0; i < lessons.length; i++) i};
   final charTotal = lessons.fold(0, (a, b) => a + b.charCount);
@@ -424,6 +431,16 @@ Future<List<TextbookLesson>?> _pickLessons(
                   '本次勾选 ${selected.length} 课 · $pickedChars 字',
                   style: const TextStyle(fontSize: 12, color: _kGrey),
                 ),
+                if (unreadablePages.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '⚠️ 有 ${unreadablePages.length} 页整页读不出文字'
+                    '（第 ${unreadablePages.join('、')} 页，多为插图或表格页），'
+                    '这些页的内容没有进来。若缺的正是课文页，请减小页码区间重导。',
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xffb47a00), height: 1.5),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [

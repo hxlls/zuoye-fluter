@@ -33,11 +33,21 @@ class PdfTextbookExtraction {
   /// 实测这本 PDF 的目录页上词坐标不可信（见 `textbook_structurer.dart`）。
   final Map<int, String> layoutTexts;
 
+  /// 取不出词的页（1-based 绝对页序）。
+  ///
+  /// `syncfusion` 的 `extractTextLines` 在个别页上会抛空指针 —— 实测《数学》
+  /// 四年级下册第 48 页（插图以 XObject 形式嵌入的那一页），而同一页的
+  /// `extractText` / `extractText(layoutText: true)` 都正常。
+  /// **一页读不出不该让整本导入崩掉**，所以这里隔离掉并把页码带出来，
+  /// 由调用方决定怎么提示（静默丢页会让用户以为整本书都导进来了）。
+  final List<int> failedPages;
+
   const PdfTextbookExtraction({
     required this.pages,
     required this.totalPages,
     required this.firstPageIndex,
     this.layoutTexts = const {},
+    this.failedPages = const [],
   });
 
   int get extractedCount => pages.length;
@@ -49,17 +59,22 @@ class PdfTextbookExtraction {
 /// 把后面的页误当目录页。
 const int kTocScanPages = 16;
 
-List<PdfWord> _pageWords(PdfTextExtractor ex, int index) {
-  final ws = <PdfWord>[];
-  for (final line
-      in ex.extractTextLines(startPageIndex: index, endPageIndex: index)) {
-    for (final w in line.wordCollection) {
-      if (w.text.trim().isEmpty) continue;
-      final b = w.bounds;
-      ws.add(PdfWord(w.text, w.fontName, b.left, b.top, b.right, b.bottom));
+/// 取一页的词。**读不出来时返回 null，不往外抛** —— 见 `failedPages` 的说明。
+List<PdfWord>? _pageWords(PdfTextExtractor ex, int index) {
+  try {
+    final ws = <PdfWord>[];
+    for (final line
+        in ex.extractTextLines(startPageIndex: index, endPageIndex: index)) {
+      for (final w in line.wordCollection) {
+        if (w.text.trim().isEmpty) continue;
+        final b = w.bounds;
+        ws.add(PdfWord(w.text, w.fontName, b.left, b.top, b.right, b.bottom));
+      }
     }
+    return ws;
+  } catch (_) {
+    return null;
   }
-  return ws;
 }
 
 /// 逐页取出词。
@@ -88,8 +103,16 @@ Future<PdfTextbookExtraction> extractPdfWords(
     final to = (lastPage ?? last).clamp(from, last);
     final extractor = PdfTextExtractor(doc);
     final out = <List<PdfWord>>[];
+    final failed = <int>[];
     for (var i = from; i <= to; i++) {
-      out.add(_pageWords(extractor, i));
+      final ws = _pageWords(extractor, i);
+      // 读不出的页用空页占位：页序不能错位，后面全靠它算边界与页码偏移
+      if (ws == null) {
+        failed.add(i + 1);
+        out.add(const []);
+      } else {
+        out.add(ws);
+      }
       onProgress?.call(i - from + 1, to - from + 1);
       // 让出事件循环，UI 才有机会刷新进度
       await Future<void>.delayed(Duration.zero);
@@ -98,11 +121,14 @@ Future<PdfTextbookExtraction> extractPdfWords(
 
     // 目录页的版面文本：只对疑似目录页再取一次（每页几毫秒）。
     // 判据用词文本拼起来测 —— 目录条目的「点线+页码」在词级也是连着的。
+    // 词为空的页也取一次：它们可能是「本来无文字」，也可能是词提取失败，
+    // 而 layoutText 在这两种页上都还能用（实测失败页的 layoutText 正常）。
     final layoutTexts = <int, String>{};
     for (var i = 0; i < out.length; i++) {
       final absNo = from + i + 1; // 1-based 绝对页序
       if (absNo > kTocScanPages) break;
-      if (!looksLikeTocPage(out[i].map((w) => w.text))) continue;
+      final wordsOk = out[i].isNotEmpty;
+      if (wordsOk && !looksLikeTocPage(out[i].map((w) => w.text))) continue;
       try {
         layoutTexts[absNo] = extractor.extractText(
           startPageIndex: from + i,
@@ -119,6 +145,7 @@ Future<PdfTextbookExtraction> extractPdfWords(
       totalPages: count,
       firstPageIndex: from,
       layoutTexts: layoutTexts,
+      failedPages: failed,
     );
   } finally {
     doc.dispose();
@@ -175,6 +202,8 @@ Future<TextbookParseResult> parseTextbookPdf(
     tocTexts: ex.layoutTexts,
     // 分段导入时本段末页不是全书末页，「末课是否被切断」要靠全书总页数判
     totalPages: ex.totalPages,
+    // 少数页可能整页读不出（库在这些页上抛空指针）—— 带出去让界面如实说明
+    unreadablePages: ex.failedPages,
   );
 }
 
@@ -212,6 +241,7 @@ Future<TextbookProbe> probeTextbookPdf(
       cleaned,
       tocTexts: ex.layoutTexts,
       totalPages: ex.totalPages,
+      unreadablePages: ex.failedPages,
     ),
   );
 }
