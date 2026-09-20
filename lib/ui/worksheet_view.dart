@@ -362,31 +362,30 @@ class _Heading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 试卷大题标题：中文序号 + 黑色加粗；右侧浅灰注明教材单元（给家长看的参考）
+    //
+    // 用 Wrap 而不是 Row：教材单元标注可能同时引到两个单元（如「人教版一上 一 …
+    // 加、减法；人教版一上 二 …」），Row 里未加 flexible 的那一段会把整行顶爆，
+    // 表现是预览页右上角出现黄黑溢出条纹。Wrap 放不下就换行，信息不丢。
     return Padding(
       padding: const EdgeInsets.only(bottom: 6, top: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
+      child: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Flexible(
-            child: Text(
-              continuation
-                  ? '$title（续）'
-                  : (number == null ? title : '$number、$title'),
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xff111111),
-                  height: 1.4),
-            ),
+          Text(
+            continuation
+                ? '$title（续）'
+                : (number == null ? title : '$number、$title'),
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xff111111),
+                height: 1.4),
           ),
           if (unit != null && unit!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(unit!,
-                  style:
-                      const TextStyle(fontSize: 11.5, color: Color(0xffaaaaaa))),
-            ),
+            Text(unit!,
+                style:
+                    const TextStyle(fontSize: 11.5, color: Color(0xffaaaaaa))),
         ],
       ),
     );
@@ -456,20 +455,20 @@ class _AnswerGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 同样用 Wrap：答案是按题型分组列的，组标题后面跟着该题型的单元标注，
+    // 两者都可能较长。Row + 不可伸缩的 Text 会在窄页面上溢出。
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 4),
-      child: Row(
+      child: Wrap(
+        spacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(node.title,
               style:
                   const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           if (node.unit != null && node.unit!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(node.unit!,
-                  style:
-                      const TextStyle(fontSize: 12, color: Color(0xff999999))),
-            ),
+            Text(node.unit!,
+                style: const TextStyle(fontSize: 12, color: Color(0xff999999))),
         ],
       ),
     );

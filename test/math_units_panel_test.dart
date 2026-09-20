@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zuoye_fluter/data/app_data.dart';
 import 'package:zuoye_fluter/ui/math_panel.dart';
+import 'package:zuoye_fluter/ui/panel_widgets.dart';
 
 /// 数学面板「本册单元（教材目录）」的渲染测试。
 ///
@@ -46,9 +47,28 @@ void main() {
       .where((s) => s.isNotEmpty)
       .join('\n');
 
+  /// 只取「本册单元（教材目录）」那一组的文字。
+  ///
+  /// 「上/下册不串页」要锁的是**目录那一组**，不能拿整个面板的文字来断言：
+  /// 题型的 sub 标签会照实写出内容的真实归属册（四上的「除数是两位数的除法」
+  /// 在 2024 新版属于四下，标成「人教版四下 一 除数是两位数的除法」），
+  /// 那是有意给出的提示，不是目录串页。
+  String tocText(WidgetTester tester) {
+    final group = find.ancestor(
+      of: find.text('本册单元（教材目录）'),
+      matching: find.byType(FormGroup),
+    );
+    return tester
+        .widgetList<Text>(
+            find.descendant(of: group, matching: find.byType(Text)))
+        .map((t) => t.data ?? '')
+        .where((s) => s.isNotEmpty)
+        .join('\n');
+  }
+
   testWidgets('四年级上画出人教版本册目录，且顺序与数据一致', (tester) async {
     await pumpMath(tester, grade: 4, volume: '上');
-    final s = allText(tester);
+    final s = tocText(tester);
     final units = AppData().mathUnitsFor('renjiao', 4, '上');
 
     expect(units.isNotEmpty, true);
@@ -60,7 +80,7 @@ void main() {
 
   testWidgets('四年级上只出现上册单元，下册单元不串页', (tester) async {
     await pumpMath(tester, grade: 4, volume: '上');
-    final s = allText(tester);
+    final s = tocText(tester);
 
     expect(s, contains('一 万以上数的认识'));
     expect(s, isNot(contains('一 除数是两位数的除法')));
@@ -68,7 +88,7 @@ void main() {
 
   testWidgets('切到下册目录跟着换', (tester) async {
     await pumpMath(tester, grade: 4, volume: '下');
-    final s = allText(tester);
+    final s = tocText(tester);
 
     expect(s, contains('一 除数是两位数的除法'));
     expect(s, isNot(contains('一 万以上数的认识')));
@@ -85,7 +105,7 @@ void main() {
   testWidgets('未收录单元清单的版本如实说明，不拿人教版顶替', (tester) async {
     // 冀教版数学用的是冀教版教材，MATH_UNITS._meta.alignment 里没有 hebei。
     await pumpMath(tester, grade: 4, version: 'hebei');
-    final s = allText(tester);
+    final s = tocText(tester);
 
     expect(s, contains('这个版本的单元清单暂未收录'));
     expect(s, isNot(contains('一 万以上数的认识')));
