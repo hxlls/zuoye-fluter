@@ -147,6 +147,7 @@ String aiBuildPrompt(String subject, List<AiStyleSpec> typeSpecs, AiPromptOpts o
           : '应用题要贴近生活，答案给出单位。\n'
               '本年级数学题型清单（**只能出这些类型，不得引入清单之外的题型或运算**）：${_gradeMathTopics(data, opts)}\n'
               '${_gradeMathScope(data, opts)}'
+              '${_gradeMathUnits(data, opts)}'
               '注重培养学生的"量感"（对数量、度量、单位的直观感知与合理估算）与"模型意识"（用数学语言描述现实、建立简单模型）；综合与实践题要结合真实情境。';
 
   return '你是中国$subjectCN教学出题专家。请为"${tb.name}$gname$volName"的学生出一套$diffText难度的作业，共$total题，题型分配如下：\n'
@@ -189,6 +190,22 @@ String _gradeMathTopics(AppData data, AiPromptOpts opts) {
   final cfg = data.vol(opts.version, opts.grade, opts.volume, 'math')?.math ?? [];
   final topics = cfg.map((t) => t.label).join('、');
   return topics.isEmpty ? '（无）' : topics;
+}
+
+/// 本册教材单元清单（**正向**：「本册按进度有哪些单元」）。
+///
+/// 与 `_gradeMathTopics` 的分工必须写清，否则两条约束会互相顶：
+/// - 题型白名单（`_gradeMathTopics` + `_gradeMathScope`）= **能出什么**
+/// - 单元清单（本函数）= **情境落在哪**
+///
+/// 单元里含「认识立体图形」「图形的运动」这类本地生成器出不了的单元，
+/// 所以提示词必须显式禁止据此扩题型 —— 只让它决定应用题的场景与数据。
+/// 没有数据（如冀教版）时返回空串，整句话不出现在提示词里。
+String _gradeMathUnits(AppData data, AiPromptOpts opts) {
+  final units = data.mathUnitsFor(opts.version, opts.grade, opts.volume);
+  if (units.isEmpty) return '';
+  return '本册教材单元（**仅用于让应用题的情境与数据贴合本册进度**，'
+      '绝不可因此引入上面清单之外的题型或运算）：${units.join('、')}\n';
 }
 
 /// 从题型 id 推导「数值与运算范围」硬约束，用于防 AI 超纲。

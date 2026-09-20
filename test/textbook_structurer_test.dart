@@ -768,4 +768,68 @@ void main() {
       expect(r.language.totalChars, greaterThan(kLangVerdictMinChars));
     });
   });
+
+  // 数学教材的汉字占比完全正常（实测 52.6%），躲得过上面的「外文」判定，
+  // 但它的课数同样是 0。诊断必须能单独认出它 —— 否则用户会收到
+  // 「请确认这本 PDF 带文本层」，与事实正好相反。
+  group('数学教材判定（数字占比 · 实测校准）', () {
+    // 以下四组数字全部来自真实教材的实测输出（~/samples/，仓库外）。
+    // 括号里是「汉字占比 / 数字占比 / 切出的课数」。
+    const math4x = TextLanguageProfile(
+        totalChars: 30683, hanChars: 16146, digitChars: 8593); // 52.6% / 28.0% / 0
+    const yuwen6x = TextLanguageProfile(
+        totalChars: 51687, hanChars: 42907, digitChars: 756); // 83.0% / 1.5% / 46
+    const daofa1s = TextLanguageProfile(
+        totalChars: 6121, hanChars: 4719, digitChars: 321); // 77.1% / 5.2% / 16
+    const eng6x = TextLanguageProfile(
+        totalChars: 35548, hanChars: 807, digitChars: 755); // 2.3% / 2.1% / 0
+
+    test('实测四本：只有数学被判为「通篇算式」', () {
+      expect(math4x.hanRatio, closeTo(0.526, 0.001));
+      expect(math4x.digitRatio, closeTo(0.280, 0.001));
+      expect(math4x.looksNonChinese, false, reason: '汉字 52.6%，不像外文');
+      expect(math4x.looksMathLike, true);
+
+      expect(yuwen6x.looksMathLike, false, reason: '语文数字只占 1.5%');
+      expect(daofa1s.looksMathLike, false, reason: '道德与法治数字占 5.2%');
+      expect(eng6x.looksMathLike, false, reason: '英语走外文那条，不重复判');
+      expect(eng6x.looksNonChinese, true);
+    });
+
+    test('阈值边界：数字正好占 15% 算数学，差一点不算', () {
+      const at15 = TextLanguageProfile(
+          totalChars: 1000, hanChars: 600, digitChars: 150);
+      expect(at15.digitRatio, closeTo(kMathDigitRatio, 1e-9));
+      expect(at15.looksMathLike, true);
+
+      const at14 = TextLanguageProfile(
+          totalChars: 1000, hanChars: 600, digitChars: 140);
+      expect(at14.looksMathLike, false);
+    });
+
+    test('文本量不足时不下结论（数字多也可能只是页码）', () {
+      const few = TextLanguageProfile(
+          totalChars: kLangVerdictMinChars - 1, hanChars: 100, digitChars: 100);
+      expect(few.digitRatio, greaterThan(kMathDigitRatio));
+      expect(few.looksMathLike, false, reason: '页数太少，不下结论');
+    });
+
+    test('汉字占比过低时优先级归「外文」，不判成数学', () {
+      const mixed = TextLanguageProfile(
+          totalChars: 1000, hanChars: 100, digitChars: 300);
+      expect(mixed.hanRatio, lessThan(kChineseHanRatio));
+      expect(mixed.looksNonChinese, true);
+      expect(mixed.looksMathLike, false, reason: '两种情况建议相反，不能同时成立');
+    });
+
+    test('profileLanguage 真的在数数字', () {
+      final p = profileLanguage([
+        pg(1, 1, [line(120, '${'中' * 50}${'7' * 30}')]),
+      ]);
+      expect(p.totalChars, 80);
+      expect(p.hanChars, 50);
+      expect(p.digitChars, 30);
+      expect(p.digitRatio, closeTo(30 / 80, 1e-9));
+    });
+  });
 }

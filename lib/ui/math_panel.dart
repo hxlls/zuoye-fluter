@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/math_worksheet.dart';
 import '../core/type_catalog.dart';
 import '../core/worksheet_model.dart';
+import '../data/app_data.dart';
 import '../data/panel_pref_store.dart';
 import '../data/type_count_store.dart';
 import 'panel_widgets.dart';
@@ -118,16 +119,34 @@ class _MathPanelState extends State<MathPanel> {
 
   Widget _config() {
     final cfg = _specs;
+    final data = AppData();
     final total = _counts.values.fold<int>(0, (s, v) => s + v);
+    // 教材名取自数据（「人教版数学」/「冀教版数学」…）。
+    // 原先硬编码「题型对应**人教版**数学教材各年级单元」，冀教用户看到的是错的。
+    final book = data.textbooks[widget.version]?.math ?? '数学教材';
+    final units = data.mathUnitsFor(widget.version, widget.grade, widget.volume);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('数学作业设置',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Text('📚 题型对应人教版数学教材各年级单元',
-            style: TextStyle(fontSize: 12, color: Color(0xff888888))),
+        Text('📚 $book',
+            style: const TextStyle(fontSize: 12, color: Color(0xff888888))),
         const SizedBox(height: 14),
+        // 本册单元：对方是「本册按教材进度有哪些单元」，用户拿它跟课本目录对一眼
+        // 就能确认册次有没有选错。冀教版暂无数据 —— 如实说明，不拿人教版顶替。
+        FormGroup(
+          label: '本册单元（教材目录）',
+          child: units.isEmpty
+              ? const Text('这个版本的单元清单暂未收录，请以课本目录为准。',
+                  style: TextStyle(fontSize: 12, color: Color(0xffaaaaaa)))
+              : Text(
+                  units.join('　·　'),
+                  style: const TextStyle(
+                      fontSize: 12, height: 1.7, color: Color(0xff666666)),
+                ),
+        ),
         FormGroup(
           label: '题型（可多选，每种题型可单独设置题量）',
           child: Column(

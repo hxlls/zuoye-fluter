@@ -165,12 +165,23 @@ class TextLanguageProfile {
   /// 其中汉字的个数
   final int hanChars;
 
+  /// 其中阿拉伯数字（0-9）的个数。
+  ///
+  /// 与 [hanChars] 同一用途：把「切不出课」的原因说准。中文教材里数字本来极少，
+  /// 若汉字占比正常、数字占比却很高，基本就是数学这类通篇算式与数据的教材 ——
+  /// 它按单元编排、没有成篇课文，「按课文切分」自然无物可切。
+  final int digitChars;
+
   const TextLanguageProfile({
     required this.totalChars,
     required this.hanChars,
+    this.digitChars = 0,
   });
 
   double get hanRatio => totalChars == 0 ? 0 : hanChars / totalChars;
+
+  /// 阿拉伯数字占比。
+  double get digitRatio => totalChars == 0 ? 0 : digitChars / totalChars;
 
   /// 文本量是否够下「这是不是中文教材」的结论。
   ///
@@ -181,9 +192,16 @@ class TextLanguageProfile {
   /// 看起来不是中文教材：文本量足够，但汉字占比低得离谱。
   bool get looksNonChinese => enoughText && hanRatio < kChineseHanRatio;
 
+  /// 看起来是数学这类「通篇算式」的教材：中文、文本量足够，但数字密度极高。
+  ///
+  /// 判据是 [digitRatio]，实测值见 [kMathDigitRatio]。
+  bool get looksMathLike =>
+      enoughText && !looksNonChinese && digitRatio >= kMathDigitRatio;
+
   @override
   String toString() => 'TextLanguageProfile($totalChars 字符, '
-      '汉字 $hanChars, ${(hanRatio * 100).toStringAsFixed(1)}%)';
+      '汉字 $hanChars, ${(hanRatio * 100).toStringAsFixed(1)}%, '
+      '数字 $digitChars, ${(digitRatio * 100).toStringAsFixed(1)}%)';
 }
 
 /// 下「不是中文教材」结论所需的最少字符数。
@@ -198,20 +216,39 @@ const int kLangVerdictMinChars = 300;
 /// 汉字占比也远高于 30%；而外文教材要凑到 30% 汉字几乎不可能。
 const double kChineseHanRatio = 0.3;
 
+/// 判「这是数学这类通篇算式的教材」的数字占比下限。
+///
+/// 实测 4 本真实教材的非空白字符里阿拉伯数字占比：
+/// 《数学》四年级下册 **28.0%**（汉字 52.6%，一节课都切不出来）、
+/// 《语文》六年级下册 **1.5%**（汉字 83.0%，切出 46 课）、
+/// 英语《英语（三年级起点）》六年级下册 **2.1%**（汉字 2.3%，走外文判定）、
+/// 《道德与法治》一年级上册 **5.2%**（汉字 77.1%，切出 16 课）。
+///
+/// 取 15%：数学 28% 有近 2 倍余量，其余三本最高 5.2%（近 3 倍余量）。
+/// 之所以要它而不是只看汉字占比：数学教材的汉字占比（52.6%）完全正常，
+/// 单看汉字占比根本分不出来，会被当成「中文教材却切不出课」而给错建议。
+const double kMathDigitRatio = 0.15;
+
 /// 统计清洗后正文的语言画像。
 TextLanguageProfile profileLanguage(Iterable<CleanedPage> pages) {
   var total = 0;
   var han = 0;
+  var digit = 0;
   for (final p in pages) {
     for (final l in p.lines) {
       for (final r in l.text.runes) {
         if (r == 0x20 || r == 0x0A || r == 0x0D || r == 0x09) continue;
         total++;
         if (r >= 0x4E00 && r <= 0x9FFF) han++;
+        if (r >= 0x30 && r <= 0x39) digit++;
       }
     }
   }
-  return TextLanguageProfile(totalChars: total, hanChars: han);
+  return TextLanguageProfile(
+    totalChars: total,
+    hanChars: han,
+    digitChars: digit,
+  );
 }
 
 /// 整本教材的解析结果。

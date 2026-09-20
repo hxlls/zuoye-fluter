@@ -52,7 +52,7 @@ class VolumeData {
 
 /// 全局数据仓库
 class AppData {
-  static const String version = "3.5.0";
+  static const String version = "3.6.0";
 
   late Map<String, Textbook> textbooks;
   late Map<int, String> gradeNames;
@@ -92,6 +92,24 @@ class AppData {
 
   /// MATH_CULTURE：2022 课标「数学文化」原生题库（故事·历史·思想，按学段 low/mid/high）
   late List<CultureItem> mathCulture;
+
+  /// MATH_UNITS：本册**完整**单元清单（{版本:{年级:{册:[单元名]}}}，`*` 开头为综合与实践）
+  ///
+  /// 为什么需要它：`MathType.unit` 是「题型 → 单元」的**逆向**映射，天然残缺 ——
+  /// 人教版四下教材 10 个单元，题型只覆盖到 3 个（缺的是认识/概念/图形类，
+  /// 本地生成器本来就出不了）。所以它答不了「本册按教材进度有哪些内容」，
+  /// 而 AI 出题恰恰需要这个才能让情境贴合本册。
+  ///
+  /// 数据依据人教版 **2024 新版**（2022 版课标修订），见 `_meta.basis`。
+  /// 滚动启用：2026 秋起四/五/六年级上册已换新版，2027 春全部下册换完。
+  late Map<String, Map<int, Map<String, List<String>>>> mathUnits;
+
+  /// 「数学教材与人教版对齐」的版本集合，取自 `MATH_UNITS._meta.alignment`。
+  ///
+  /// 统编/外研这些是**语文英语**的版本名，其数学课本实际用人教版；冀教版不在其中 ——
+  /// 它的数学是冀教版教材（`unit` 写作「冀教三上 第N单元 …」），套用人教版清单
+  /// 会给出错误的单元名，宁可没有。
+  late Set<String> mathUnitsAligned;
 
   /// YUWEN_PRACTICAL：2022 课标「实用性阅读与交流」应用文格式与例文原生库
   late List<PracticalItem> practical;
@@ -278,6 +296,39 @@ class AppData {
       }
     }
 
+    // MATH_UNITS：本册**完整**教材单元清单（人教版 2024 新版）
+    mathUnitsAligned = <String>{};
+    mathUnits = {};
+    final mu = j['MATH_UNITS'];
+    if (mu is Map) {
+      // `_meta.alignment` 声明了「哪些教材版本的数学课本实际用人教版」。
+      // 这层对齐关系放在数据里而不是写进代码：它是关于教材的事实，改数据比改代码安全。
+      final meta = mu['_meta'];
+      if (meta is Map && meta['alignment'] is List) {
+        for (final v in (meta['alignment'] as List)) {
+          mathUnitsAligned.add('$v');
+        }
+      }
+      for (final ver in mu.entries) {
+        if ('${ver.key}'.startsWith('_')) continue;
+        final grades = <int, Map<String, List<String>>>{};
+        if (ver.value is Map) {
+          for (final g in (ver.value as Map).entries) {
+            final gnum = int.tryParse('${g.key}');
+            if (gnum == null || g.value is! Map) continue;
+            final vols = <String, List<String>>{};
+            for (final v in (g.value as Map).entries) {
+              if (v.value is List) {
+                vols['${v.key}'] = [for (final s in (v.value as List)) '$s'];
+              }
+            }
+            grades[gnum] = vols;
+          }
+        }
+        mathUnits['${ver.key}'] = grades;
+      }
+    }
+
     // YUWEN_PRACTICAL：2022 课标实用性阅读与交流·应用文格式与例文
     practical = [];
     final yp = j['YUWEN_PRACTICAL'];
@@ -378,6 +429,15 @@ class AppData {
   /// 按学段取数学文化条目（low=1-2年级 / mid=3-4年级 / high=5-6年级）
   List<CultureItem> mathCultureBySeg(String seg) =>
       mathCulture.where((p) => p.seg == seg).toList();
+
+  /// 该版本·年级·册的**教材单元清单**（正向：「本册有哪些单元」）。
+  ///
+  /// 返回空表 = 该版本没有可用数据（如冀教版），调用方**必须回退**到
+  /// 「只用题型清单」，不可抛错、也不可拿别的版本的清单顶上。
+  List<String> mathUnitsFor(String ver, int grade, String vol) {
+    if (!mathUnitsAligned.contains(ver)) return const [];
+    return mathUnits['renjiao']?[grade]?[vol] ?? const [];
+  }
 
   Map<String, List<int>> _parseIntListMap(dynamic j) {
     final out = <String, List<int>>{};

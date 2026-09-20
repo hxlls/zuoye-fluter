@@ -153,7 +153,7 @@ Future<PdfImportOutcome?> importTextbookPdf(
     return null;
   }
   if (segment.lessons.isEmpty && segment.leadingText.isEmpty) {
-    _snack(context, _noLessonMessage(segment, range.$1, range.$2));
+    await _showNoLessonDialog(context, segment, range.$1, range.$2);
     return null;
   }
 
@@ -161,7 +161,7 @@ Future<PdfImportOutcome?> importTextbookPdf(
   final segments = _appendSegment(previous, segment);
   final lessons = mergeSegments(segments);
   if (lessons.isEmpty) {
-    _snack(context, _noLessonMessage(segment, range.$1, range.$2));
+    await _showNoLessonDialog(context, segment, range.$1, range.$2);
     return null;
   }
 
@@ -196,16 +196,24 @@ Future<PdfImportOutcome?> importTextbookPdf(
 
 /// 「一节课都切不出来」时的诊断文案。
 ///
-/// 两种情况要给完全相反的建议，所以必须先分清：
-/// - **扫描图片版**（提取不到文字）→ 先 OCR，或改用「拍照导入」；
-/// - **不是中文教材**（有文字但正文是外文）→ 换中文教材；改 OCR 或拍照都没用。
+/// 三种情况要给完全相反的建议，所以必须先分清：
+/// - **扫描图片版**（文字量不够）→ 先 OCR，或改用「拍照导入」；
+/// - **不是中文教材**（文字够但正文是外文）→ 换中文教材；改 OCR 或拍照都没用；
+/// - **中文教材但没有成篇课文**（数学教材）→ 导入这条路本来就不通，
+///   应该去「数学」面板出题，而不是继续折腾 PDF。
 ///
-/// 实测英语教材（人教社·三年级起点 六年级下册）就是第二种：81 页、35548 个字符
+/// 实测英语教材（人教社·三年级起点 六年级下册）是第二种：81 页、35548 个字符
 /// 全部提取成功，但汉字只占 2.3%，一节课都切不出来。原来只报「请确认这本 PDF
 /// 带文本层」，会把用户引向完全错误的方向。
-String _noLessonMessage(TextbookParseResult seg, int first, int last) {
+///
+/// 第三种实测于《数学》四年级下册：汉字 52.6%（正常）、数字 28.0%、课数 0。
+/// 它的汉字占比完全看不出异常，所以必须靠数字占比单独认出来，
+/// 否则用户会收到「请确认带文本层」这种与事实相反的建议。
+String noLessonMessage(TextbookParseResult seg, int first, int last) {
   final lang = seg.language;
-  // 整页读不出的情况优先说 —— 它可能是「一篇都切不出来」的真正原因
+  // 整页读不出的情况优先说 —— 它可能是「一篇都切不出来」的真正原因。
+  // 三条支路都必须带上它：静默不提，用户会以为整本书都读到了
+  // （见 TextbookParseResult.unreadablePages 的说明）。
   final unreadable = seg.unreadablePages.isEmpty
       ? ''
       : '另有 ${seg.unreadablePages.length} 页整页读不出文字'
@@ -215,13 +223,58 @@ String _noLessonMessage(TextbookParseResult seg, int first, int last) {
         lang.hanRatio < 0.095 ? 1 : 0);
     return '第 $first–$last 页提取到 ${lang.totalChars} 个字符'
         '（其中汉字 ${lang.hanChars} 个，占 $pct%）——这本 PDF 的正文不是中文，'
-        '看起来不是中文教材。教材导入是按中文课文设计的，'
+        '看起来不是中文教材。$unreadable'
+        '教材导入是按中文课文设计的，'
         '其他语种的教材请用「拍照导入」（走视觉识别，不受语种限制）。';
+  }
+  // 中文、文字量也够，却切不出一课。数学教材就长这样：按单元编排，
+  // 通篇是算式、图示和练习，没有语文教材那种成篇课文可切。
+  if (lang.enoughText) {
+    final digitPct = (lang.digitRatio * 100).toStringAsFixed(1);
+    final guess = lang.looksMathLike
+        ? '数字占到 $digitPct%，看起来就是数学教材'
+        : '数字占到 $digitPct%，多半也是数学、科学这类按单元编排的教材';
+    return '第 $first–$last 页提取到 ${lang.totalChars} 个字符'
+        '（汉字 ${lang.hanChars} 个），文字是够的、也不是外文，'
+        '但里面没有成篇的课文 —— $guess。'
+        '$unreadable这类教材通篇是算式、图示和练习，'
+        '「按课文切分」无物可切，所以一节课都切不出来。\n'
+        '数学作业不需要课本正文：把版本、年级、册选对，'
+        '到「数学」面板勾选这次要练的题型即可出题；'
+        '本册的教材单元会显示在面板顶部，可以拿来核对册次有没有选错。';
   }
   return '第 $first–$last 页里没有识别到课文。$unreadable'
       '若这些页本来就是封面、目录或插图，属正常；'
       '否则请确认这本 PDF 带文本层（扫描图片版需要先做 OCR，'
       '或用「拍照导入」）。';
+}
+
+/// 弹出「一节课都切不出来」的诊断。
+///
+/// 用对话框而不是 SnackBar：这段文案有三四行，SnackBar 6 秒就消失，
+/// 用户还没读到关键那句就没了 —— 而「让用户读到」正是它存在的理由。
+Future<void> _showNoLessonDialog(
+  BuildContext context,
+  TextbookParseResult segment,
+  int first,
+  int last,
+) async {
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('没能按课文切分'),
+      content: SingleChildScrollView(
+        child: Text(noLessonMessage(segment, first, last)),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('知道了'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// 把新段并入已解析的段：页码区间完全相同的旧段被替换，避免重复导入同一段时
