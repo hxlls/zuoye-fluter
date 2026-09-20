@@ -127,8 +127,19 @@ class _CorpusPageState extends State<CorpusPage> {
     _snack('导入的课文将归档到「${c.name}」');
   }
 
+  /// 避开重名：两个同名语料库在语文面板的下拉里长得一模一样，没法分辨。
+  String _uniqueName(String base) {
+    final used = <String>{for (final c in _corpora) c.name};
+    if (!used.contains(base)) return base;
+    for (var i = 2; i < 100; i++) {
+      final cand = '$base（$i）';
+      if (!used.contains(cand)) return cand;
+    }
+    return '$base（${DateTime.now().millisecondsSinceEpoch % 100000}）';
+  }
+
   Future<Corpus?> _newCorpus() async {
-    final ctrl = TextEditingController(text: _defaultName());
+    final ctrl = TextEditingController(text: _uniqueName(_defaultName()));
     final created = await showDialog<Corpus>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -161,7 +172,7 @@ class _CorpusPageState extends State<CorpusPage> {
               Navigator.pop(
                 ctx,
                 Corpus(
-                  name: name.isNotEmpty ? name : _defaultName(),
+                  name: _uniqueName(name.isNotEmpty ? name : _defaultName()),
                   version: widget.version,
                   grade: widget.grade,
                   volume: widget.volume,

@@ -79,6 +79,9 @@ class _ChinesePanelState extends State<ChinesePanel> {
     // 用户语料（持久化在 SharedPreferences）；内置课文为 bundled，运行时由 AppData 合成，不持久化
     final userCorpora = stored.where((c) => c.origin != 'bundled').toList();
     final bundled = _buildBundledCorpora();
+    // ⚠️ 必须在解析活跃语料**之前**赋值：`_resolveActiveId()` 靠遍历 `_corpora`
+    // 找候选，赋值晚了它会看到上一轮的旧值（首次打开是空表，直接返回 null）。
+    _corpora = [...bundled, ...userCorpora];
 
     if (userCorpora.isEmpty) {
       // 首次使用：自动建一个与当前面板对应的空语料，作为默认采集/生成目标
@@ -90,18 +93,27 @@ class _ChinesePanelState extends State<ChinesePanel> {
         origin: 'imported-json',
       );
       userCorpora.add(c);
+      _corpora.add(c);
       _activeId = c.id;
       _captureId = c.id;
     } else {
-      // 活跃/采集目标仅在用户语料范围内解析（内置课文需用户显式选择，不与导入语料混淆）
-      if (_activeId == null || !userCorpora.any((c) => c.id == _activeId)) {
-        _activeId = _resolveActiveId();
-      }
-      if (_captureId == null || !userCorpora.any((c) => c.id == _captureId)) {
-        _captureId = _activeId;
-      }
+      // 面板是独立路由，每次打开都是新的 State —— 活跃语料与归档目标要从存储里
+      // **恢复**（那正是用户在「设置 → 教材语料库」里选的），只有存的那个已经
+      // 不存在时才重新解析。
+      //
+      // 不能一律走 `_resolveActiveId()`：它「非空优先」，用户刚在设置里新建/选中的
+      // 空语料库会被它丢掉，回到面板就显示成「未创建语料库」。
+      final savedActive = await CorpusStore.loadActiveId();
+      final savedCapture = await CorpusStore.loadCaptureId();
+      _activeId = (savedActive != null &&
+              userCorpora.any((c) => c.id == savedActive))
+          ? savedActive
+          : _resolveActiveId();
+      _captureId = (savedCapture != null &&
+              userCorpora.any((c) => c.id == savedCapture))
+          ? savedCapture
+          : _activeId;
     }
-    _corpora = [...bundled, ...userCorpora]; // 先赋值，供 _resolveActiveId 使用
     await CorpusStore.saveCorpora(userCorpora);
     await CorpusStore.saveActiveId(_activeId);
     await CorpusStore.saveCaptureId(_captureId);
@@ -848,8 +860,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
                         ? (widget.version == 'tongbiao'
                             ? '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）'
                             : (widget.version.startsWith('waiyan')
-                                ? '已开启：将依据外研课文 Module/Unit 篇目，由 AI 原创适龄英文短文出题（A档目录模式，正文可用「拍照导入」补充）'
-                                : '已开启：将依据本版本课文篇目，由 AI 原创适龄短文出题（A档目录模式，正文可用「拍照导入」补充）'))
+                                ? '已开启：将依据外研课文 Module/Unit 篇目，由 AI 原创适龄英文短文出题（A档目录模式，正文可在「设置 → 教材语料库」里导入）'
+                                : '已开启：将依据本版本课文篇目，由 AI 原创适龄短文出题（A档目录模式，正文可在「设置 → 教材语料库」里导入）'))
                         : '未开启：阅读理解为 AI 原创短文模式',
                     style: const TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                   ),
