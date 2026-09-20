@@ -7,6 +7,7 @@ import 'ai_help_panel.dart';
 import 'ai_panel.dart';
 import 'calligraphy_panel.dart';
 import 'chinese_panel.dart';
+import 'corpus_page.dart';
 import 'english_panel.dart';
 import 'math_panel.dart';
 import 'panel_widgets.dart';
@@ -501,6 +502,25 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(height: 20),
+          _secTitle('教材语料库'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.library_books_outlined),
+              title: const Text('导入与管理'),
+              subtitle: const Text(
+                  '导入教材 PDF / 语料文件、拍照识别；管理出题用的课文'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => CorpusPage(
+                  version: _version,
+                  grade: _grade,
+                  volume: _volume,
+                ),
+              )),
+            ),
+          ),
+          const SizedBox(height: 20),
           _secTitle('AI 模型'),
           const AiConfigCard(),
           const SizedBox(height: 20),
@@ -591,6 +611,8 @@ class _HomePageState extends State<HomePage> {
   /// 刻意用**路由**而不是页面内状态切换：
   /// - 状态切换没有路由可弹，系统返回键只能退出应用；
   /// - 且嵌套 PopScope 会同时触发所有处理器，「预览页返回」会连带跳回首页。
+  /// [focusCorpus] 为 true 时，打开后直接落在语文面板的语料分组
+  /// （设置页「教材语料库」入口用）。
   void _openSubject(String key) {
     final s = _kSubjects.firstWhere((e) => e.key == key);
     Navigator.of(context).push(MaterialPageRoute(
@@ -605,7 +627,11 @@ class _HomePageState extends State<HomePage> {
   Widget _panelFor(String key) {
     switch (key) {
       case 'chinese':
-        return ChinesePanel(grade: _grade, version: _version, volume: _volume);
+        return ChinesePanel(
+          grade: _grade,
+          version: _version,
+          volume: _volume,
+        );
       case 'math':
         return MathPanel(grade: _grade, version: _version, volume: _volume);
       case 'english':

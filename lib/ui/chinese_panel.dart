@@ -17,6 +17,7 @@ import 'preview_panel.dart';
 import 'recitation_panel.dart';
 import 'book_list_panel.dart';
 import 'practical_panel.dart';
+import 'corpus_page.dart';
 import 'export_file.dart';
 import 'ai_config_card.dart';
 import 'pdf_import_flow.dart';
@@ -27,18 +28,11 @@ class ChinesePanel extends StatefulWidget {
   final String version;
   final String volume;
 
-  /// 从设置页「教材语料库」入口进来时为 true：打开后自动滚到语料分组。
-  ///
-  /// 「导入」的直觉路径是设置，所以入口放那儿；但本面板很长（语料分组在
-  /// 三个重面板之后），不滚的话用户还是得自己翻到底。
-  final bool focusCorpus;
-
   const ChinesePanel({
     super.key,
     required this.grade,
     required this.version,
     required this.volume,
-    this.focusCorpus = false,
   });
 
   @override
@@ -63,13 +57,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
   /// 常驻采集目标（sticky：导入/拍照归档到此，跨会话保持）
   String? _captureId;
 
-  /// 本次会话内已解析的「教材 PDF 分段」，按语料 id 记。
-  /// 分段导入时后一段开头那点正文属于前一段的最后一课，靠这些段来续接
-  /// （见 `mergeSegments`）。只在内存里：跨会话续接请把页码范围覆盖到上次
-  /// 导入处 —— 同一课会被更完整的正文覆盖，不会重复。
-  final Map<String, List<TextbookParseResult>> _pdfSegments = {};
-
-  /// 「生成用语料（课文·阅读）」分组的位置，供设置页入口点进来时滚动定位。
+  /// 「生成用语料（课文·阅读）」分组的 key。语料管理已移到
+  /// 设置里的「教材语料库」页面，这里只留出题参数。
   final GlobalKey _corpusKey = GlobalKey();
 
   // 内置课文现以「内置语料」形式直接出现在语料下拉中，无需回退开关
@@ -81,23 +70,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
     _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
     _loadCounts();
     _initCorpora();
-    if (widget.focusCorpus) {
-      // 首帧之后才拿得到 RenderObject，所以挂到 post-frame 上
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCorpus());
-    }
-  }
-
-  /// 滚到语料分组。用 `Scrollable.ensureVisible` 而不是自己拿 ScrollController：
-  /// 滚动视图在 `PanelLayout` 里（宽窄屏各一个），从这里够不到。
-  void _scrollToCorpus() {
-    if (!mounted) return;
-    final ctx = _corpusKey.currentContext;
-    if (ctx == null) return;
-    Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 260),
-      alignment: 0.02, // 让分组标题贴近顶边，而不是「刚好可见」
-    );
   }
 
   /// 加载语料集合 + 活跃/采集目标，并做校验与默认初始化
@@ -149,14 +121,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
     if (_activeId == null) return null;
     for (final c in _corpora) {
       if (c.id == _activeId) return c;
-    }
-    return null;
-  }
-
-  Corpus? _captureCorpus() {
-    if (_captureId == null) return null;
-    for (final c in _corpora) {
-      if (c.id == _captureId) return c;
     }
     return null;
   }
@@ -344,89 +308,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
     ];
   }
 
-  // ---- 语料合并 / 去重辅助 ----
-  /// 去重键包含 version，避免不同版本同册同标题撞车
-  String _itemKey(Map<String, dynamic> m) {
-    final ver = '${m['version'] ?? ''}'.trim();
-    final g = m['grade'];
-    final v = '${m['volume'] ?? ''}'.trim();
-    final u = '${m['unit'] ?? ''}'.trim();
-    final t = '${m['title'] ?? ''}'.trim().toLowerCase();
-    return '$ver#$g#$v#$u#$t';
-  }
-
-  List<dynamic> _mergeQuestions(dynamic eq, dynamic iq) {
-    final out = <dynamic>[];
-    final seen = <String>{};
-    void addQ(dynamic q) {
-      if (q is! Map) return;
-      final qq = '${q['q'] ?? ''}'.trim();
-      if (qq.isEmpty) return;
-      if (seen.contains(qq)) return;
-      seen.add(qq);
-      out.add(q);
-    }
-    if (eq is List) {
-      for (final q in eq) {
-        addQ(q);
-      }
-    }
-    if (iq is List) {
-      for (final q in iq) {
-        addQ(q);
-      }
-    }
-    return out;
-  }
-
-  /// 合并两组条目：按 (version,grade,volume,unit,title) 去重；命中则合并字段（取更长正文、合并题目）。
-  /// corpus 的 version/grade/volume 作为缺省为缺值项盖章，保证去重键一致且覆盖度可算。
-  /// 返回 (合并后条目, 新增数, 更新数)。
-  (List<Map<String, dynamic>>, int, int) _mergeItems(
-      List<Map<String, dynamic>> existing,
-      List<Map<String, dynamic>> incoming,
-      {String fileSource = '',
-      String corpusVersion = '',
-      int? corpusGrade,
-      String? corpusVolume}) {
-    final map = <String, Map<String, dynamic>>{};
-    for (final e in existing) {
-      final m = <String, dynamic>{};
-      e.forEach((k, v) => m[k] = v);
-      map[_itemKey(m)] = m;
-    }
-    var added = 0, updated = 0;
-    for (final inc in incoming) {
-      final m = <String, dynamic>{};
-      inc.forEach((k, v) => m[k] = v);
-      if (corpusVersion.isNotEmpty && '${m['version'] ?? ''}'.isEmpty) {
-        m['version'] = corpusVersion;
-      }
-      if (corpusGrade != null && m['grade'] == null) m['grade'] = corpusGrade;
-      if (corpusVolume != null && '${m['volume'] ?? ''}'.isEmpty) {
-        m['volume'] = corpusVolume;
-      }
-      final k = _itemKey(m);
-      if (map.containsKey(k)) {
-        final ex = map[k]!;
-        final et = '${ex['text'] ?? ''}', it = '${m['text'] ?? ''}';
-        if (it.length > et.length) ex['text'] = it;
-        if ('${ex['unit'] ?? ''}'.isEmpty) ex['unit'] = m['unit'];
-        if ('${ex['author'] ?? ''}'.isEmpty) ex['author'] = m['author'];
-        ex['grade'] = ex['grade'] ?? m['grade'];
-        if ('${ex['volume'] ?? ''}'.isEmpty) ex['volume'] = m['volume'];
-        final es = '${ex['source'] ?? ''}', ins = '${m['source'] ?? ''}';
-        ex['source'] = es.isNotEmpty ? es : ins;
-        ex['questions'] = _mergeQuestions(ex['questions'], m['questions']);
-        updated++;
-      } else {
-        if ('${m['source'] ?? ''}'.isEmpty) m['source'] = fileSource;
-        map[k] = m;
-        added++;
-      }
-    }
-    return (map.values.toList(), added, updated);
-  }
 
   String _sourceTag(String s) {
     if (s == 'original') return '原创·非版权';
@@ -582,393 +463,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
     }
   }
 
-  Future<void> _importCorpus() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final f = result.files.first;
-    if (f.bytes == null) return;
-    Object? decoded;
-    try {
-      decoded = json.decode(utf8.decode(f.bytes!));
-    } catch (e) {
-      _showSnack('这个文件不是合法 JSON：$e');
-      return;
-    }
-    final data = CorpusFile.decode(decoded);
-    if (data == null) {
-      _showSnack('格式不正确：需包含 items 数组');
-      return;
-    }
-    if (data.items.isEmpty) {
-      _showSnack('这个文件里没有条目，未导入。');
-      return;
-    }
-    if (!mounted) return; // 选文件是异步的，回来时页面可能已卸载
-
-    // ---- 选落点 ----
-    // 默认给「新建同名语料库」，这样「导出课文库」产出的文件在任何设备上都能
-    // **直接导入使用**。旧实现只能并入「常驻采集目标」，新设备上没建过库就直接
-    // 报「无采集目标」—— 手里只有一个导出文件的人反而用不了。
-    final same = <Corpus>[
-      for (final c in _corpora)
-        if (c.origin != 'bundled' && c.name == data.name) c,
-    ];
-    final active = _activeCorpus();
-    final activeWritable =
-        (active != null && active.origin != 'bundled') ? active : null;
-
-    final choice = await _askImportTarget(
-      data: data,
-      sameName: same.isEmpty ? null : same.first,
-      active: activeWritable,
-    );
-    if (choice == null) {
-      _showSnack('已取消导入');
-      return;
-    }
-
-    try {
-      late final Corpus target;
-      var note = '';
-      if (choice == 'new') {
-        target = Corpus(
-          name: data.name,
-          version: data.version,
-          grade: data.grade,
-          volume: data.volume,
-          source: data.source,
-          origin: 'imported-json',
-          items: data.items,
-        );
-        _corpora.add(target);
-      } else {
-        target = choice == 'same' ? same.first : activeWritable!;
-        if (choice == 'replace') {
-          target.items = data.items;
-        } else {
-          final res = _mergeItems(
-            target.items,
-            data.items,
-            fileSource: data.source,
-            corpusVersion: data.version.isEmpty ? target.version : data.version,
-            corpusGrade: data.grade ?? target.grade,
-            corpusVolume: data.volume ?? target.volume,
-          );
-          target.items = res.$1;
-          note = '（新增 ${res.$2} 篇 / 更新 ${res.$3} 篇）';
-        }
-        // 库级元数据也补齐：原来没标签的库，导入后要拿到文件里的版本/年级/册，
-        // 否则将来「按册过滤出题范围」会一直拿不到册次。
-        if (target.version.isEmpty && data.version.isNotEmpty) {
-          target.version = data.version;
-        }
-        if (target.grade == null && data.grade != null) {
-          target.grade = data.grade;
-        }
-        if (target.volume == null && data.volume != null) {
-          target.volume = data.volume;
-        }
-        if (target.source.isEmpty) target.source = data.source;
-      }
-
-      // 导入即用：设为活跃语料 + 常驻采集目标（阅读读的是活跃语料）
-      _activeId = target.id;
-      _captureId = target.id;
-      await CorpusStore.saveActiveId(_activeId);
-      await CorpusStore.saveCaptureId(_captureId);
-      await CorpusStore.saveCorpora([
-        for (final c in _corpora)
-          if (c.origin != 'bundled') c,
-      ]);
-      await _loadCorpusStatus();
-      _regenerate();
-      if (mounted) setState(() {});
-      _showSnack('已导入「${target.name}」$note，共 ${target.items.length} 篇，'
-          '并已设为当前语料，可直接出题。');
-    } catch (e) {
-      _showSnack('导入失败：$e');
-    }
-  }
-
-  /// 导入落点选择。返回 'new' / 'same' / 'merge' / 'replace'；取消返回 null。
-  ///
-  /// 第一项总是「新建同名语料库」或「覆盖同名语料库」—— 导出的文件应当
-  /// 在任何设备上一条路走完，而不是先让人去建库、再猜该并到哪一本。
-  Future<String?> _askImportTarget({
-    required CorpusFileData data,
-    required Corpus? sameName,
-    required Corpus? active,
-  }) async {
-    final meta = <String>[
-      '${data.items.length} 篇',
-      if (data.version.isNotEmpty) data.version,
-      if (data.grade != null)
-        '${AppData().gradeNames[data.grade!] ?? '${data.grade}年级'}'
-            '${data.volume ?? ''}',
-      if (data.source == 'licensed')
-        '已声明课本授权'
-      else if (data.source == 'original')
-        '原创内容',
-    ];
-    final options = <(String, String, String)>[
-      if (sameName != null)
-        ('same', '覆盖同名语料库「${sameName.name}」',
-            '现有 ${sameName.items.length} 篇将被文件内容替换')
-      else
-        ('new', '新建语料库「${data.name}」', '导入后直接设为当前语料'),
-      if (active != null)
-        ('merge', '合并到「${active.name}」',
-            '现有 ${active.items.length} 篇，按课文去重后并入'),
-      if (active != null)
-        ('replace', '替换「${active.name}」的内容',
-            '现有 ${active.items.length} 篇将被文件内容替换'),
-    ];
-
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text('导入「${data.name}」'),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-            child: Text(
-              meta.join(' · '),
-              style: const TextStyle(fontSize: 12, color: Color(0xff888888)),
-            ),
-          ),
-          for (final o in options)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, o.$1),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(o.$2, style: const TextStyle(fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(o.$3,
-                      style: const TextStyle(
-                          fontSize: 11, color: Color(0xff999999))),
-                ],
-              ),
-            ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 拍照/相册导入：识别课本页面照片 → 视觉模型结构化 → 合并归档进语料库
-  Future<void> _importCorpusFromImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final XFile? file = await picker.pickImage(
-      source: source,
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 82,
-    );
-    if (file == null) return;
-    if (mounted) setState(() => _loading = true);
-    try {
-      final bytes = await file.readAsBytes();
-      final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      final incoming = await _structureCorpusPage(b64);
-      if (incoming == null) return; // 已在内部提示过原因
-      // 合并进「常驻采集目标」（分页/重拍可累积，按课文身份去重；sticky 保证多次拍摄落到同一本）
-      final target = _captureCorpus();
-      if (target == null) {
-        _showSnack('无采集目标，请先新建语料库');
-        return;
-      }
-      final res = _mergeItems(target.items, incoming,
-          fileSource: 'licensed',
-          corpusVersion: target.version,
-          corpusGrade: target.grade,
-          corpusVolume: target.volume);
-      target.items = res.$1;
-      if (target.source.isEmpty) target.source = 'licensed';
-      target.origin = 'photo';
-      // 导入成功后让该语料成为「活跃语料」，保证「导入即出阅读」
-      _activeId = target.id;
-      // 采集目标保持为该语料（sticky）
-      _captureId = target.id;
-      await CorpusStore.saveActiveId(_activeId);
-      await CorpusStore.saveCaptureId(_captureId);
-      await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
-      await _loadCorpusStatus();
-      _regenerate();
-      if (mounted) setState(() {});
-      _showSnack('已识别并归档：新增 ${res.$2} 篇 / 更新 ${res.$3} 篇'
-          '（累计 ${target.items.length} 篇）');
-    } catch (e) {
-      _showSnack('拍照导入失败：${aiFriendlyError(e)}');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// PDF 教材导入：整本或任意页码范围 → 结构化课文 → 合并归档进语料库。
-  ///
-  /// **零 AI 成本**：走的是 PDF 自带的文本层（先把拼音注音按字体剔掉、
-  /// 把被注音打断的行按坐标拼回、再去掉跨页水印），不调用任何模型。
-  /// 因此对扫描图片版的 PDF 无效 —— 那种得先 OCR，或改用「拍照导入」。
-  Future<void> _importCorpusFromPdf() async {
-    final target = _captureCorpus();
-    if (target == null) {
-      _showSnack('无采集目标，请先新建语料库');
-      return;
-    }
-    final previous = _pdfSegments[target.id] ?? const <TextbookParseResult>[];
-    if (mounted) setState(() => _loading = true);
-    try {
-      final outcome = await importTextbookPdf(
-        context,
-        previous: previous,
-        fallbackName: target.name,
-      );
-      if (outcome == null) return; // 用户取消，或流程内已提示过原因
-
-      final res = _mergeItems(target.items, outcome.items,
-          fileSource: 'licensed',
-          corpusVersion: target.version,
-          corpusGrade: target.grade,
-          corpusVolume: target.volume);
-      target.items = res.$1;
-      if (target.source.isEmpty) target.source = 'licensed';
-      target.origin = 'imported-pdf';
-      _pdfSegments[target.id] = outcome.segments;
-
-      // 导入成功后让该语料成为「活跃语料」，保证「导入即出阅读」
-      _activeId = target.id;
-      // 采集目标保持为该语料（sticky）
-      _captureId = target.id;
-      await CorpusStore.saveActiveId(_activeId);
-      await CorpusStore.saveCaptureId(_captureId);
-      await CorpusStore.saveCorpora(
-          _corpora.where((c) => c.origin != 'bundled').toList());
-      await _loadCorpusStatus();
-      _regenerate();
-      if (mounted) setState(() {});
-
-      final cut = outcome.picked.where((l) => l.cutOff).toList();
-      _showSnack('已导入第 ${outcome.firstPage}–${outcome.lastPage} 页'
-          '（共 ${outcome.totalPages} 页）：新增 ${res.$2} 篇 / 更新 ${res.$3} 篇，'
-          '该教材累计 ${outcome.totalLessons} 课。'
-          '${cut.isEmpty ? '' : '「${cut.first.title}」正文被页码区间切断。'}'
-          '${outcome.suggestNextPage == 0 ? '已到最后一页，导入完成。' : '下次可从第 ${outcome.suggestNextPage} 页继续导入。'}');
-    } catch (e) {
-      _showSnack('PDF 导入失败：$e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// 调视觉模型把**一页课本图片**结构化成课文条目。
-  ///
-  /// 抽出来是为了让「拍照导入」与「PDF 导入」**共用同一份提示词** ——
-  /// 复制成两份的话，改一处必漏另一处（本项目吃过「同一份数据两处定义」的亏）。
-  ///
-  /// 返回 null 表示**已在内部提示过用户原因**，调用方直接返回即可，不要重复报错。
-  /// 入库合并由调用方负责 —— 本方法只做「图片 → 结构化条目」这一件事。
-  Future<List<Map<String, dynamic>>?> _structureCorpusPage(
-      String imageBase64) async {
-    final cfg = await AiStore.load();
-    if (cfg.base.isEmpty || cfg.model.isEmpty) {
-      _showSnack('请先在顶部「AI 智能出题设置」中填写 API 地址，并选用支持看图的多模态大模型'
-          '（如 qwen-vl-max / glm-4v / gpt-4o）；纯文本模型无法识别图片。');
-      return null;
-    }
-      const prompt = '你是一名小学课本排版识别助手。下面是小学课本（语文或英语）的一页照片。'
-          '请识别页面中的课文/对话，并严格按以下 JSON 输出：\n'
-          '{"name":"识别到的课本名（如 冀教版语文三年级上册）",'
-          '"items":[{"grade":3,"volume":"上","unit":"第一单元","title":"课文标题",'
-          '"author":"作者/出处","text":"课文正文（尽量完整抄录，多课分别列出）","questions":[]}]}\n'
-          '要求：1) grade 用数字（一年级=1…六年级=6），volume 用"上"或"下"，依据页眉/封面判断；'
-          '2) 一页含多篇课文时分别列出，unit 填所属单元名；'
-          '3) text 尽量完整抄录原文（含标点），不要改写；只显示部分则抄录可见部分；'
-          '4) questions 固定为空数组；5) 只输出一个 JSON 对象，不要其他文字。';
-    final content = await AiClient.chat(
-      cfg,
-      [AiChatMessage('user', prompt)],
-      imageBase64: imageBase64,
-      jsonMode: true,
-    );
-    final data = aiExtractJson(content);
-    final items = data['items'];
-    if (items is! List || items.isEmpty) {
-      _showSnack('未识别到课文，请换一张更清晰或正文更完整的页面试试。');
-      return null;
-    }
-    final out = <Map<String, dynamic>>[];
-    for (final e in items) {
-      if (e is Map) {
-        final m = <String, dynamic>{};
-        e.forEach((k, v) => m['$k'] = v);
-        out.add(m);
-      }
-    }
-    return out;
-  }
-
-  Future<void> _clearCorpus() async {
-    final c = _activeCorpus();
-    if (c == null) {
-      _showSnack('无语料可清除');
-      return;
-    }
-    if (c.origin == 'bundled') {
-      _showSnack('内置课文语料为应用预置，不可清除');
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('确认清除'),
-        content: Text('确定要清除「${c.name}」的所有课文吗？此操作不可撤销。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    c.items = [];
-    await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
-    await _loadCorpusStatus();
-    _regenerate();
-    if (mounted) setState(() {});
-  }
-
-  /// 导出当前活跃语料库为 .json，**可原样导回并直接使用**（见 `_importCorpus`）。
-  ///
-  /// 文件是**自包含**的：库元数据（名称/版本/年级/册/来源）+ 全部条目
-  /// （含已补的题目）都在里面，所以换台设备选这个文件就能回到同样的状态，
-  /// 不必先手动建库。格式定义在 `CorpusFile` 里，导出与导入严格对称。
-  Future<void> _exportCorpus() async {
-    final c = _activeCorpus();
-    final items = c?.items ?? [];
-    if (items.isEmpty) {
-      _showSnack('当前语料为空：请先「拍照导入」或「导入语料(.json)」再导出。');
-      return;
-    }
-    final content = json.encode(CorpusFile.encode(c!));
-    // 文件名带上语料库名，便于用户识别是"哪一本"；去掉文件名非法字符
-    final safe = c.name.replaceAll(RegExp(r'''[\\/:*?"<>|\s]+'''), '_');
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    try {
-      await saveJsonFile('课文库_${safe}_$ts.json', content, 'application/json');
-      _showSnack('已导出「${c.name}」（${items.length} 篇）。'
-          '该文件可在任意设备的「导入语料(.json)」里直接导入使用。');
-    } catch (e) {
-      _showSnack('导出失败：${e.toString()}');
-    }
-  }
-
   /// 切换当前活跃语料（驱动生成）
   Future<void> _switchActive(Corpus c) async {
     _activeId = c.id;
@@ -978,109 +472,23 @@ class _ChinesePanelState extends State<ChinesePanel> {
     if (mounted) setState(() {});
   }
 
-  /// 新建语料库（默认按当前面板版本/年级/册），并切换为活跃+采集目标
-  Future<void> _newCorpus() async {
-    final ctrl = TextEditingController(text: _defaultCorpusName());
-    final created = await showDialog<Corpus>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('新建语料库'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('名称', style: TextStyle(fontSize: 13, color: Color(0xff888888))),
-            const SizedBox(height: 6),
-            TextField(
-              controller: ctrl,
-              decoration: const InputDecoration(
-                hintText: '如 统编版语文三年级上册',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '将按当前版本/年级/册创建：${AppData().textbooks[widget.version]?.name ?? widget.version} · '
-              '${AppData().gradeNames[widget.grade] ?? '第${widget.grade}年级'} · ${widget.volume == '下' ? '下册' : '上册'}',
-              style: const TextStyle(fontSize: 12, color: Color(0xff999999)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          TextButton(
-            onPressed: () {
-              final name = ctrl.text.trim();
-              final c = Corpus(
-                name: name.isNotEmpty ? name : _defaultCorpusName(),
-                version: widget.version,
-                grade: widget.grade,
-                volume: widget.volume,
-                origin: 'imported-json',
-              );
-              Navigator.pop(ctx, c);
-            },
-            child: const Text('创建'),
-          ),
-        ],
+  /// 跳到设置里的「教材语料库」——导入/导出/新建/删除统一在那里。
+  ///
+  /// 这一页与面板共用同一个 `CorpusStore`，所以导入完返回时
+  /// `_corpora` 还是旧的；回来要重新载一次，否则新库不出现在下拉里。
+  Future<void> _openCorpusPage() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => CorpusPage(
+        version: widget.version,
+        grade: widget.grade,
+        volume: widget.volume,
       ),
-    );
-    if (created == null) return;
-    _corpora = [..._corpora, created];
-    _activeId = created.id;
-    _captureId = created.id;
-    await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
-    await CorpusStore.saveActiveId(_activeId);
-    await CorpusStore.saveCaptureId(_captureId);
-    _loadCorpusStatus();
-    _regenerate();
+    ));
+    if (!mounted) return;
+    await _initCorpora();
     if (mounted) setState(() {});
-    _showSnack('已新建语料库：${created.name}');
   }
 
-  /// 选择「常驻采集目标」（拍照/导入归档到此），可一键更改
-  Future<void> _pickCaptureTarget() async {
-    final picked = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('选择归档目标'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final c in _corpora.where((x) => x.origin != 'bundled'))
-                RadioListTile<String>(
-                  title: Text(c.name),
-                  subtitle: Text('${c.items.length} 篇 · ${_sourceTag(c.source)}',
-                      style: const TextStyle(fontSize: 12, color: Color(0xff888888))),
-                  value: c.id,
-                  groupValue: _captureId,
-                  onChanged: (id) => Navigator.pop(ctx, id),
-                ),
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('新建语料库'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _newCorpus();
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-        ],
-      ),
-    );
-    if (picked == null) return;
-    _captureId = picked;
-    await CorpusStore.saveCaptureId(_captureId);
-    if (mounted) setState(() {});
-    final c = _captureCorpus();
-    _showSnack('归档目标：${c?.name ?? ''}');
-  }
 
   /// 覆盖度视图：比对内置教材目录，展示已录入/缺课文
   void _showCoverage() {
@@ -1233,63 +641,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
     );
   }
 
-  void _downloadSample() {
-    final sample = {
-      "name": "示例语料库",
-      "note": "这是示例格式，请参照此格式准备您自己的语料。顶层可加 \"source\" 字段声明来源：'original'(AI/人工原创·非版权) / 'licensed'(您声明拥有合法使用权的课本) / 不填(未声明，按版权自负处理)。",
-      "source": "licensed",
-      "items": [
-        {
-          "grade": 3,
-          "volume": "上",
-          "title": "示例课文标题",
-          "author": "作者",
-          "text": "这里是课文正文内容...",
-          "questions": [
-            {"q": "问题1？", "a": "答案1"},
-            {"q": "问题2？", "a": "答案2"}
-          ]
-        }
-      ]
-    };
-    final jsonStr = const JsonEncoder.withIndent('  ').convert(sample);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('示例格式'),
-        content: SizedBox(
-          width: 400,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('请参照以下JSON格式准备语料文件：',
-                    style: TextStyle(fontSize: 13)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xfff5f5f5),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(jsonStr,
-                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
-                ),
-                const SizedBox(height: 12),
-                const Text('字段说明：',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                const Text('• grade: 年级（1-6）\n• volume: 册别（上/下）\n• title: 课文标题\n• author: 作者\n• text: 正文\n• questions: 问题数组（q=问题, a=答案）',
-                    style: TextStyle(fontSize: 11, height: 1.6)),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
-        ],
-      ),
-    );
-  }
 
   Future<void> _generateAIReading() async {
     // 出题范围的优先级：**用户导入/选中的语料** > 内置课文库 > 原创短文。
@@ -1519,7 +870,6 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
                 ),
               ),
-              // 生成用语料切换 + 新建 + 覆盖度
               Row(
                 children: [
                   Expanded(
@@ -1541,111 +891,44 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: _newCorpus,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('新建'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
                     onPressed: _showCoverage,
                     icon: const Icon(Icons.pie_chart, size: 16),
                     label: const Text('覆盖度'),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // 常驻采集目标（sticky）：拍照/导入始终归档到此
-              InkWell(
-                onTap: _pickCaptureTarget,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xffcccccc)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.login, size: 16, color: Color(0xff2f6fd0)),
-                      const SizedBox(width: 6),
-                      const Text('归档到：', style: TextStyle(fontSize: 13)),
-                      Expanded(
-                        child: Text(_captureCorpus()?.name ?? '未选择',
-                            style: const TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w500),
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                      const Icon(Icons.arrow_drop_down,
-                          size: 18, color: Color(0xff888888)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // 「导入教材 PDF」单独一行、且用实心按钮。
-              //
-              // 它原来在那排 8 个按钮里排第 4 个，用户反馈「找不到入口」——
-              // 而这恰恰是最省事的那条路（带文本层的出版社电子版，零 AI 成本、
-              // 还能自动切单元与课），不该跟「下载示例格式」这种边角按钮同等份量。
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _loading ? null : _importCorpusFromPdf,
-                  icon: const Icon(Icons.picture_as_pdf, size: 18),
-                  label: const Text('导入教材 PDF（自动切分单元与课）'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: 6, bottom: 8),
-                child: Text(
-                  '带文本层的教材 PDF（出版社电子版）走上面这条：零 AI 成本，可分次按页码范围导入。\n'
-                  '其余方式：拍照 / 相册由 AI 识别课文并归档到上方目标（分多次拍同一本会自动合并去重），也可导入 .json 语料文件。',
-                  style: TextStyle(fontSize: 11, color: Color(0xff999999), height: 1.4),
-                ),
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _importCorpusFromImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt, size: 16),
-                    label: const Text('📷 拍照导入'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => _importCorpusFromImage(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library, size: 16),
-                    label: const Text('🖼️ 相册导入'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _importCorpus,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('导入语料(.json)'),
-                  ),
+                  const SizedBox(width: 8),
                   OutlinedButton.icon(
                     onPressed: _previewCorpus,
                     icon: const Icon(Icons.preview, size: 16),
-                    label: const Text('预览语料'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _downloadSample,
-                    icon: const Icon(Icons.download, size: 16),
-                    label: const Text('下载示例格式'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _clearCorpus,
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('清除当前'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _exportCorpus,
-                    icon: const Icon(Icons.file_download, size: 16),
-                    label: const Text('导出课文库'),
+                    label: const Text('预览'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              // 导入 / 导出 / 删除这些**管理动作**已经收进「设置 → 教材语料库」：
+              // 教材不是语文独有的，导入又是一次性的重操作（选文件 → 填页码范围 →
+              // 预览勾选），不该挤在科目面板的按钮墙里。这里只留出题参数。
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff6f7f9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 15, color: Color(0xff7a8699)),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        '导入教材 PDF、拍照识别、导入/导出语料文件，都在「设置 → 教材语料库」。',
+                        style: TextStyle(fontSize: 11, color: Color(0xff7a8699), height: 1.4),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _openCorpusPage,
+                      child: const Text('去管理', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 4),

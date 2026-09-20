@@ -85,8 +85,130 @@ String _sourceFromName(String name) {
 }
 
 // ---------------------------------------------------------------------------
-// 语料交换文件（导出 / 导入）
+// 语料条目合并（「导入 PDF / 导入 JSON / 拍照」三条路共用）
 // ---------------------------------------------------------------------------
+
+/// 语料条目的**身份键**：同一本书分次导入时靠它去重。
+///
+/// 带上 `version/grade/volume` —— 不同册会有同名课文（各册都有「语文园地」之类）。
+String corpusItemKey(Map<String, dynamic> m) {
+  final ver = '${m['version'] ?? ''}'.trim();
+  final g = m['grade'];
+  final v = '${m['volume'] ?? ''}'.trim();
+  final u = '${m['unit'] ?? ''}'.trim();
+  final t = '${m['title'] ?? ''}'.trim().toLowerCase();
+  return '$ver#$g#$v#$u#$t';
+}
+
+/// 合并两组题目：按题干去重，保留先出现的。
+List<dynamic> mergeQuestions(dynamic existing, dynamic incoming) {
+  final out = <dynamic>[];
+  final seen = <String>{};
+  void addQ(dynamic q) {
+    if (q is! Map) return;
+    final qq = '${q['q'] ?? ''}'.trim();
+    if (qq.isEmpty) return;
+    if (seen.contains(qq)) return;
+    seen.add(qq);
+    out.add(q);
+  }
+
+  if (existing is List) {
+    for (final q in existing) {
+      addQ(q);
+    }
+  }
+  if (incoming is List) {
+    for (final q in incoming) {
+      addQ(q);
+    }
+  }
+  return out;
+}
+
+/// 合并两组语料条目，返回 `(合并后条目, 新增数, 更新数)`。
+///
+/// 按 [corpusItemKey] 去重；命中则取更长的正文、补齐缺失的单元/作者/册次/来源、
+/// 并合并题目（[mergeQuestions]）。
+///
+/// `corpusVersion` / `corpusGrade` / `corpusVolume` 是给**缺标签的条目盖章的缺省值**：
+/// 同一本书两次导入若一次带标签一次不带，算出的键会不同，于是凭空多出一份重复课文。
+///
+/// 放在数据层是为了让三条导入路径共用同一份逻辑，也便于单测
+/// （见 `test/corpus_exchange_test.dart`）。
+(List<Map<String, dynamic>>, int, int) mergeCorpusItems(
+  List<Map<String, dynamic>> existing,
+  List<Map<String, dynamic>> incoming, {
+  String fileSource = '',
+  String corpusVersion = '',
+  int? corpusGrade,
+  String? corpusVolume,
+}) {
+  final map = <String, Map<String, dynamic>>{};
+  for (final e in existing) {
+    final m = <String, dynamic>{};
+    e.forEach((k, v) => m[k] = v);
+    map[corpusItemKey(m)] = m;
+  }
+  var added = 0, updated = 0;
+  for (final inc in incoming) {
+    final m = <String, dynamic>{};
+    inc.forEach((k, v) => m[k] = v);
+    if (corpusVersion.isNotEmpty && '${m['version'] ?? ''}'.isEmpty) {
+      m['version'] = corpusVersion;
+    }
+    if (corpusGrade != null && m['grade'] == null) m['grade'] = corpusGrade;
+    if (corpusVolume != null && '${m['volume'] ?? ''}'.isEmpty) {
+      m['volume'] = corpusVolume;
+    }
+    final k = corpusItemKey(m);
+    if (map.containsKey(k)) {
+      final ex = map[k]!;
+      final et = '${ex['text'] ?? ''}', it = '${m['text'] ?? ''}';
+      if (it.length > et.length) ex['text'] = it;
+      if ('${ex['unit'] ?? ''}'.isEmpty) ex['unit'] = m['unit'];
+      if ('${ex['author'] ?? ''}'.isEmpty) ex['author'] = m['author'];
+      ex['grade'] = ex['grade'] ?? m['grade'];
+      if ('${ex['volume'] ?? ''}'.isEmpty) ex['volume'] = m['volume'];
+      final es = '${ex['source'] ?? ''}', ins = '${m['source'] ?? ''}';
+      ex['source'] = es.isNotEmpty ? es : ins;
+      ex['questions'] = mergeQuestions(ex['questions'], m['questions']);
+      updated++;
+    } else {
+      if ('${m['source'] ?? ''}'.isEmpty) m['source'] = fileSource;
+      map[k] = m;
+      added++;
+    }
+  }
+  return (map.values.toList(), added, updated);
+}
+
+/// 语料库来源的中文标签（列表与提示里用）。
+String corpusSourceTag(String s) {
+  if (s == 'original') return '原创·非版权';
+  if (s == 'licensed') return '版权自负·已确认授权';
+  if (s == 'builtin') return '内置课文';
+  return '版权自负';
+}
+
+/// 语料库进入方式的中文标签。
+String corpusOriginTag(String o) {
+  switch (o) {
+    case 'bundled':
+      return '内置';
+    case 'imported-pdf':
+      return '教材 PDF';
+    case 'imported-json':
+      return '语料文件';
+    case 'photo':
+      return '拍照识别';
+    case 'ai':
+      return 'AI 生成';
+    default:
+      return '未知';
+  }
+}
+
 
 /// 交换文件的格式版本键。
 const String kCorpusSchemaKey = 'schemaVersion';
