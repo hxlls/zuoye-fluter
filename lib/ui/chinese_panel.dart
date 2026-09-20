@@ -591,98 +591,176 @@ class _ChinesePanelState extends State<ChinesePanel> {
     if (result == null || result.files.isEmpty) return;
     final f = result.files.first;
     if (f.bytes == null) return;
+    Object? decoded;
     try {
-      final decoded = json.decode(utf8.decode(f.bytes!));
-      if (decoded is! Map<String, dynamic> || decoded['items'] is! List) {
-        _showSnack('格式不正确：需包含 items 数组');
-        return;
-      }
-      String fileSource = '${decoded['source'] ?? ''}';
-      if (fileSource != 'original' && fileSource != 'licensed') {
-        final name = '${decoded['name'] ?? ''}';
-        if (name.contains('原创') ||
-            name.contains('非版权') ||
-            name.contains('原创生成')) {
-          fileSource = 'original';
-        } else {
-          fileSource = '';
-        }
-      }
-      final incoming = <Map<String, dynamic>>[];
-      for (final e in decoded['items'] as List) {
-        if (e is Map) {
-          final m = <String, dynamic>{};
-          (e).forEach((k, v) => m['$k'] = v);
-          incoming.add(m);
-        }
-      }
-      // 合并进「常驻采集目标」（sticky），分多次导入始终落到同一本
-      final target = _captureCorpus();
-      if (target == null) {
-        _showSnack('无采集目标，请先新建语料库');
-        return;
-      }
-      if (target.items.isNotEmpty) {
-        if (!mounted) return; // 选文件是异步的，回来时页面可能已卸载
-        final choice = await showDialog<String>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text('导入到「${target.name}」'),
-            content: const Text('该语料已有内容。要合并到现有语料，还是替换为该文件？'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, 'merge'),
-                  child: const Text('合并')),
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, 'replace'),
-                  child: const Text('替换')),
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, 'cancel'),
-                  child: const Text('取消')),
-            ],
-          ),
+      decoded = json.decode(utf8.decode(f.bytes!));
+    } catch (e) {
+      _showSnack('这个文件不是合法 JSON：$e');
+      return;
+    }
+    final data = CorpusFile.decode(decoded);
+    if (data == null) {
+      _showSnack('格式不正确：需包含 items 数组');
+      return;
+    }
+    if (data.items.isEmpty) {
+      _showSnack('这个文件里没有条目，未导入。');
+      return;
+    }
+    if (!mounted) return; // 选文件是异步的，回来时页面可能已卸载
+
+    // ---- 选落点 ----
+    // 默认给「新建同名语料库」，这样「导出课文库」产出的文件在任何设备上都能
+    // **直接导入使用**。旧实现只能并入「常驻采集目标」，新设备上没建过库就直接
+    // 报「无采集目标」—— 手里只有一个导出文件的人反而用不了。
+    final same = <Corpus>[
+      for (final c in _corpora)
+        if (c.origin != 'bundled' && c.name == data.name) c,
+    ];
+    final active = _activeCorpus();
+    final activeWritable =
+        (active != null && active.origin != 'bundled') ? active : null;
+
+    final choice = await _askImportTarget(
+      data: data,
+      sameName: same.isEmpty ? null : same.first,
+      active: activeWritable,
+    );
+    if (choice == null) {
+      _showSnack('已取消导入');
+      return;
+    }
+
+    try {
+      late final Corpus target;
+      var note = '';
+      if (choice == 'new') {
+        target = Corpus(
+          name: data.name,
+          version: data.version,
+          grade: data.grade,
+          volume: data.volume,
+          source: data.source,
+          origin: 'imported-json',
+          items: data.items,
         );
-        if (choice == null || choice == 'cancel') {
-          _showSnack('已取消导入');
-          return;
-        }
-        if (choice == 'merge') {
-          final res = _mergeItems(target.items, incoming,
-              fileSource: fileSource,
-              corpusVersion: target.version,
-              corpusGrade: target.grade,
-              corpusVolume: target.volume);
-          target.items = res.$1;
-          _showSnack('已合并：新增 ${res.$2} 篇 / 更新 ${res.$3} 篇');
-        } else {
-          target.items = incoming;
-          for (final m in target.items) {
-            if ('${m['source'] ?? ''}'.isEmpty) m['source'] = fileSource;
-          }
-          _showSnack('已替换：${target.items.length} 篇');
-        }
+        _corpora.add(target);
       } else {
-        final res = _mergeItems([], incoming,
-            fileSource: fileSource,
-            corpusVersion: target.version,
-            corpusGrade: target.grade,
-            corpusVolume: target.volume);
-        target.items = res.$1;
-        _showSnack('已导入：${target.items.length} 篇');
+        target = choice == 'same' ? same.first : activeWritable!;
+        if (choice == 'replace') {
+          target.items = data.items;
+        } else {
+          final res = _mergeItems(
+            target.items,
+            data.items,
+            fileSource: data.source,
+            corpusVersion: data.version.isEmpty ? target.version : data.version,
+            corpusGrade: data.grade ?? target.grade,
+            corpusVolume: data.volume ?? target.volume,
+          );
+          target.items = res.$1;
+          note = '（新增 ${res.$2} 篇 / 更新 ${res.$3} 篇）';
+        }
+        // 库级元数据也补齐：原来没标签的库，导入后要拿到文件里的版本/年级/册，
+        // 否则将来「按册过滤出题范围」会一直拿不到册次。
+        if (target.version.isEmpty && data.version.isNotEmpty) {
+          target.version = data.version;
+        }
+        if (target.grade == null && data.grade != null) {
+          target.grade = data.grade;
+        }
+        if (target.volume == null && data.volume != null) {
+          target.volume = data.volume;
+        }
+        if (target.source.isEmpty) target.source = data.source;
       }
-      // 导入成功后让该语料成为「活跃语料」，保证「导入即出阅读」（阅读读取活跃语料，避免采集目标与活跃不一致时读不到）
+
+      // 导入即用：设为活跃语料 + 常驻采集目标（阅读读的是活跃语料）
       _activeId = target.id;
-      // 采集目标保持为该语料（sticky）
       _captureId = target.id;
       await CorpusStore.saveActiveId(_activeId);
       await CorpusStore.saveCaptureId(_captureId);
-      await CorpusStore.saveCorpora(_corpora.where((c) => c.origin != 'bundled').toList());
-      _loadCorpusStatus();
+      await CorpusStore.saveCorpora([
+        for (final c in _corpora)
+          if (c.origin != 'bundled') c,
+      ]);
+      await _loadCorpusStatus();
       _regenerate();
       if (mounted) setState(() {});
+      _showSnack('已导入「${target.name}」$note，共 ${target.items.length} 篇，'
+          '并已设为当前语料，可直接出题。');
     } catch (e) {
       _showSnack('导入失败：$e');
     }
+  }
+
+  /// 导入落点选择。返回 'new' / 'same' / 'merge' / 'replace'；取消返回 null。
+  ///
+  /// 第一项总是「新建同名语料库」或「覆盖同名语料库」—— 导出的文件应当
+  /// 在任何设备上一条路走完，而不是先让人去建库、再猜该并到哪一本。
+  Future<String?> _askImportTarget({
+    required CorpusFileData data,
+    required Corpus? sameName,
+    required Corpus? active,
+  }) async {
+    final meta = <String>[
+      '${data.items.length} 篇',
+      if (data.version.isNotEmpty) data.version,
+      if (data.grade != null)
+        '${AppData().gradeNames[data.grade!] ?? '${data.grade}年级'}'
+            '${data.volume ?? ''}',
+      if (data.source == 'licensed')
+        '已声明课本授权'
+      else if (data.source == 'original')
+        '原创内容',
+    ];
+    final options = <(String, String, String)>[
+      if (sameName != null)
+        ('same', '覆盖同名语料库「${sameName.name}」',
+            '现有 ${sameName.items.length} 篇将被文件内容替换')
+      else
+        ('new', '新建语料库「${data.name}」', '导入后直接设为当前语料'),
+      if (active != null)
+        ('merge', '合并到「${active.name}」',
+            '现有 ${active.items.length} 篇，按课文去重后并入'),
+      if (active != null)
+        ('replace', '替换「${active.name}」的内容',
+            '现有 ${active.items.length} 篇将被文件内容替换'),
+    ];
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('导入「${data.name}」'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+              meta.join(' · '),
+              style: const TextStyle(fontSize: 12, color: Color(0xff888888)),
+            ),
+          ),
+          for (final o in options)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, o.$1),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(o.$2, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(o.$3,
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xff999999))),
+                ],
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 拍照/相册导入：识别课本页面照片 → 视觉模型结构化 → 合并归档进语料库
@@ -866,7 +944,11 @@ class _ChinesePanelState extends State<ChinesePanel> {
     if (mounted) setState(() {});
   }
 
-  /// 导出当前活跃课文库为 .json，方便多端导入导出
+  /// 导出当前活跃语料库为 .json，**可原样导回并直接使用**（见 `_importCorpus`）。
+  ///
+  /// 文件是**自包含**的：库元数据（名称/版本/年级/册/来源）+ 全部条目
+  /// （含已补的题目）都在里面，所以换台设备选这个文件就能回到同样的状态，
+  /// 不必先手动建库。格式定义在 `CorpusFile` 里，导出与导入严格对称。
   Future<void> _exportCorpus() async {
     final c = _activeCorpus();
     final items = c?.items ?? [];
@@ -874,19 +956,14 @@ class _ChinesePanelState extends State<ChinesePanel> {
       _showSnack('当前语料为空：请先「拍照导入」或「导入语料(.json)」再导出。');
       return;
     }
-    final obj = <String, dynamic>{
-      'name': c!.name,
-      'version': c.version,
-      'grade': c.grade,
-      'volume': c.volume,
-      'source': c.source,
-      'items': items,
-    };
-    final content = json.encode(obj);
+    final content = json.encode(CorpusFile.encode(c!));
+    // 文件名带上语料库名，便于用户识别是"哪一本"；去掉文件名非法字符
+    final safe = c.name.replaceAll(RegExp(r'''[\\/:*?"<>|\s]+'''), '_');
     final ts = DateTime.now().millisecondsSinceEpoch;
     try {
-      await saveJsonFile('课文库_$ts.json', content, 'application/json');
-      _showSnack('已导出课文库（${items.length} 篇）。该文件可在任意设备的「导入语料(.json)」中重新导入。');
+      await saveJsonFile('课文库_${safe}_$ts.json', content, 'application/json');
+      _showSnack('已导出「${c.name}」（${items.length} 篇）。'
+          '该文件可在任意设备的「导入语料(.json)」里直接导入使用。');
     } catch (e) {
       _showSnack('导出失败：${e.toString()}');
     }
