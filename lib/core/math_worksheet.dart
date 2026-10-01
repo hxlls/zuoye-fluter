@@ -149,6 +149,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
     if (curNodes.isNotEmpty) {
       pages.add(WsPage(
         title: curTitle,
+        repeatedHeader: true,
         nodes: curNodes,
         packed: curPacked,
       ));
@@ -234,6 +235,7 @@ List<WsPage> mathRenderPages(MathOptions opts) {
       }
     }
     pages.add(WsPage(
+      repeatedHeader: opts.showTitle,
       title: opts.showTitle
           ? mathTitle(pageNo[0])
           : WsPageTitle(main: '参考答案', meta1: '数学'),

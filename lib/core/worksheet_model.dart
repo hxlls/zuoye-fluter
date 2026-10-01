@@ -12,7 +12,17 @@ class WsPage {
   /// 内容是否紧凑排布（unitconv 等稀疏页：行从顶部开始，避免大片留白）
   bool packed;
 
-  WsPage({this.title, List<WsNode>? nodes, this.noSpread = false, this.packed = false})
+  /// 页头是否为「随页重复的主标题」（语文作业 / 数学作业…）。
+  /// A3 试卷版拼栏时，非第一栏的这类页头会被省略；
+  /// 「参考答案」等语义标题不受影响（保持 false）。
+  bool repeatedHeader;
+
+  WsPage(
+      {this.title,
+      List<WsNode>? nodes,
+      this.noSpread = false,
+      this.packed = false,
+      this.repeatedHeader = false})
       : nodes = nodes ?? [];
 }
 

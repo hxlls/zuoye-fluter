@@ -78,11 +78,20 @@ class WorksheetPageView extends StatelessWidget {
   /// 非空时在**第一页**顶部渲染「题号 / 得分」表——试卷的标志性元素。
   final List<String> scoreColumns;
 
+  /// 是否渲染页眉 chrome（标题栏/得分栏）。A3 试卷版只让第一栏渲染；
+  /// false 时「随页重复的主标题」被省略，「参考答案」等语义标题仍保留。
+  final bool showChrome;
+
+  /// 去掉本页的白底与投影（A3 双栏时由整幅纸容器统一承担）。
+  final bool bare;
+
   const WorksheetPageView({
     super.key,
     required this.page,
     this.sectionOffset = 0,
     this.scoreColumns = const [],
+    this.showChrome = true,
+    this.bare = false,
   });
 
   /// 判断某个节点是否开启一个新大题。
@@ -121,20 +130,24 @@ class WorksheetPageView extends StatelessWidget {
       width: 794,
       constraints: const BoxConstraints(minHeight: 1123),
       padding: const EdgeInsets.fromLTRB(56, 44, 56, 44),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: const [
-          BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 2)),
-        ],
-      ),
+      decoration: bare
+          ? null
+          : BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: const [
+                BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 2)),
+              ],
+            ),
       child: page.noSpread
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (page.title != null) _TitleBar(title: page.title!),
-                if (scoreColumns.isNotEmpty) _ScoreTable(columns: scoreColumns),
+                if (page.title != null && (showChrome || !page.repeatedHeader))
+                  _TitleBar(title: page.title!),
+                if (showChrome && scoreColumns.isNotEmpty)
+                  _ScoreTable(columns: scoreColumns),
                 for (var i = 0; i < page.nodes.length; i++)
                   _buildNode(context, page.nodes[i], nums[i]),
               ],
@@ -143,8 +156,10 @@ class WorksheetPageView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (page.title != null) _TitleBar(title: page.title!),
-                  if (scoreColumns.isNotEmpty) _ScoreTable(columns: scoreColumns),
+                  if (page.title != null && (showChrome || !page.repeatedHeader))
+                  _TitleBar(title: page.title!),
+                  if (showChrome && scoreColumns.isNotEmpty)
+                  _ScoreTable(columns: scoreColumns),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -266,6 +266,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     if (curContent.isNotEmpty) {
       pages.add(WsPage(
         title: opts.showTitle ? cnTitle(main: '语文作业') : null,
+        repeatedHeader: true,
         nodes: curContent,
       ));
       curContent = [];
@@ -375,6 +376,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     } else {
       pages.add(WsPage(
         title: opts.showTitle ? cnTitle(main: '语文作业') : null,
+        repeatedHeader: true,
         nodes: [
           WsPlaceholder('📂', '该年级暂无课文阅读素材',
               '内置课文已作为语料出现在「生成用语料」下拉中，选它即可直接出题（无需导入）；英语外研请拍照或导入您拥有合法使用权的课本页作为外置语料。'),
@@ -394,6 +396,7 @@ List<WsPage> chineseRenderPages(ChineseOptions opts, {List<ReadingBlockData>? cu
     } else {
       pages.add(WsPage(
         title: opts.showTitle ? cnTitle(main: '语文作业') : null,
+        repeatedHeader: true,
         nodes: [
           WsPlaceholder('🤖', '阅读理解 · AI 生成',
               '点击「生成预览」按钮，AI 将实时生成短文与理解题（需先在顶部「AI 智能出题设置」配置 API 并保存）。'),
@@ -511,6 +514,7 @@ WsPage _readingPage(ChineseOptions opts, List<WsNode> nodes,
     ...nodes,
   ];
   return WsPage(
+    repeatedHeader: true,
     title: opts.showTitle
         ? WsPageTitle(
             main: '阅读理解 · $gname · $volName',

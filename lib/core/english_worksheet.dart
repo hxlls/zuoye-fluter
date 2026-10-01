@@ -315,6 +315,7 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
     } else {
       pages.add(WsPage(
         title: opts.showTitle ? engTitleBar(opts) : null,
+        repeatedHeader: true,
         nodes: [
           WsPlaceholder('🤖', '阅读理解 · AI 生成（英文）',
               '点击「生成预览」按钮，AI 将实时生成英文短文与理解题（需先在顶部「AI 智能出题设置」配置 API 并保存）。'),
@@ -331,6 +332,7 @@ EnglishRenderResult englishRenderPagesWithResult(EnglishOptions opts) {
     } else {
       pages.add(WsPage(
         title: opts.showTitle ? engTitleBar(opts) : null,
+        repeatedHeader: true,
         nodes: [
           WsPlaceholder('🎧', '听力短文 · AI 生成（英文）',
               '点击「生成预览」按钮，AI 将实时生成英文听力材料与理解题（需先在顶部「AI 智能出题设置」配置 API 并保存）。'),
@@ -373,6 +375,7 @@ List<WsPage> renderENReadingPages(List<ReadingBlockData> items, EnglishOptions o
 WsPage _enReadingPage(EnglishOptions opts, List<WsNode> nodes) {
   return WsPage(
     title: opts.showTitle ? engTitleBar(opts) : null,
+    repeatedHeader: true,
     nodes: [
       WsSection('Read the passage and answer the questions.（阅读短文，回答问题。）'),
       ...nodes,
@@ -422,6 +425,7 @@ List<WsPage> renderENListeningPages(List<ReadingBlockData> items, EnglishOptions
 WsPage _enListeningPage(EnglishOptions opts, List<WsNode> nodes) {
   return WsPage(
     title: opts.showTitle ? engTitleBar(opts) : null,
+    repeatedHeader: true,
     nodes: [
       WsSection('Listen to the passage and answer the questions.（听录音，回答问题。）'),
       ...nodes,
@@ -733,6 +737,7 @@ List<WsPage> _packEngSections(List<_EngSection> sections, EnglishOptions opts) {
     if (nodes.isEmpty) return;
     pages.add(WsPage(
       title: opts.showTitle ? engTitleBar(opts) : null,
+      repeatedHeader: true,
       nodes: nodes,
     ));
     nodes = [];

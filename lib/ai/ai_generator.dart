@@ -393,7 +393,7 @@ List<WsPage> aiRenderPages(List<AiSection> sections, AiRenderOpts opts) {
       final nodes = <WsNode>[];
       if (curInstr.isNotEmpty) nodes.add(WsSection(curInstr));
       nodes.add(WsGrid(cur, cols: colFlow ? 1 : 3, evenly: true));
-      pages.add(WsPage(title: pageTitle(), nodes: nodes));
+      pages.add(WsPage(title: pageTitle(), nodes: nodes, repeatedHeader: true));
       cur = [];
       curH = 0;
       curSent = 0;

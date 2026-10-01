@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/worksheet_model.dart';
 import '../core/calligraphy_worksheet.dart';
+import '../core/paper.dart';
 import '../pdf/pdf_service.dart';
 import 'worksheet_view.dart';
 
@@ -9,11 +10,15 @@ class WorksheetPreviewPanel extends StatefulWidget {
   final List<WsPage> pages;
   final String label;
   final bool loading;
+
+  /// 初始纸张（探测入口 / 将来的纸张偏好持久化用）
+  final PaperSize initialPaper;
   const WorksheetPreviewPanel({
     super.key,
     this.pages = const [],
     this.label = '',
     this.loading = false,
+    this.initialPaper = PaperSize.a4,
   });
 
   @override
@@ -23,6 +28,7 @@ class WorksheetPreviewPanel extends StatefulWidget {
 class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
   final List<GlobalKey> _keys = [];
   bool _exporting = false;
+  late PaperSize _paper = widget.initialPaper;
 
   @override
   void didUpdateWidget(WorksheetPreviewPanel oldWidget) {
@@ -39,7 +45,7 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
     if (_keys.isEmpty) return;
     setState(() => _exporting = true);
     try {
-      final path = await PdfService.savePdf(_keys, '小学作业-${widget.label}');
+      final path = await PdfService.savePdf(_keys, '小学作业-${widget.label}', paper: _paper);
       if (mounted && path != null) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('PDF 已导出：$path')));
@@ -58,7 +64,7 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
     if (_keys.isEmpty) return;
     setState(() => _exporting = true);
     try {
-      await PdfService.printPdf(_keys);
+      await PdfService.printPdf(_keys, paper: _paper);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -133,11 +139,56 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
     );
   }
 
+  /// A3 试卷版整幅纸：双栏并排，每栏 = 一个 A4 页槽。
+  /// 标题/得分栏只在第一栏（真实试卷惯例）；栏内容沿用 A4 分页结果。
+  /// RepaintBoundary 包整张纸，PDF 按 A3 横向逐纸截图。
+  Widget _a3Sheet(BuildContext context, int sheetIndex, (int, int?) slots,
+      ({List<int> offsets, List<String> columns}) scan) {
+    Widget column(int idx) => SizedBox(
+          width: _paper.columnWidth,
+          child: WorksheetPageView(
+            page: widget.pages[idx],
+            sectionOffset: scan.offsets[idx],
+            scoreColumns: idx == 0 ? scan.columns : const <String>[],
+            showChrome: idx == 0,
+            bare: true,
+          ),
+        );
+    return FittedBox(
+      fit: BoxFit.fitWidth,
+      child: RepaintBoundary(
+        key: _keys[sheetIndex],
+        child: Container(
+          width: _paper.pageWidth,
+          constraints: BoxConstraints(minHeight: _paper.pageHeight),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2)),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              column(slots.$1),
+              if (slots.$2 != null) column(slots.$2!),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_keys.length != widget.pages.length) {
+    final sheets = _paper.sheetSlots(widget.pages.length);
+    if (_keys.length != sheets.length) {
       _keys.clear();
-      for (var i = 0; i < widget.pages.length; i++) {
+      for (var i = 0; i < sheets.length; i++) {
         _keys.add(GlobalKey());
       }
     }
@@ -169,10 +220,12 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
                                 TextStyle(color: Color(0xff888888), fontSize: 15)),
                       )
                     else
-                      for (var i = 0; i < widget.pages.length; i++)
+                      for (var s = 0; s < sheets.length; s++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: _pageSlot(context, i, scan),
+                          child: _paper == PaperSize.a4
+                              ? _pageSlot(context, sheets[s].$1, scan)
+                              : _a3Sheet(context, s, sheets[s], scan),
                         ),
                     ],
                   ),
@@ -186,6 +239,33 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
                   alignment: WrapAlignment.center,
                   runAlignment: WrapAlignment.center,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('纸张',
+                              style: TextStyle(
+                                  fontSize: 13, color: Color(0xff666666))),
+                          const SizedBox(width: 4),
+                          ChoiceChip(
+                            label:
+                                const Text('A4', style: TextStyle(fontSize: 13)),
+                            selected: _paper == PaperSize.a4,
+                            onSelected: (_) =>
+                                setState(() => _paper = PaperSize.a4),
+                          ),
+                          const SizedBox(width: 6),
+                          ChoiceChip(
+                            label: const Text('A3 试卷版',
+                                style: TextStyle(fontSize: 13)),
+                            selected: _paper == PaperSize.a3,
+                            onSelected: (_) =>
+                                setState(() => _paper = PaperSize.a3),
+                          ),
+                        ],
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: FilledButton.icon(
@@ -230,6 +310,7 @@ class CalligraphyPreviewPanel extends StatefulWidget {
 class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
   final List<GlobalKey> _keys = [];
   bool _exporting = false;
+  PaperSize _paper = PaperSize.a4;
 
   @override
   void didUpdateWidget(CalligraphyPreviewPanel oldWidget) {
@@ -246,7 +327,7 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
     if (_keys.isEmpty) return;
     setState(() => _exporting = true);
     try {
-      final path = await PdfService.savePdf(_keys, '小学作业-${widget.label}');
+      final path = await PdfService.savePdf(_keys, '小学作业-${widget.label}', paper: _paper);
       if (mounted && path != null) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('PDF 已导出：$path')));
@@ -284,11 +365,52 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
     );
   }
 
+  /// A3 试卷版整幅纸（练字帖）：两页并排，标题只保留第一页。
+  Widget _a3CallySheet(
+      BuildContext context, int sheetIndex, (int, int?) slots) {
+    Widget column(int idx) => SizedBox(
+          width: _paper.columnWidth,
+          child: _CalligraphyPageView(
+            page: widget.pages[idx],
+            showChrome: idx == 0,
+            bare: true,
+          ),
+        );
+    return FittedBox(
+      fit: BoxFit.fitWidth,
+      child: RepaintBoundary(
+        key: _keys[sheetIndex],
+        child: Container(
+          width: _paper.pageWidth,
+          constraints: BoxConstraints(minHeight: _paper.pageHeight),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2)),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              column(slots.$1),
+              if (slots.$2 != null) column(slots.$2!),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_keys.length != widget.pages.length) {
+    final sheets = _paper.sheetSlots(widget.pages.length);
+    if (_keys.length != sheets.length) {
       _keys.clear();
-      for (var i = 0; i < widget.pages.length; i++) {
+      for (var i = 0; i < sheets.length; i++) {
         _keys.add(GlobalKey());
       }
     }
@@ -319,10 +441,12 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
                                 TextStyle(color: Color(0xff888888), fontSize: 15)),
                       )
                     else
-                      for (var i = 0; i < widget.pages.length; i++)
+                      for (var s = 0; s < sheets.length; s++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: _callySlot(context, i),
+                          child: _paper == PaperSize.a4
+                              ? _callySlot(context, sheets[s].$1)
+                              : _a3CallySheet(context, s, sheets[s]),
                         ),
                   ],
                 ),
@@ -336,6 +460,33 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
                   alignment: WrapAlignment.center,
                   runAlignment: WrapAlignment.center,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('纸张',
+                              style: TextStyle(
+                                  fontSize: 13, color: Color(0xff666666))),
+                          const SizedBox(width: 4),
+                          ChoiceChip(
+                            label:
+                                const Text('A4', style: TextStyle(fontSize: 13)),
+                            selected: _paper == PaperSize.a4,
+                            onSelected: (_) =>
+                                setState(() => _paper = PaperSize.a4),
+                          ),
+                          const SizedBox(width: 6),
+                          ChoiceChip(
+                            label: const Text('A3 试卷版',
+                                style: TextStyle(fontSize: 13)),
+                            selected: _paper == PaperSize.a3,
+                            onSelected: (_) =>
+                                setState(() => _paper = PaperSize.a3),
+                          ),
+                        ],
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: FilledButton.icon(
@@ -355,7 +506,14 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
 
 class _CalligraphyPageView extends StatelessWidget {
   final CalligraphyPageData page;
-  const _CalligraphyPageView({required this.page});
+
+  /// 是否渲染「写字练习」标题。A3 双栏时只保留第一栏。
+  final bool showChrome;
+
+  /// 去掉白底与投影（A3 双栏时由整幅纸容器统一承担）。
+  final bool bare;
+  const _CalligraphyPageView(
+      {required this.page, this.showChrome = true, this.bare = false});
 
   @override
   Widget build(BuildContext context) {
@@ -363,16 +521,18 @@ class _CalligraphyPageView extends StatelessWidget {
       width: 794,
       height: 1123,
       padding: const EdgeInsets.fromLTRB(56, 44, 56, 44),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: const [
-          BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 2)),
-        ],
-      ),
+      decoration: bare
+          ? null
+          : BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: const [
+                BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 2)),
+              ],
+            ),
       child: Column(
         children: [
-          if (page.showTitle) ...[
+          if (showChrome && page.showTitle) ...[
             const Text('写字练习',
                 style: TextStyle(
                     fontSize: 26,

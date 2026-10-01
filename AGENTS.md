@@ -50,6 +50,7 @@ lib/
     panel_widgets.dart       通用控件（PanelLayout / SegButtons / TypeRow …）
     pdf_import_flow.dart     教材 PDF 导入流程（选文件 → 页码范围 → 预览勾选）
     *_panel.dart             各科配置面板
+  core/paper.dart            纸张尺寸单一来源（A4 / A3 试卷版、栏位拼排）
   pdf/pdf_service.dart       PDF 导出（RepaintBoundary 截图 → pdf 包）
 assets/data.json             全部教材数据（勿手改，见 docs/DATA_MODEL.md）
 ```
@@ -111,9 +112,20 @@ TypeCatalog。新增题型时只改一处，并补 `test/type_catalog_test.dart`
 
 ### 5. 试卷版式约定
 
-预览的 Widget 就是试卷本身 —— **PDF 是对预览 Widget 截图后嵌进 A4 的**
+预览的 Widget 就是试卷本身 —— **PDF 是对预览 Widget 截图后嵌进纸张的**
 （`PdfService` 对每个 `RepaintBoundary` 做 `toImage(pixelRatio: 3.1)`）。
 **只改 Widget 渲染，PDF 与「所见即所得」自动跟着变**，不要维护两套。
+
+纸张尺寸收敛在 `lib/core/paper.dart`（`PaperSize`，单一来源）：
+
+- **A4**（默认）：794x1123 px（96dpi），一页一纸，与历史行为一致
+- **A3 试卷版**：A3 横向 1588x1123 px，**双栏并排**——每栏就是一个
+  现有 A4 页槽，生成器分页逻辑完全不变；标题栏与得分栏只在第一栏
+  （`WsPage.repeatedHeader` 标记随页重复的主标题，非第一栏省略；
+  「参考答案」等语义标题不受影响）。对应真实试卷
+  「8K 横放、两栏、对折成 A4」的版式。栏位拼排用 `sheetSlots()`
+- 导出按纸截图：A4 → `PdfPageFormat.a4`，A3 → `PdfPageFormat.a3.landscape`
+  （两种纸的基准同为 96dpi，pixelRatio 3.1 ≈ 297 DPI）
 
 - **大题序号**：中文（一、二、三…），跨页连续（预览层预扫描后传给各页）
 - **得分栏**：`题序 | 一 | 二 | … | 总分`，列数 = 实际大题数
