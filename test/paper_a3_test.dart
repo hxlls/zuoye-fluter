@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zuoye_fluter/core/paper.dart';
 import 'package:zuoye_fluter/core/worksheet_model.dart';
 import 'package:zuoye_fluter/ui/preview_panel.dart';
+import 'package:zuoye_fluter/core/paper.dart' show PaperPref;
 import 'package:zuoye_fluter/ui/worksheet_view.dart';
 
 void main() {
@@ -116,6 +118,41 @@ void main() {
       expect(find.text('数学作业 · 四年级 · 上册'), findsOneWidget);
       expect(find.text('第2页内容'), findsOneWidget);
       expect(find.text('第3页内容'), findsOneWidget);
+    });
+
+    testWidgets('纸张选择持久化：点选后写入偏好，新面板恢复', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final pages = [
+        for (var i = 0; i < 2; i++)
+          WsPage(
+            title: WsPageTitle(
+                main: '语文作业 · 六年级 · 上册', meta1: '姓名：____________'),
+            repeatedHeader: true,
+            nodes: [WsNote('第${i + 1}页内容')],
+          ),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: WorksheetPreviewPanel(pages: pages)),
+      ));
+      await tester.pump(); // initState 异步读偏好（此时为空 → A4）
+      await tester.pump();
+      expect(find.text('语文作业 · 六年级 · 上册'), findsNWidgets(2)); // A4 逐页页头
+
+      await tester.tap(find.text('A3 试卷版'));
+      await tester.pump(); // setState + PaperPref.save
+      await tester.pump();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('paperSize'), 'a3');
+      expect(await PaperPref.load(), PaperSize.a3);
+
+      // 新面板实例（模拟重启）：恢复 A3
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: WorksheetPreviewPanel(pages: pages)),
+      ));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('语文作业 · 六年级 · 上册'), findsOneWidget); // A3 只在首栏
     });
   });
 }

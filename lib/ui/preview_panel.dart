@@ -3,7 +3,23 @@ import '../core/worksheet_model.dart';
 import '../core/calligraphy_worksheet.dart';
 import '../core/paper.dart';
 import '../pdf/pdf_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'worksheet_view.dart';
+
+/// 纸张偏好持久化（SharedPreferences，全局一份，两个预览面板共用）
+class PaperPref {
+  static const _key = 'paperSize';
+
+  static Future<PaperSize> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_key) == 'a3' ? PaperSize.a3 : PaperSize.a4;
+  }
+
+  static Future<void> save(PaperSize p) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, p == PaperSize.a3 ? 'a3' : 'a4');
+  }
+}
 
 /// 作业预览区（滚动显示所有 A4 页 + PDF/打印按钮）
 class WorksheetPreviewPanel extends StatefulWidget {
@@ -11,14 +27,14 @@ class WorksheetPreviewPanel extends StatefulWidget {
   final String label;
   final bool loading;
 
-  /// 初始纸张（探测入口 / 将来的纸张偏好持久化用）
-  final PaperSize initialPaper;
+  /// 初始纸张（探测入口用）；为空时加载持久化偏好
+  final PaperSize? initialPaper;
   const WorksheetPreviewPanel({
     super.key,
     this.pages = const [],
     this.label = '',
     this.loading = false,
-    this.initialPaper = PaperSize.a4,
+    this.initialPaper,
   });
 
   @override
@@ -28,7 +44,17 @@ class WorksheetPreviewPanel extends StatefulWidget {
 class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
   final List<GlobalKey> _keys = [];
   bool _exporting = false;
-  late PaperSize _paper = widget.initialPaper;
+  late PaperSize _paper = widget.initialPaper ?? PaperSize.a4;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPaper == null) {
+      PaperPref.load().then((p) {
+        if (mounted) setState(() => _paper = p);
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(WorksheetPreviewPanel oldWidget) {
@@ -252,16 +278,20 @@ class _WorksheetPreviewPanelState extends State<WorksheetPreviewPanel> {
                             label:
                                 const Text('A4', style: TextStyle(fontSize: 13)),
                             selected: _paper == PaperSize.a4,
-                            onSelected: (_) =>
-                                setState(() => _paper = PaperSize.a4),
+                            onSelected: (_) {
+                                setState(() => _paper = PaperSize.a4);
+                                PaperPref.save(PaperSize.a4);
+                              },
                           ),
                           const SizedBox(width: 6),
                           ChoiceChip(
                             label: const Text('A3 试卷版',
                                 style: TextStyle(fontSize: 13)),
                             selected: _paper == PaperSize.a3,
-                            onSelected: (_) =>
-                                setState(() => _paper = PaperSize.a3),
+                            onSelected: (_) {
+                                setState(() => _paper = PaperSize.a3);
+                                PaperPref.save(PaperSize.a3);
+                              },
                           ),
                         ],
                       ),
@@ -311,6 +341,14 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
   final List<GlobalKey> _keys = [];
   bool _exporting = false;
   PaperSize _paper = PaperSize.a4;
+
+  @override
+  void initState() {
+    super.initState();
+    PaperPref.load().then((p) {
+      if (mounted) setState(() => _paper = p);
+    });
+  }
 
   @override
   void didUpdateWidget(CalligraphyPreviewPanel oldWidget) {
@@ -473,16 +511,20 @@ class _CalligraphyPreviewPanelState extends State<CalligraphyPreviewPanel> {
                             label:
                                 const Text('A4', style: TextStyle(fontSize: 13)),
                             selected: _paper == PaperSize.a4,
-                            onSelected: (_) =>
-                                setState(() => _paper = PaperSize.a4),
+                            onSelected: (_) {
+                                setState(() => _paper = PaperSize.a4);
+                                PaperPref.save(PaperSize.a4);
+                              },
                           ),
                           const SizedBox(width: 6),
                           ChoiceChip(
                             label: const Text('A3 试卷版',
                                 style: TextStyle(fontSize: 13)),
                             selected: _paper == PaperSize.a3,
-                            onSelected: (_) =>
-                                setState(() => _paper = PaperSize.a3),
+                            onSelected: (_) {
+                                setState(() => _paper = PaperSize.a3);
+                                PaperPref.save(PaperSize.a3);
+                              },
                           ),
                         ],
                       ),
