@@ -125,7 +125,10 @@ jobs:
   build-windows:
     needs: check
     if: github.event_name == 'workflow_dispatch' || needs.check.outputs.changed == 'true'
-    runs-on: windows-latest
+    # 固定 windows-2022（自带 Visual Studio 2022）。windows-latest 已升级到 VS 2026，
+    # Flutter 3.24.5 的 CMake 生成器只认 VS 2019/2022，会报
+    # 「Generator Visual Studio 16 2019 could not find any instance of Visual Studio」。
+    runs-on: windows-2022
     permissions:
       contents: write
     steps:
