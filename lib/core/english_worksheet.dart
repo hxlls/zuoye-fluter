@@ -537,7 +537,24 @@ List<String> buildMatchAnswer(List<List<String>> vocab, List<List<String>> right
 
 List<List<String>> pickVocab(AppData data, int grade, int count, String ver, String vol) {
   final list = data.vol(ver, grade, vol, 'eng')?.eng ?? [];
-  final shuffled = shuffleCopy(list);
+  // 同一中文释义只保留一个词。
+  //
+  // 连线题靠「中文」定位答案（buildMatchAnswer 用 rightCn.indexWhere(p[1] == 中文)），
+  // 听力题也按中文给选项 —— 一份卷子里若出现两个中文相同的词（如 hello/hi 都是
+  // 「你好」、drink 既是「喝」又是「饮料」），连线会出现两个一模一样的右列项、
+  // 答案标号重复，听力则变成一题两个正确答案。词表里确实存在这类词，所以在取词
+  // 这一步就按中文去重，比在下游各处分别兜底更可靠。
+  final seenEn = <String>{};
+  final seenCn = <String>{};
+  final uniq = <List<String>>[];
+  for (final w in list) {
+    final en = w.isNotEmpty ? w[0] : '';
+    final cn = w.length > 1 ? w[1] : '';
+    // 英文与中文各去重一次：英文重复会让左列出现两个同样的词，
+    // 中文重复会让右列出现两个同样的释义，两种情况连线题都无解。
+    if (seenEn.add(en) && seenCn.add(cn)) uniq.add(w);
+  }
+  final shuffled = shuffleCopy(uniq);
   return shuffled.take(count < shuffled.length ? count : shuffled.length).toList();
 }
 

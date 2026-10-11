@@ -143,11 +143,22 @@ class _ChinesePanelState extends State<ChinesePanel> {
   List<Corpus> _buildBundledCorpora() {
     final data = AppData();
     const versions = ['tongbiao', 'hebei', 'renjiao', 'shanghai'];
-    // 含正文的语文内置课文（shanghai 复用统编课文库 YUWEN_TEXTS）
+    // 含正文的语文内置课文。
+    //
+    // 必须按「实际课文库」去重：shanghai 复用统编课文库（YUWEN_TEXTS），与
+    // tongbiao 取到的是同一批课文。不去重的话下拉里会出现两条内容一模一样、
+    // 名字却不同的内置语料，用户会以为是两份不同的教材。
+    // 当前版本排在最前 —— 它自己那条保留、被复用的一方被去重掉，
+    // 这样下拉里显示的名字与用户当前选的教材一致。
+    final ordered = <String>[
+      if (versions.contains(widget.version)) widget.version,
+      ...versions.where((v) => v != widget.version),
+    ];
     final gname = data.gradeNames[widget.grade] ?? '第${widget.grade}年级';
     final volName = widget.volume == '下' ? '下册' : '上册';
     final out = <Corpus>[];
-    for (final v in versions) {
+    final seenLib = <String>{};
+    for (final v in ordered) {
       final texts = data.yuwenTextsFor(v, widget.grade, widget.volume);
       if (texts.isEmpty) continue;
       final items = <Map<String, dynamic>>[];
@@ -163,6 +174,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
         });
       }
       if (items.isEmpty) continue;
+      // 复用同一课文库的版本只保留第一条（当前版本优先）
+      if (!seenLib.add(data.textLibKeyOf(v))) continue;
       final tb = data.textbooks[v];
       out.add(Corpus(
         id: 'builtin:$v',

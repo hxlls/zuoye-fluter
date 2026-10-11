@@ -60,7 +60,13 @@ class ScopeGuard {
         .toSet();
     if (ids.isEmpty) return null;
     bool has(String s) => ids.any((i) => i.contains(s));
-    if (has('1000') || has('10000')) return 10000;
+    // 同一个 id「add1000」在不同教材里指的不是一回事：
+    // - 人教版三年级「万以内加减法」 -> 上限 10000
+    // - 沪教版/冀教版二年级「三位数的加减法」 -> 上限 1000
+    // 原先一律返回 10000，于是二年级的提示词会写成「整数运算限制在万以内」，
+    // 生成后的超纲校验也放行四位数 —— 对二年级是明显超纲。
+    if (has('10000')) return 10000;
+    if (has('1000')) return grade >= 3 ? 10000 : 1000;
     if (has('100')) return 100;
     if (has('20')) return 20;
     return 10;

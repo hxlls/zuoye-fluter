@@ -52,7 +52,7 @@ class VolumeData {
 
 /// 全局数据仓库
 class AppData {
-  static const String version = "3.8.6";
+  static const String version = "3.8.7";
 
   late Map<String, Textbook> textbooks;
   late Map<int, String> gradeNames;
@@ -116,6 +116,14 @@ class AppData {
 
   /// 各版本课文目录（按版本分库）：统编版(tongbiao,含正文) / 冀教(hebei) / 旧人教版(renjiao, A档目录 text 多数为空)
   late Map<String, List<YuwenText>> _textsByVersion;
+
+  /// 版本 -> 课文库键（如 tongbiao 与 shanghai 同为 'YUWEN_TEXTS'）。
+  /// 供「内置语料去重」使用：复用同一课文库的版本不应在下拉里重复出现。
+  late Map<String, String> _textLibKeys;
+
+  /// 该版本实际使用的课文库键（shanghai 复用统编 -> 与 tongbiao 相同）。
+  /// 用途：内置课文语料按课文库去重，避免同内容的条目重复出现在下拉里。
+  String textLibKeyOf(String version) => _textLibKeys[version] ?? version;
 
   /// 取某版本·年级·册的课文目录（A档 text 可能为空，由生成端依据标题原创短文；统编版含正文）
   List<YuwenText> yuwenTextsFor(String version, int grade, String volume) {
@@ -362,6 +370,7 @@ class AppData {
       'waiyanYQ': 'WAIYAN_YQ_TEXTS',
       'waiyanSQ': 'WAIYAN_SQ_TEXTS',
     };
+    _textLibKeys = versionMap;
     for (final e in versionMap.entries) {
       final raw = j[e.value];
       final list = <YuwenText>[];
