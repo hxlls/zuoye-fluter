@@ -420,15 +420,10 @@ class AppData {
     _loaded = true;
   }
 
-  /// 该年级英语词汇（2022 课标对齐）：三年级起使用 ENG_505 二级词汇表，
-  /// 一、二年级沿用各册配套词汇。返回单词列表。
-  List<String> eng505Words(int grade) {
-    if (grade >= 3) return eng505;
-    final list = vol('renjiao', grade, '上', 'eng')?.eng ??
-        vol('renjiao', grade, '下', 'eng')?.eng ??
-        [];
-    return list.map((w) => w[0]).toList();
-  }
+  // 注：原先这里有个 eng505Words(int grade)，但它没有任何调用方，且一、二年级
+  // 硬编码取 renjiao 词表 —— 对 shanghai / 外研这类版本会取错。实际在用的
+  // 是 ai_generator 的 _engVocabText()，它按 opts.version 取词（正确），
+  // 三年级起同样回落到 ENG_505。故直接删除，避免日后被误接上。
 
   /// 2022 背诵篇目标题集合（用于古诗填空优先选用官方篇目）
   Set<String> recitationTitleSet() =>
