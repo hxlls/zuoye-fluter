@@ -104,7 +104,16 @@ jobs:
         run: flutter build apk --release
 
       - name: 构建 Web 版
-        run: flutter build web --release --base-href ./
+        run: |
+          flutter build web --release
+          # Flutter 3.24.5 的 --base-href 只接受以 "/" 开头且结尾的值，传 "./" 会直接失败：
+          #   Received a --base-href value of "./"
+          #   --base-href should start and end with /
+          # 但相对 base 恰恰是「解压到任意目录用 启动.bat 起本地服务」以及「部署到子目录」
+          # 能正常加载资源的关键 —— 否则 index.html 会按绝对路径 /main.dart.js 请求而 404，
+          # 页面白屏（这正是「首页打开没有任何内容」的根因）。故构建后改写 <base href>。
+          sed -i -E 's|<base href="[^"]*">|<base href="./">|' build/web/index.html
+          grep -o '<base[^>]*>' build/web/index.html
 
       - name: 整理 Android/Web 产物
         run: |
