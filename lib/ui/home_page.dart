@@ -49,6 +49,7 @@ const _kVersions = <(String, String)>[
   ('hebei', '冀教版'),
   ('waiyanYQ', '外研·一起点'),
   ('waiyanSQ', '外研·三起点'),
+  ('shanghai', '上海·五四学制'),
 ];
 
 class _HomePageState extends State<HomePage> {

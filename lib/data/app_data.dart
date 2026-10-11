@@ -350,6 +350,11 @@ class AppData {
     _textsByVersion = {};
     final versionMap = {
       'tongbiao': 'YUWEN_TEXTS',
+      // 上海五四学制语文是「五四版」，课文选篇与六三统编不完全相同，
+      // 不复用统编课文库：走独立 SHANGHAI_TEXTS（data.json 预留键）。
+      // 数据就绪前 hasTextbook 返回 false → duanwen 题型不可用、
+      // aiyuedu 走 AI 原创，安全降级。数据就绪后无需改代码。
+      'shanghai': 'SHANGHAI_TEXTS',
       'hebei': 'HEBEI_TEXTS',
       'renjiao': 'RENJIAO_OLD_TEXTS',
       'waiyanYQ': 'WAIYAN_YQ_TEXTS',
