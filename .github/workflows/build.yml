@@ -136,6 +136,12 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # 必须与 ubuntu 的 build job 用同一 Flutter 版本：pubspec.lock 是按
+          # 3.24.5 / Dart 3.5.4 生成的。用更新的 stable 会让 flutter pub get
+          # 全量重解析依赖，把 image 升到 4.11.0 而 archive 仍停在 4.0.9，
+          # 编译期报「The method 'decodeLazy' isn't defined for the type
+          # 'ZLibDecoder'」—— 这是 v3.8.2 起 Windows 构建失败的根因。
+          flutter-version: 3.24.5
           cache: true
 
       - name: 安装依赖
