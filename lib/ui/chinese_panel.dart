@@ -67,7 +67,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
   void initState() {
     super.initState();
     // 选「统编版」时，阅读理解默认基于统编版课文出题（课文阅读）
-    _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
+    _useTextbook = const {'tongbiao', 'hebei', 'renjiao', 'shanghai'}
+        .contains(widget.version);
     _loadCounts();
     _initCorpora();
   }
@@ -141,7 +142,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
   /// 不持久化（每次按当前面板范围合成，始终与内置数据一致）；出现在「生成用语料」下拉中即可直接选。
   List<Corpus> _buildBundledCorpora() {
     final data = AppData();
-    const versions = ['tongbiao', 'hebei', 'renjiao']; // 含正文的语文内置课文
+    const versions = ['tongbiao', 'hebei', 'renjiao', 'shanghai'];
+    // 含正文的语文内置课文（shanghai 复用统编课文库 YUWEN_TEXTS）
     final gname = data.gradeNames[widget.grade] ?? '第${widget.grade}年级';
     final volName = widget.volume == '下' ? '下册' : '上册';
     final out = <Corpus>[];
@@ -217,7 +219,8 @@ class _ChinesePanelState extends State<ChinesePanel> {
         oldWidget.volume != widget.volume) {
       // 切换到「统编版」则默认开启课文模式；切走则关闭（用户手动开关在同版本内仍有效）
       if (oldWidget.version != widget.version) {
-        _useTextbook = const {'tongbiao', 'hebei', 'renjiao'}.contains(widget.version);
+        _useTextbook = const {'tongbiao', 'hebei', 'renjiao', 'shanghai'}
+        .contains(widget.version);
       }
       // 切换版本/年级/册时重新解析活跃语料，否则 _activeId 会停留在旧范围，
       // 导致「选统编却显示旧语料」或外置语料阅读被 grade/volume 过滤掉。
@@ -830,7 +833,7 @@ class _ChinesePanelState extends State<ChinesePanel> {
                   _persistOpts();
                 },
               ),
-              if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}
+              if (const {'tongbiao', 'hebei', 'renjiao', 'shanghai', 'waiyanYQ', 'waiyanSQ'}
                   .contains(widget.version))
                 CheckLabel(
                   label: widget.version.startsWith('waiyan')
@@ -851,14 +854,16 @@ class _ChinesePanelState extends State<ChinesePanel> {
                     _persistOpts();
                   },
                 ),
-              if (const {'tongbiao', 'hebei', 'renjiao', 'waiyanYQ', 'waiyanSQ'}
+              if (const {'tongbiao', 'hebei', 'renjiao', 'shanghai', 'waiyanYQ', 'waiyanSQ'}
                   .contains(widget.version))
                 Padding(
                   padding: const EdgeInsets.only(top: 2, left: 4),
                   child: Text(
                     _useTextbook
-                        ? (widget.version == 'tongbiao'
-                            ? '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）'
+                        ? (widget.version == 'tongbiao' || widget.version == 'shanghai'
+                            ? (widget.version == 'shanghai'
+                                ? '已开启：阅读理解将围绕统编（五四学制）真实课文出题（1–5 年级，课文与六三统编同年级一致）'
+                                : '已开启：阅读理解将围绕统编版真实课文出题（课文库已覆盖 1–6 年级上下册，共 287 篇）')
                             : (widget.version.startsWith('waiyan')
                                 ? '已开启：将依据外研课文 Module/Unit 篇目，由 AI 原创适龄英文短文出题（A档目录模式，正文可在「设置 → 教材语料库」里导入）'
                                 : '已开启：将依据本版本课文篇目，由 AI 原创适龄短文出题（A档目录模式，正文可在「设置 → 教材语料库」里导入）'))

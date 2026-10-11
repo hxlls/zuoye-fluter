@@ -52,7 +52,7 @@ class VolumeData {
 
 /// 全局数据仓库
 class AppData {
-  static const String version = "3.8.1";
+  static const String version = "3.8.3";
 
   late Map<String, Textbook> textbooks;
   late Map<int, String> gradeNames;
@@ -127,7 +127,9 @@ class AppData {
   bool hasTextbook(String version, int grade, String volume) {
     final list = yuwenTextsFor(version, grade, volume);
     if (list.isEmpty) return false;
-    if (version == 'tongbiao') return list.any((t) => t.text.trim().isNotEmpty);
+    if (version == 'tongbiao' || version == 'shanghai') {
+      return list.any((t) => t.text.trim().isNotEmpty);
+    }
     return true;
   }
 
@@ -350,11 +352,11 @@ class AppData {
     _textsByVersion = {};
     final versionMap = {
       'tongbiao': 'YUWEN_TEXTS',
-      // 上海五四学制语文是「五四版」，课文选篇与六三统编不完全相同，
-      // 不复用统编课文库：走独立 SHANGHAI_TEXTS（data.json 预留键）。
-      // 数据就绪前 hasTextbook 返回 false → duanwen 题型不可用、
-      // aiyuedu 走 AI 原创，安全降级。数据就绪后无需改代码。
-      'shanghai': 'SHANGHAI_TEXTS',
+      // 上海五四学制语文：经逐册核对电子课本目录，统编五四制版 1-5 年级
+      // 课文选篇与六三统编同年级完全一致（dzkbw 电子课本网验证），
+      // 因此复用统编课文库 YUWEN_TEXTS（含正文），duanwen/aiyuedu 立即可用。
+      // 若未来上海换用不同选篇的教材，再把这里改回独立键即可。
+      'shanghai': 'YUWEN_TEXTS',
       'hebei': 'HEBEI_TEXTS',
       'renjiao': 'RENJIAO_OLD_TEXTS',
       'waiyanYQ': 'WAIYAN_YQ_TEXTS',
@@ -440,6 +442,11 @@ class AppData {
   /// 返回空表 = 该版本没有可用数据（如冀教版），调用方**必须回退**到
   /// 「只用题型清单」，不可抛错、也不可拿别的版本的清单顶上。
   List<String> mathUnitsFor(String ver, int grade, String vol) {
+    // 优先用该版本自己的单元清单（如沪教版 shanghai 有独立的 MATH_UNITS）。
+    final own = mathUnits[ver]?[grade]?[vol];
+    if (own != null && own.isNotEmpty) return own;
+    // 其余「数学课本实际用人教版」的版本（统编/外研，见 _meta.alignment）沿用 renjiao 清单；
+    // 冀教版等不对齐的版本返回空表，调用方回退到「只用题型清单」。
     if (!mathUnitsAligned.contains(ver)) return const [];
     return mathUnits['renjiao']?[grade]?[vol] ?? const [];
   }

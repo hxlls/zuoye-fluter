@@ -20,7 +20,7 @@ void main() {
   group('AppData', () {
     test('加载数据', () async {
       await AppData().load();
-      expect(AppData().textbooks.length, 5); // 人教/冀教/外研(一起)/外研(三起)/统编版
+      expect(AppData().textbooks.length, 6); // 人教/冀教/外研(一起)/外研(三起)/统编版/上海·五四学制
       expect(AppData().gradeNames[1], '一年级');
       // 人教版一年级上册生字
       final cally = AppData().vol('renjiao', 1, '上', 'cally')!.cally!;
@@ -228,7 +228,7 @@ void main() {
       // 于是题型列表里直接显示英文 id「ailistening」。
       // 这条断言保证「新增题型但忘了加标签」不会再悄悄溜过去。
       for (final grade in [1, 3, 6]) {
-        for (final v in ['renjiao', 'hebei', 'waiyanSQ', 'waiyanYQ']) {
+        for (final v in ['renjiao', 'hebei', 'waiyanSQ', 'waiyanYQ', 'shanghai']) {
           for (final s in TypeCatalog.of(Subject.english,
               version: v, grade: grade, includeUnavailable: true)) {
             expect(s.label, isNot(equals(s.id)),

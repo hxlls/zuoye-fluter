@@ -54,7 +54,7 @@ void main() {
     expect(find.text('学期'), findsOneWidget);
     expect(find.text('年级'), findsOneWidget);
 
-    for (final v in ['人教版', '统编版', '冀教版', '外研·一起点', '外研·三起点']) {
+    for (final v in ['人教版', '统编版', '冀教版', '外研·一起点', '外研·三起点', '上海·五四学制']) {
       expect(find.text(v), findsOneWidget, reason: '缺少教材版本 $v');
     }
   });
@@ -110,7 +110,7 @@ void main() {
     expect(find.text('当前版本不提供'), findsWidgets);
   });
 
-  testWidgets('五个教材版本的年级与科目裁剪全部符合 VERSION_SUPPORT', (tester) async {
+  testWidgets('六个教材版本的年级与科目裁剪全部符合 VERSION_SUPPORT', (tester) async {
     // 独立断言表：刻意不引用 VERSION_SUPPORT，避免「用被测数据自证」。
     // 数据源 assets/data.json 的 VERSION_SUPPORT：
     //   renjiao  {cally:[1,6], math:[1,6], eng:[1,6]}
@@ -118,6 +118,7 @@ void main() {
     //   hebei    {cally:null,  math:[1,6], eng:[1,6]}
     //   waiyanYQ {cally:null,  math:null,  eng:[1,2]}
     //   waiyanSQ {cally:null,  math:null,  eng:[3,6]}
+    //   shanghai {cally:[1,5], math:[1,5], eng:[1,5]}
     // 注意：语文作业与练字帖共用 cally 支持键（都源自语文教科书），
     //       所以 cally 为 null 时这两张卡片一起变成「不提供」。
     const expectTable = <String, (List<int>, int)>{
@@ -126,6 +127,7 @@ void main() {
       '冀教版':      ([1, 2, 3, 4, 5, 6], 2), // 练字帖 / 语文作业
       '外研·一起点': ([1, 2],             3), // 练字帖 / 语文作业 / 数学作业
       '外研·三起点': ([3, 4, 5, 6],       3),
+      '上海·五四学制': ([1, 2, 3, 4, 5],   0), // 语数英 1-5 年级全提供
     };
 
     for (final entry in expectTable.entries) {

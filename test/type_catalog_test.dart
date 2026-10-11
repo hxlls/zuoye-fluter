@@ -164,7 +164,9 @@ void main() {
   });
 
   group('反漂移 · 渲染层与目录层必须一致', () {
-    const versions = ['renjiao', 'tongbiao', 'hebei', 'waiyanYQ', 'waiyanSQ'];
+    const versions = [
+      'renjiao', 'tongbiao', 'hebei', 'waiyanYQ', 'waiyanSQ', 'shanghai'
+    ];
 
     for (final ver in versions) {
       for (var grade = 1; grade <= 6; grade++) {
