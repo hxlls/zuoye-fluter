@@ -102,4 +102,54 @@ void main() {
       );
     }
   });
+
+  /// 沪教版该册没有对应内容的题型，不能为了「看起来全」而拿别的年级硬凑。
+  /// 逐条依据见 haoduoyun.cc 沪教版电子课本目录（本轮逐册核对）。
+  test('沪教版该册没有对应内容的题型不出现', () {
+    final data = AppData();
+    List<String> ids(int g, String vol) =>
+        (data.vol('shanghai', g, vol, 'math')?.math ?? const <MathType>[])
+            .map((t) => t.id)
+            .toList();
+
+    // 四上「二 数与量」是大数的认识（读写/比较/改写/近似数），不含加减法
+    expect(ids(4, '上'), isNot(contains('add1000')));
+    // 四上「五 几何小实践」是圆的初步认识（圆心/半径/直径），不含周长面积
+    // （圆周长与面积是沪教版六年级内容，本版本只到五年级）
+    expect(ids(4, '上'), isNot(contains('circle')));
+    // 四上「四 整数的四则运算」里没有「文字计算题」这一节对应的题型时，
+    // simple 应挂到「运算定律」而不是文字计算题
+    // 四下「三 统计」是折线统计图，本地生成器只有条形统计图
+    expect(ids(4, '下'), isNot(contains('bargraph')));
+    // 平均数是沪教版五上「三 统计」的内容
+    expect(ids(4, '下'), isNot(contains('avg')));
+    // 沪教版五下没有分数单元（分数的初步认识在 3下 / 4上）
+    expect(ids(5, '下'), isNot(contains('fracadd')));
+    // 百分数是沪教版六年级内容
+    expect(ids(5, '下'), isNot(contains('percent')));
+    // 周长在沪教版三下「六 几何小实践」，三上没有
+    expect(ids(3, '上'), isNot(contains('perimeter')));
+  });
+
+  test('label 如实描述题型，不沿用人数版说法', () {
+    final data = AppData();
+    // add1000 生成三位数加减法（不是人教版的「万以内加减法」）
+    for (final vol in ['上', '下']) {
+      for (final t
+          in data.vol('shanghai', 2, vol, 'math')?.math ?? const <MathType>[]) {
+        if (t.id == 'add1000') expect(t.label, isNot(contains('万以内')));
+      }
+    }
+    // simple 生成连加/连乘/带括号的简便运算（不是「化简与求值」——
+    // 那是沪教版五上「简易方程(一)」的内容）
+    for (final vol in ['上', '下']) {
+      for (final t
+          in data.vol('shanghai', 4, vol, 'math')?.math ?? const <MathType>[]) {
+        if (t.id == 'simple') expect(t.label, isNot(contains('化简与求值')));
+      }
+    }
+    // 四上 equation 生成「求未知数 x」，对应沪教版四上「正推、逆推」而非「简易方程」
+    final g4 = data.vol('shanghai', 4, '上', 'math')!.math!;
+    expect(g4.firstWhere((t) => t.id == 'equation').label, contains('正推'));
+  });
 }

@@ -85,4 +85,35 @@ void main() {
     expect(types['culture'], '2022 课标·数学文化');
     expect(types['word'], '四年级上册 综合练习');
   });
+
+  // ---- 沪教版（上海五四学制）----
+  //
+  // shanghai 的数学是沪教版，不与人教版对齐，所以不在 mathUnitsAligned 里、
+  // 上面那套「人教版前缀」校验覆盖不到它。这里按同样的口径单独锁一份：
+  // unit 里引用的教材单元，必须能在 MATH_UNITS.shanghai 里找到 ——
+  // 否则「本册单元（教材目录）」面板与题型 sub 标签会自相矛盾。
+  group('沪教版 shanghai · unit 引用必须落在 MATH_UNITS.shanghai 内', () {
+    const cnDigits = '一二三四五';
+    final refRe = RegExp(r'^沪教版([一二三四五])([上下]) (.+)$');
+
+    test('unit 里的单元引用逐条能在 MATH_UNITS.shanghai 里找到', () {
+      final data = AppData();
+      for (var g = 1; g <= 5; g++) {
+        for (final vol in ['上', '下']) {
+          final types =
+              data.vol('shanghai', g, vol, 'math')?.math ?? const <MathType>[];
+          expect(types, isNotEmpty, reason: 'shanghai $g$vol 没有数学题型数据');
+          for (final t in types) {
+            final m = refRe.firstMatch(t.unit);
+            if (m == null) continue; // 课标/综合类标签，不参与单元校验
+            final rg = cnDigits.indexOf(m.group(1)!) + 1;
+            final rvol = m.group(2)!;
+            expect(data.mathUnitsFor('shanghai', rg, rvol), contains(m.group(3)!),
+                reason: 'shanghai $g$vol 的题型 ${t.id} 写着「${t.unit}」，'
+                    '但沪教版 $rg$rvol 的单元清单里没有这一条');
+          }
+        }
+      }
+    });
+  });
 }
