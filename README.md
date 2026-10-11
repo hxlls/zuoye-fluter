@@ -29,6 +29,11 @@
   在应用内「AI 智能出题设置」填入 API 地址、模型与 Key 即可
 - Key 以系统级加密保存（Windows DPAPI / 安卓系统密钥库 Keystore），仅存本机、不联网上传
 - **记忆你的设置**：教材版本 / 学期 / 年级、各题型题量、面板显示选项、AI 科目与对话都会自动保存，重开仍在
+- **Web 版使用**：`flutter build web` 产物（或 GitHub Release 的 web zip）**不能直接双击 index.html 打开**
+  （Flutter Web 的 CanvasKit 渲染器不支持 file:// 协议，会白屏）。请任选一种：
+  - Windows 下解压后双击 **`启动.bat`**（自动起本地 HTTP 服务并打开浏览器，需已装 Python 3）
+  - 或手动起服务：`python -m http.server 8765` 后访问 `http://127.0.0.1:8765`
+  - 或部署到任意静态托管（已使用相对路径 base，支持子目录部署）
 
 ## 设计要点
 
@@ -58,7 +63,7 @@ bash scripts/validate.sh
 
 # 构建
 flutter build apk --release      # Android（需 JDK 21）
-flutter build web --release      # Web
+flutter build web --release --base-href ./   # Web（相对路径，支持子目录部署）
 flutter build windows --release  # Windows（需 Windows 环境）
 ```
 

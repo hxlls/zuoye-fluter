@@ -104,7 +104,7 @@ jobs:
         run: flutter build apk --release
 
       - name: 构建 Web 版
-        run: flutter build web --release
+        run: flutter build web --release --base-href ./
 
       - name: 整理 Android/Web 产物
         run: |
@@ -213,7 +213,7 @@ jobs:
             echo "### 📦 下载"
             echo "- zuoye-fluter-windows-v${{ needs.check.outputs.version }}.zip（Windows 便携版，解压即用）"
             echo "- zuoye-fluter-android-v${{ needs.check.outputs.version }}.apk（Android，可直接安装）"
-            echo "- zuoye-fluter-web-v${{ needs.check.outputs.version }}.zip（Web 版，解压后浏览器打开 index.html）"
+            echo "- zuoye-fluter-web-v${{ needs.check.outputs.version }}.zip（Web 版：Windows 双击\"启动.bat\"本地运行；或部署到任意静态托管。不可直接双击 index.html（file:// 协议不受 Flutter Web 支持））"
           } > notes.md
           cat notes.md
 
